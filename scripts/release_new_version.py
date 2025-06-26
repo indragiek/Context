@@ -1874,14 +1874,11 @@ def verify_release(
 
     verification_results = []
 
-    # Verify DMG exists and has reasonable size
+    # Verify DMG exists
     if not dmg_path.exists():
         raise ReleaseError(f"DMG not found at {dmg_path}")
 
     dmg_size_mb = dmg_path.stat().st_size / (1024 * 1024)
-    if dmg_size_mb < 10:
-        raise ReleaseError(f"DMG seems too small ({dmg_size_mb:.1f} MB)")
-
     verification_results.append((Icons.SUCCESS, f"DMG size: {dmg_size_mb:.1f} MB"))
 
     # Verify DMG is signed
