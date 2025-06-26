@@ -82,6 +82,7 @@ struct SidebarFeature {
       case currentServerTabChanged(ServerTab)
       case initialServerLoad
       case newServersAdded([UUID])
+      case serverAdded(UUID)
     }
   }
 
@@ -206,7 +207,10 @@ struct SidebarFeature {
         _ = state.$servers.withLock { servers in
           servers.append(ServerFeature.State(server: server))
         }
-        return .send(.serverSelected(server.id))
+        return .merge(
+          .send(.serverSelected(server.id)),
+          .send(.delegate(.serverAdded(server.id)))
+        )
 
       case .importWizard(.dismiss):
         return .none
@@ -308,7 +312,8 @@ struct SidebarFeature {
         return .none
 
       case let .delegate(.newServersAdded(serverIds)):
-        if state.selectedServerID == nil, let firstNewServerId = serverIds.first {
+        // Always select the first newly added server
+        if let firstNewServerId = serverIds.first {
           return .send(.serverSelected(firstNewServerId))
         }
         return .none

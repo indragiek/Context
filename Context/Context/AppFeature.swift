@@ -118,6 +118,9 @@ struct AppFeature {
       case let .sidebarFeature(.delegate(.serverUpdated(serverId))):
         return .send(.serverLifecycleFeature(.reloadServerConnection(serverId)))
 
+      case let .sidebarFeature(.delegate(.serverAdded(serverId))):
+        return .send(.serverLifecycleFeature(.reloadServerConnection(serverId)))
+
       case .sidebarFeature:
         return .none
 
