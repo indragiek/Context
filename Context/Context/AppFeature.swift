@@ -125,6 +125,7 @@ struct AppFeature {
         return .none
 
       case .welcome(.importServersButtonTapped):
+        state.welcome.isVisible = false
         return .send(.sidebarFeature(.importMenuItemTapped))
 
       case .welcome(.addServerButtonTapped):
@@ -132,6 +133,7 @@ struct AppFeature {
         return .send(.sidebarFeature(.addServerButtonTapped))
 
       case .welcome(.addReferenceServersButtonTapped):
+        state.welcome.isVisible = false
         return .send(.addReferenceServers)
 
       case .welcome:
@@ -147,9 +149,6 @@ struct AppFeature {
         return .none
 
       case .referenceServersAdded:
-        // Close welcome modal first
-        state.welcome.isVisible = false
-
         state.referenceServersAlert = AlertState {
           TextState("Reference Servers Added")
         } actions: {
