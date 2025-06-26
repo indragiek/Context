@@ -9,6 +9,7 @@ struct ConnectionStateIcon: View {
   let onReload: (() -> Void)?
 
   @State private var isHovering = false
+  @State private var isRotating = false
 
   var body: some View {
     Group {
@@ -21,8 +22,20 @@ struct ConnectionStateIcon: View {
       } else {
         switch state {
         case .connecting:
-          Image(systemName: "clock.circle.fill")
+          Image(systemName: "arrow.trianglehead.2.clockwise.rotate.90.circle.fill")
             .foregroundStyle(isSelected ? .white : .orange)
+            .rotationEffect(.degrees(isRotating ? 360 : 0))
+            .animation(
+              .linear(duration: 1)
+              .repeatForever(autoreverses: false),
+              value: isRotating
+            )
+            .onAppear {
+              isRotating = true
+            }
+            .onDisappear {
+              isRotating = false
+            }
         case .connected:
           Image(systemName: "checkmark.circle.fill")
             .foregroundStyle(isSelected ? .white : .green)
@@ -30,8 +43,20 @@ struct ConnectionStateIcon: View {
           Image(systemName: "xmark.circle.fill")
             .foregroundStyle(isSelected ? .white : .red)
         case .disconnecting:
-          Image(systemName: "clock.circle.fill")
+          Image(systemName: "arrow.trianglehead.2.clockwise.rotate.90.circle.fill")
             .foregroundStyle(isSelected ? .white : .orange)
+            .rotationEffect(.degrees(isRotating ? 360 : 0))
+            .animation(
+              .linear(duration: 1)
+              .repeatForever(autoreverses: false),
+              value: isRotating
+            )
+            .onAppear {
+              isRotating = true
+            }
+            .onDisappear {
+              isRotating = false
+            }
         }
       }
     }
