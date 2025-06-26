@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>SUPublicEDKey</key>
+	<string>oHCnTChJwkguvr4nCfAJupUglweocNBqjRXu3b7NLoU=</string>
+	<key>SUFeedURL</key>
+	<string>https://raw.githubusercontent.com/indragiek/Context/refs/heads/main/appcast.xml</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>CFBundleURLName</key>
+			<string>com.indragie.Context</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>context</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>

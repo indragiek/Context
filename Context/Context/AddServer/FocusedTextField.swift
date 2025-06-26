@@ -1,0 +1,35 @@
+// Copyright © 2025 Indragie Karunaratne. All rights reserved.
+
+import SwiftUI
+
+struct FocusedTextField: View {
+  let placeholder: String
+  @Binding var text: String
+  let shouldFocus: Bool
+  let onFocusHandled: (() -> Void)?
+  @FocusState private var isFocused: Bool
+
+  init(
+    placeholder: String = "", text: Binding<String>, shouldFocus: Bool,
+    onFocusHandled: (() -> Void)? = nil
+  ) {
+    self.placeholder = placeholder
+    self._text = text
+    self.shouldFocus = shouldFocus
+    self.onFocusHandled = onFocusHandled
+  }
+
+  var body: some View {
+    TextField(placeholder, text: $text)
+      .focused($isFocused)
+      .onAppear {
+        if shouldFocus {
+          // Use a small delay to ensure the view is fully rendered
+          DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            isFocused = true
+            onFocusHandled?()
+          }
+        }
+      }
+  }
+}

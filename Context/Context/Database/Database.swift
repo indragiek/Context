@@ -1,0 +1,49 @@
+import Foundation
+import SharingGRDB
+
+func appDatabase() throws -> any DatabaseWriter {
+  let databaseURL = try FileManager.default
+    .url(
+      for: .applicationSupportDirectory,
+      in: .userDomainMask,
+      appropriateFor: nil,
+      create: true
+    )
+    .appendingPathComponent("Context", isDirectory: true)
+  try FileManager.default.createDirectory(at: databaseURL, withIntermediateDirectories: true)
+  let databasePath = databaseURL.appendingPathComponent("context.db").path
+  print("Database path: \(databasePath)")
+
+  var configuration = Configuration()
+  #if DEBUG
+    configuration.prepareDatabase { db in
+      db.trace { print("SQL: \($0)") }
+    }
+  #else
+    configuration.prepareDatabase { _ in }
+  #endif
+
+  let dbWriter = try DatabasePool(path: databasePath, configuration: configuration)
+  var migrator = DatabaseMigrator()
+  migrator.registerMigration("Create 'mcp_servers' table") { db in
+    try #sql(
+      """
+      CREATE TABLE "mcp_servers" (
+        "id" TEXT PRIMARY KEY NOT NULL ON CONFLICT REPLACE DEFAULT (uuid()),
+        "name" TEXT NOT NULL,
+        "transport" TEXT NOT NULL,
+        "command" TEXT,
+        "args" TEXT,
+        "url" TEXT,
+        "environment" TEXT,
+        "headers" TEXT,
+        "watched_paths" TEXT
+      )
+      """
+    )
+    .execute(db)
+  }
+
+  try migrator.migrate(dbWriter)
+  return dbWriter
+}

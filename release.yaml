@@ -1,0 +1,9 @@
+# Release configuration for Context
+
+app_name: "Context"
+bundle_identifier: "com.indragie.Context"
+xcode_project: "Context/Context.xcodeproj"
+scheme: "Context"
+website_url: "https://www.contextmcp.app/"
+github_owner: "indragiek"
+github_repo: "Context"
