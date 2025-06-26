@@ -5,6 +5,15 @@
     <description>Most recent changes with links to updates.</description>
     <language>en</language>
     <item>
+      <title>Version 1.0.2 (102)</title>
+      <link>https://www.contextmcp.app/</link>
+      <sparkle:version>102</sparkle:version>
+      <sparkle:shortVersionString>1.0.2</sparkle:shortVersionString>
+      <sparkle:releaseNotesLink>https://raw.githubusercontent.com/indragiek/Context/refs/heads/main/release_notes/1.0.2.html</sparkle:releaseNotesLink>
+      <pubDate>Thu, 26 Jun 2025 05:15:27 +0000</pubDate>
+      <enclosure url="https://github.com/indragiek/Context/releases/download/v1.0.2/Context_v1.0.2.dmg" sparkle:edSignature="9wiCFOjM4DtVpP1JEmB1wPOnAT0iDZHiIO8kkmvClxWhTf07jLkYf29aQmq5T1jgAPeQOKuqqrFjVxi4LRLeAA==" length="6838359" type="application/octet-stream"/>
+    </item>
+    <item>
       <title>Version 1.0.1 (101)</title>
       <link>https://www.contextmcp.app/</link>
       <sparkle:version>101</sparkle:version>

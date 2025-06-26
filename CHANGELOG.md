@@ -1,5 +1,7 @@
 ## Unreleased
 
+## Version 1.0.2 (102)
+
 - Fix bug where authentication modal wouldn't appear after adding a server
 - Animate the connection state icon
 
