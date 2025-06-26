@@ -1640,8 +1640,14 @@ def update_appcast(
     )
 
 
-def create_git_commit_and_tag(marketing_version: str, changelog_items: str):
-    """Create git commit and annotated tag"""
+def create_git_commit_and_tag(marketing_version: str, changelog_items: str) -> Tuple[str, bool]:
+    """Create git commit and annotated tag
+    
+    Returns:
+        Tuple of (tag_name, pushed_to_github)
+    """
+    pushed = False
+    
     with Progress(
         SpinnerColumn(),
         TextColumn("[progress.description]{task.description}"),
@@ -1660,15 +1666,17 @@ def create_git_commit_and_tag(marketing_version: str, changelog_items: str):
         tag_name = f"v{marketing_version}"
         run_command(["git", "tag", "-a", tag_name, "-m", changelog_items])
 
-        # Push commit and tag
+        # Push commit and tag - POINT OF NO RETURN
+        # After this point, rollback is not possible as changes are permanent on GitHub
         progress.update(task, description="Pushing to remote...")
         run_command(["git", "push", "origin", "main"])
         run_command(["git", "push", "origin", tag_name])
+        pushed = True
 
     console.print(
         f"[green]✓[/green] Created and pushed commit and tag for v{marketing_version}"
     )
-    return tag_name
+    return tag_name, pushed
 
 
 def create_dsyms_zip(archive_dir: Path, dmg_path: Path) -> Optional[Path]:
@@ -1962,6 +1970,13 @@ def main():
 
     # Initialize rollback manager
     rollback_manager = RollbackManager()
+    
+    # Track if we've pushed to GitHub (point of no return)
+    pushed_to_github = False
+    
+    # Initialize version variables (for error handling)
+    new_marketing = None
+    new_project = None
 
     try:
         # Parse arguments first to get config path
@@ -2126,7 +2141,7 @@ def main():
             console.print()
             console.rule("[bold blue]Git & GitHub Release[/bold blue]")
 
-        tag_name = create_git_commit_and_tag(new_marketing, changelog_items)
+        tag_name, pushed_to_github = create_git_commit_and_tag(new_marketing, changelog_items)
 
         # Create dSYMs ZIP for GitHub release
         dsyms_zip_path = create_dsyms_zip(args.archive_path, dmg_path)
@@ -2157,33 +2172,70 @@ def main():
         )
 
     except ReleaseError as e:
-        rollback_manager.rollback()
-        if not QUIET:
-            error_panel = Panel(
-                f"[bold red]Release Failed[/bold red]\n\n{e}",
-                border_style="red",
-                padding=(1, 2),
-            )
-            console.print()
-            console.print(error_panel)
+        if pushed_to_github:
+            # Don't rollback if we've already pushed to GitHub
+            version_str = f"v{new_marketing}" if new_marketing else "version"
+            if not QUIET:
+                error_panel = Panel(
+                    f"[bold red]Release Partially Completed[/bold red]\n\n"
+                    f"The commit and tag have been pushed to GitHub ({version_str}).\n"
+                    f"However, the following error occurred:\n\n{e}\n\n"
+                    f"[yellow]Manual intervention may be required to complete the release.[/yellow]",
+                    border_style="red",
+                    padding=(1, 2),
+                )
+                console.print()
+                console.print(error_panel)
+            else:
+                console.print(f"\n{Icons.ERROR} Error after pushing to GitHub: {e}")
+                console.print(f"{Icons.WARNING} The commit and tag {version_str} have been pushed.")
+                console.print(f"{Icons.WARNING} Manual intervention may be required.")
         else:
-            console.print(f"\n{Icons.ERROR} Error: {e}")
+            rollback_manager.rollback()
+            if not QUIET:
+                error_panel = Panel(
+                    f"[bold red]Release Failed[/bold red]\n\n{e}",
+                    border_style="red",
+                    padding=(1, 2),
+                )
+                console.print()
+                console.print(error_panel)
+            else:
+                console.print(f"\n{Icons.ERROR} Error: {e}")
         sys.exit(1)
     except KeyboardInterrupt:
-        rollback_manager.rollback()
-        if not QUIET:
-            console.print(f"\n{Icons.WARNING} Release cancelled by user")
+        if pushed_to_github:
+            version_str = f"v{new_marketing}" if new_marketing else "version"
+            if not QUIET:
+                console.print(f"\n{Icons.WARNING} Release interrupted after pushing to GitHub!")
+                console.print(f"{Icons.WARNING} The commit and tag {version_str} have been pushed.")
+                console.print(f"{Icons.WARNING} Manual intervention may be required to complete the release.")
+        else:
+            rollback_manager.rollback()
+            if not QUIET:
+                console.print(f"\n{Icons.WARNING} Release cancelled by user")
         sys.exit(1)
     except Exception as e:
-        rollback_manager.rollback()
-        if not QUIET:
-            console.print(f"\n{Icons.ERROR} Unexpected error: {e}")
-        if DEBUG:
-            import traceback
-
-            traceback.print_exc()
+        if pushed_to_github:
+            version_str = f"v{new_marketing}" if new_marketing else "version"
+            if not QUIET:
+                console.print(f"\n{Icons.ERROR} Unexpected error after pushing to GitHub: {e}")
+                console.print(f"{Icons.WARNING} The commit and tag {version_str} have been pushed.")
+                console.print(f"{Icons.WARNING} Manual intervention may be required to complete the release.")
+            if DEBUG:
+                import traceback
+                traceback.print_exc()
+            else:
+                console.print("\nRun with --debug flag for full stack trace")
         else:
-            console.print("\nRun with --debug flag for full stack trace")
+            rollback_manager.rollback()
+            if not QUIET:
+                console.print(f"\n{Icons.ERROR} Unexpected error: {e}")
+            if DEBUG:
+                import traceback
+                traceback.print_exc()
+            else:
+                console.print("\nRun with --debug flag for full stack trace")
         sys.exit(1)
 
 
