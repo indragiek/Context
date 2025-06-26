@@ -37,7 +37,9 @@ func appDatabase() throws -> any DatabaseWriter {
         "url" TEXT,
         "environment" TEXT,
         "headers" TEXT,
-        "watched_paths" TEXT
+        "watched_paths" TEXT,
+        "working_directory_path" TEXT,
+        "auto_reload_enabled" INTEGER NOT NULL
       )
       """
     )

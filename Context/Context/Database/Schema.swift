@@ -28,4 +28,10 @@ struct MCPServer: Equatable, Identifiable {
   
   @Column("watched_paths", as: [String]?.JSONRepresentation.self)
   var watchedPaths: [String]?
+  
+  @Column("working_directory_path")
+  var workingDirectoryPath: String?
+  
+  @Column("auto_reload_enabled")
+  var autoReloadEnabled: Bool = false
 }
