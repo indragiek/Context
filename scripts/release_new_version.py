@@ -26,13 +26,13 @@ import sys
 import os
 import shutil
 import time
-import yaml
+import yaml  # type: ignore[import]
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Tuple, Optional, Dict, List, Any
+from typing import Tuple, Optional, Dict, List, Any, Union
 import xml.etree.ElementTree as ET
-from rich.console import Console
-from rich.progress import (
+from rich.console import Console  # type: ignore[import]
+from rich.progress import (  # type: ignore[import]
     Progress,
     SpinnerColumn,
     TextColumn,
@@ -40,25 +40,25 @@ from rich.progress import (
     TaskProgressColumn,
     TimeRemainingColumn,
 )
-from rich.panel import Panel
-from rich.table import Table
-from rich.tree import Tree
-from rich.rule import Rule
-from rich.syntax import Syntax
-from rich.prompt import Confirm
-from rich import print as rprint
-from lxml import etree
-import markdown2
+from rich.panel import Panel  # type: ignore[import]
+from rich.table import Table  # type: ignore[import]
+from rich.tree import Tree  # type: ignore[import]
+from rich.rule import Rule  # type: ignore[import]
+from rich.syntax import Syntax  # type: ignore[import]
+from rich.prompt import Confirm  # type: ignore[import]
+from rich import print as rprint  # type: ignore[import]
+from lxml import etree  # type: ignore[import]
+import markdown2  # type: ignore[import]
 
 console = Console()
 
 # Global config object
-CONFIG = None
+CONFIG: Optional['Config'] = None
 
 # Global verbosity settings
-VERBOSE = False
-QUIET = False
-DEBUG = False
+VERBOSE: bool = False
+QUIET: bool = False
+DEBUG: bool = False
 
 
 # Status icons
@@ -193,7 +193,7 @@ def run_command(
     cmd: List[str],
     check: bool = True,
     capture_output: bool = True,
-    show_output: bool = None,
+    show_output: Optional[bool] = None,
     **kwargs: Any,
 ) -> subprocess.CompletedProcess[str]:
     """Run a command with error handling"""
@@ -421,7 +421,7 @@ def preflight_checks() -> List[str]:
 
 
 def run_parallel_tasks(
-    tasks: List[Tuple[str, callable, tuple]], description: str = "Running tasks"
+    tasks: List[Tuple[str, Any, tuple]], description: str = "Running tasks"
 ) -> List[Any]:
     """Run multiple tasks sequentially (parallelization removed) and return their results"""
     results = []
@@ -486,7 +486,7 @@ def validate_environment() -> Dict[str, str]:
     return env_vars
 
 
-def parse_arguments():
+def parse_arguments() -> argparse.Namespace:
     """Parse command line arguments"""
     parser = argparse.ArgumentParser(
         description="Automate building and publishing app releases",
@@ -665,7 +665,7 @@ def update_project_versions(
     new_project: int,
     new_marketing: str,
     rollback_manager: RollbackManager,
-):
+) -> None:
     """Update version numbers in Xcode project file for the specified bundle identifier"""
     # Backup the file before modifying
     rollback_manager.backup_file(project_path)
@@ -676,7 +676,7 @@ def update_project_versions(
     # We need to update version numbers only in buildSettings blocks that contain our bundle identifier
     # Use a more complex approach to handle nested braces correctly
 
-    def find_matching_brace(text, start_pos):
+    def find_matching_brace(text: str, start_pos: int) -> int:
         """Find the closing brace for an opening brace at start_pos"""
         count = 1
         pos = start_pos + 1
@@ -803,7 +803,7 @@ def process_changelog(
     return changelog_items
 
 
-def generate_html_from_markdown(markdown_text: str, version: str = None) -> str:
+def generate_html_from_markdown(markdown_text: str, version: Optional[str] = None) -> str:
     """Convert markdown changelog to HTML using markdown2"""
     # Convert markdown to HTML with useful extras
     html_content = markdown2.markdown(
@@ -859,6 +859,8 @@ def build_xcode_archive(
     archive_dir: Path, bundle_identifier: str, rollback_manager: RollbackManager
 ) -> Path:
     """Build Xcode archive and export the app"""
+    assert CONFIG is not None, "CONFIG must be initialized"
+    
     team_id = os.environ.get("APPLE_TEAM_ID")
     if not team_id:
         raise ReleaseError("APPLE_TEAM_ID environment variable is not set")
@@ -915,7 +917,8 @@ def build_xcode_archive(
         )
 
         # Close xcodebuild's stdout in parent process
-        xcodebuild_proc.stdout.close()
+        if xcodebuild_proc.stdout:
+            xcodebuild_proc.stdout.close()
 
         # Get output from xcbeautify
         stdout, stderr = xcbeautify_proc.communicate()
@@ -1238,6 +1241,8 @@ def get_developer_id_certificate() -> str:
 
 def prepare_dmg_contents(app_path: Path, archive_dir: Path) -> Tuple[Path, Path, Path]:
     """Prepare DMG contents by copying app to proper structure"""
+    assert CONFIG is not None, "CONFIG must be initialized"
+    
     # Copy app to archive directory, preserving symlinks
     archive_app_path = archive_dir / f"{CONFIG['app_name']}.app"
     if archive_app_path.exists():
@@ -1433,6 +1438,8 @@ def create_and_notarize_dmg(
     rollback_manager: RollbackManager,
 ) -> Path:
     """Create DMG and submit for notarization"""
+    assert CONFIG is not None, "CONFIG must be initialized"
+    
     dmg_name = f"{CONFIG['app_name']}_v{marketing_version}.dmg"
     dmg_path = archive_dir / dmg_name
 
@@ -1565,8 +1572,10 @@ def update_appcast(
     signature: str,
     length: str,
     rollback_manager: RollbackManager,
-):
+) -> None:
     """Update appcast.xml with new release information"""
+    assert CONFIG is not None, "CONFIG must be initialized"
+    
     appcast_path = Path("appcast.xml")
 
     # Backup appcast.xml before modifying
@@ -1681,6 +1690,8 @@ def create_git_commit_and_tag(marketing_version: str, changelog_items: str) -> T
 
 def create_dsyms_zip(archive_dir: Path, dmg_path: Path) -> Optional[Path]:
     """Create a ZIP file of the dSYMs directory"""
+    assert CONFIG is not None, "CONFIG must be initialized"
+    
     # Find dSYMs directory
     dsyms_path = archive_dir / f"{CONFIG['app_name']}.xcarchive" / "dSYMs"
     if not dsyms_path.exists():
@@ -1765,8 +1776,10 @@ def create_github_release(
     return release_url
 
 
-def upload_dsyms_to_sentry(archive_dir: Path, sentry_org: str, sentry_project: str):
+def upload_dsyms_to_sentry(archive_dir: Path, sentry_org: str, sentry_project: str) -> None:
     """Upload dSYMs to Sentry for crash reporting"""
+    assert CONFIG is not None, "CONFIG must be initialized"
+    
     # Check if sentry-cli is available
     if shutil.which("sentry-cli") is None:
         console.print("[yellow]sentry-cli not found, skipping dSYM upload[/yellow]")
@@ -1958,7 +1971,7 @@ def verify_release(
         console.print()
 
 
-def main():
+def main() -> None:
     """Main entry point"""
     global CONFIG, VERBOSE, QUIET, DEBUG
 
