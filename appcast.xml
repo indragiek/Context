@@ -5,14 +5,33 @@
     <description>Most recent changes with links to updates.</description>
     <language>en</language>
     <item>
+      <title>Version 1.0.4 (104)</title>
+      <link>https://www.contextmcp.app/</link>
+      <sparkle:version>104</sparkle:version>
+      <sparkle:shortVersionString>1.0.4</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[<ul>
+<li>Fix crash due to partial initialization of StdioTransport (<a rel="noopener" target="_blank" href="https://github.com/indragiek/Context/commit/ec0e9886be179cc3bb00eb56d0e95d7f2d2d8ad7">ec0e988</a>)</li>
+<li>Fix broken handling of legacy SSE transport (<a rel="noopener" target="_blank" href="https://github.com/indragiek/Context/commit/4bac2d6405270ac7cb1f9b9d95204156db8f6410">4bac2d6</a>)</li>
+<li>Build a universal binary for Intel and Apple Silicon (<a rel="noopener" target="_blank" href="https://github.com/indragiek/Context/commit/0528f8e36b2ae5372b062d69d6299bc28661469b">0528f8e</a>)</li>
+<li>Use shared browser session for OAuth (<a rel="noopener" target="_blank" href="https://github.com/indragiek/Context/commit/ec26845e34f6044e5d8000793bc4fa4f5a2abaf5">ec26845</a>)</li>
+<li>Allow HTTP connections for OAuth on localhost (<a rel="noopener" target="_blank" href="https://github.com/indragiek/Context/commit/f57c01f0ba7744c6911efcaedc07e5aead5d9863">f57c01f</a>)</li>
+<li>Use stats.store for Sparkle analytics (<a rel="noopener" target="_blank" href="https://github.com/indragiek/Context/commit/c67fca33a8bc1e1458ad55c89de646d0a4221779">c67fca3</a>)</li>
+<li>Fix $PATH resolution to use shell $PATH (<a rel="noopener" target="_blank" href="https://github.com/indragiek/Context/commit/ff896cf595159eae7a34717bc59e8a80039d9054">ff896cf</a>)</li>
+</ul>
+]]></description>
+      <pubDate>Fri, 27 Jun 2025 06:14:13 +0000</pubDate>
+      <enclosure url="https://github.com/indragiek/Context/releases/download/v1.0.4/Context_v1.0.4.dmg" sparkle:edSignature="SuZY+76JrOda9MasPDFZI3Q8Sj8NdcsgfEeBBohlkTrD5EMd9HnLAv+XsYDCGC6AhE9ghm6sVNRrI3TPoa9pCA==" length="12183058" type="application/octet-stream"/>
+    </item>
+    <item>
       <title>Version 1.0.3 (103)</title>
       <link>https://www.contextmcp.app/</link>
       <sparkle:version>103</sparkle:version>
       <sparkle:shortVersionString>1.0.3</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
-      <description><![CDATA[<ul>
-<li>Fix Import Servers modal not appearing when opening it from the Welcome modal</li>
-</ul>]]></description>
+      <description>&lt;ul&gt;
+&lt;li&gt;Fix Import Servers modal not appearing when opening it from the Welcome modal&lt;/li&gt;
+&lt;/ul&gt;</description>
       <pubDate>Thu, 26 Jun 2025 15:25:36 +0000</pubDate>
       <enclosure url="https://github.com/indragiek/Context/releases/download/v1.0.3/Context_v1.0.3.dmg" sparkle:edSignature="13HEgwUl/3TqChGthEZRVqnxoAv3xmyFV56lMnKHcSHDYcMhEBNCyhvZvzyqKlDB+tLFl8iRZET9c80GtifWDg==" length="6842909" type="application/octet-stream"/>
     </item>
@@ -22,10 +41,10 @@
       <sparkle:version>102</sparkle:version>
       <sparkle:shortVersionString>1.0.2</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
-      <description><![CDATA[<ul>
-<li>Fix bug where authentication modal wouldn't appear after adding a server</li>
-<li>Animate the connection state icon</li>
-</ul>]]></description>
+      <description>&lt;ul&gt;
+&lt;li&gt;Fix bug where authentication modal wouldn't appear after adding a server&lt;/li&gt;
+&lt;li&gt;Animate the connection state icon&lt;/li&gt;
+&lt;/ul&gt;</description>
       <pubDate>Thu, 26 Jun 2025 05:15:27 +0000</pubDate>
       <enclosure url="https://github.com/indragiek/Context/releases/download/v1.0.2/Context_v1.0.2.dmg" sparkle:edSignature="9wiCFOjM4DtVpP1JEmB1wPOnAT0iDZHiIO8kkmvClxWhTf07jLkYf29aQmq5T1jgAPeQOKuqqrFjVxi4LRLeAA==" length="6838359" type="application/octet-stream"/>
     </item>
@@ -35,9 +54,9 @@
       <sparkle:version>101</sparkle:version>
       <sparkle:shortVersionString>1.0.1</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
-      <description><![CDATA[<ul>
-<li>Initial public version</li>
-</ul>]]></description>
+      <description>&lt;ul&gt;
+&lt;li&gt;Initial public version&lt;/li&gt;
+&lt;/ul&gt;</description>
       <pubDate>Thu, 26 Jun 2025 02:25:37 +0000</pubDate>
       <enclosure url="https://github.com/indragiek/Context/releases/download/v1.0.1/Context_v1.0.1.dmg" sparkle:edSignature="hvc9/YoDc7xTyTrvgHgY5tyxVf99Ttpk6hxYk09mVj49IFHRjlVIkal5VeCRt0Pm7YBfZh/G+DCa7lBFQZO9DQ==" length="6838685" type="application/octet-stream"/>
     </item>
