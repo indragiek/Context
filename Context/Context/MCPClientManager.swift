@@ -169,16 +169,8 @@ actor MCPClientManager {
         logger: logger
       )
 
-    case .sse:
-      guard let urlString = server.url,
-        URL(string: urlString) != nil
-      else {
-        throw MCPClientError.invalidURL
-      }
-
-      throw MCPClientError.unsupportedTransport(.sse)
-
-    case .streamableHTTP:
+    case .sse, .streamableHTTP:
+      // SSE is deprecated and uses the same transport as streamableHTTP
       guard let urlString = server.url,
         let url = URL(string: urlString)
       else {
@@ -243,8 +235,8 @@ actor MCPClientManager {
     
     // Check each server's token
     for server in servers {
-      // Skip servers that don't use streamableHTTP transport (OAuth is only for HTTP)
-      guard server.transport == .streamableHTTP else { continue }
+      // Skip servers that don't use HTTP-based transport (OAuth is only for HTTP)
+      guard server.transport == .streamableHTTP || server.transport == .sse else { continue }
       
       // Get the stored token
       guard let storedToken = try? await keychainManager.retrieveStoredToken(for: server.id) else {

@@ -119,7 +119,14 @@ struct AddServerFeature {
       self.mode = .edit(originalServer: server)
       self.serverName = server.name
       self.serverNameManuallyEdited = true  // In edit mode, assume name was manually set
-      self.transport = server.transport
+      
+      // Map deprecated .sse transport to .streamableHTTP
+      if server.transport == .sse {
+        self.transport = .streamableHTTP
+      } else {
+        self.transport = server.transport
+      }
+      
       self.command = server.command ?? ""
       self.url = server.url ?? ""
 
@@ -442,18 +449,10 @@ struct AddServerFeature {
       id = originalServer.id  // Preserve existing ID for edits
     }
 
-    // Determine transport based on URL path if applicable
+    // Always use streamableHTTP instead of deprecated .sse
     var transport = state.transport
     if state.transport == .streamableHTTP || state.transport == .sse {
-      if let urlComponents = URLComponents(string: state.url),
-        let path = urlComponents.path.isEmpty ? nil : urlComponents.path
-      {
-        if path.hasSuffix("/sse") {
-          transport = .sse
-        } else {
-          transport = .streamableHTTP
-        }
-      }
+      transport = .streamableHTTP
     }
 
     var server = MCPServer(
