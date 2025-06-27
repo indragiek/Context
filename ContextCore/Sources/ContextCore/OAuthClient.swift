@@ -296,6 +296,13 @@ public struct ClientRegistrationResponse: Codable, Sendable {
   }
 }
 
+/// Checks if a URL is a localhost URL (allowing HTTP for localhost connections).
+private func isLocalhostURL(_ url: URL) -> Bool {
+  guard url.scheme == "http" else { return false }
+  guard let host = url.host else { return false }
+  return host == "localhost" || host == "127.0.0.1" || host == "::1" || host == "[::1]"
+}
+
 /// OAuth 2.0 client implementing authorization code flow with PKCE.
 public actor OAuthClient {
   private let urlSession: URLSession
@@ -429,8 +436,8 @@ public actor OAuthClient {
     resource: ProtectedResourceMetadata?,
     authServer: AuthorizationServerMetadata
   ) {
-    // Validate HTTPS requirement
-    guard resourceMetadataURL.scheme == "https" else {
+    // Validate HTTPS requirement (allow HTTP for localhost)
+    guard resourceMetadataURL.scheme == "https" || isLocalhostURL(resourceMetadataURL) else {
       throw OAuthClientError.insecureConnection
     }
 
@@ -490,8 +497,8 @@ public actor OAuthClient {
       throw OAuthClientError.invalidAuthorizationServerMetadata
     }
 
-    // Validate authorization server URL is HTTPS
-    guard authServerURL.scheme == "https" else {
+    // Validate authorization server URL is HTTPS (allow HTTP for localhost)
+    guard authServerURL.scheme == "https" || isLocalhostURL(authServerURL) else {
       throw OAuthClientError.insecureConnection
     }
 
@@ -568,8 +575,8 @@ public actor OAuthClient {
       throw OAuthClientError.missingAuthorizationEndpoint
     }
 
-    // Validate HTTPS requirement for authorization endpoint
-    guard authEndpoint.scheme == "https" else {
+    // Validate HTTPS requirement for authorization endpoint (allow HTTP for localhost)
+    guard authEndpoint.scheme == "https" || isLocalhostURL(authEndpoint) else {
       throw OAuthClientError.insecureConnection
     }
 
@@ -658,8 +665,8 @@ public actor OAuthClient {
       throw OAuthClientError.missingTokenEndpoint
     }
 
-    // Validate HTTPS requirement for token endpoint
-    guard tokenEndpoint.scheme == "https" else {
+    // Validate HTTPS requirement for token endpoint (allow HTTP for localhost)
+    guard tokenEndpoint.scheme == "https" || isLocalhostURL(tokenEndpoint) else {
       throw OAuthClientError.insecureConnection
     }
 
@@ -754,8 +761,8 @@ public actor OAuthClient {
       throw OAuthClientError.missingTokenEndpoint
     }
 
-    // Validate HTTPS requirement for token endpoint
-    guard tokenEndpoint.scheme == "https" else {
+    // Validate HTTPS requirement for token endpoint (allow HTTP for localhost)
+    guard tokenEndpoint.scheme == "https" || isLocalhostURL(tokenEndpoint) else {
       throw OAuthClientError.insecureConnection
     }
 
@@ -825,8 +832,8 @@ public actor OAuthClient {
       throw OAuthClientError.missingRegistrationEndpoint
     }
 
-    // Validate HTTPS requirement for registration endpoint
-    guard registrationEndpoint.scheme == "https" else {
+    // Validate HTTPS requirement for registration endpoint (allow HTTP for localhost)
+    guard registrationEndpoint.scheme == "https" || isLocalhostURL(registrationEndpoint) else {
       throw OAuthClientError.insecureConnection
     }
 
