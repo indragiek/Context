@@ -119,14 +119,14 @@ struct AddServerFeature {
       self.mode = .edit(originalServer: server)
       self.serverName = server.name
       self.serverNameManuallyEdited = true  // In edit mode, assume name was manually set
-      
+
       // Map deprecated .sse transport to .streamableHTTP
       if server.transport == .sse {
         self.transport = .streamableHTTP
       } else {
         self.transport = server.transport
       }
-      
+
       self.command = server.command ?? ""
       self.url = server.url ?? ""
 
@@ -195,7 +195,7 @@ struct AddServerFeature {
 
       case let .serverNameChanged(name):
         state.serverName = name
-        
+
         // Only mark as manually edited if the user actually typed something different
         // from what would be auto-generated
         if !name.isEmpty {
@@ -208,7 +208,7 @@ struct AddServerFeature {
           // If the name is cleared, allow auto-generation again
           state.serverNameManuallyEdited = false
         }
-        
+
         return .none
 
       case let .transportChanged(transport):

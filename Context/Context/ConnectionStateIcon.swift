@@ -27,7 +27,7 @@ struct ConnectionStateIcon: View {
             .rotationEffect(.degrees(isRotating ? 360 : 0))
             .animation(
               .linear(duration: 1)
-              .repeatForever(autoreverses: false),
+                .repeatForever(autoreverses: false),
               value: isRotating
             )
             .onAppear {
@@ -48,7 +48,7 @@ struct ConnectionStateIcon: View {
             .rotationEffect(.degrees(isRotating ? 360 : 0))
             .animation(
               .linear(duration: 1)
-              .repeatForever(autoreverses: false),
+                .repeatForever(autoreverses: false),
               value: isRotating
             )
             .onAppear {

@@ -197,7 +197,8 @@ struct AuthenticationFeature {
       state.loadingStep = .idle
     }
 
-    return .run { [serverID = state.serverID, serverName = state.serverName, clientID = state.clientID] send in
+    return .run {
+      [serverID = state.serverID, serverName = state.serverName, clientID = state.clientID] send in
       let mcpServer = MCPServer(
         id: serverID,
         name: serverName,

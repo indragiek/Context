@@ -161,11 +161,13 @@ actor KeychainManager {
             try? await deleteToken(for: serverID)
             throw KeychainError.tokenExpired
           }
-          
-          logger.info("Successfully retrieved valid token with client ID from keychain for server \(serverID)")
+
+          logger.info(
+            "Successfully retrieved valid token with client ID from keychain for server \(serverID)"
+          )
           return storedToken
         }
-        
+
         // Fallback to legacy format (just OAuthToken)
         let token = try decoder.decode(OAuthToken.self, from: data)
 
@@ -175,7 +177,9 @@ actor KeychainManager {
           throw KeychainError.tokenExpired
         }
 
-        logger.info("Successfully retrieved legacy token from keychain for server \(serverID), using default client ID")
+        logger.info(
+          "Successfully retrieved legacy token from keychain for server \(serverID), using default client ID"
+        )
         // Return with default client ID for legacy tokens
         return StoredOAuthToken(token: token, clientID: "com.indragie.Context")
       } catch let decodingError as DecodingError {

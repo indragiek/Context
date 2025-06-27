@@ -15,13 +15,13 @@ actor MCPClientManager {
   private var clients: [UUID: Client] = [:]
   private let logger = Logger(subsystem: "com.indragie.Context", category: "MCPClientManager")
   private let keychainManager = KeychainManager()
-  
+
   // Token refresh state
   private var refreshTask: Task<Void, Never>?
   private var activeRefreshTasks: [UUID: Task<OAuthToken, any Error>] = [:]
-  private let refreshCheckInterval: TimeInterval = 60 // Check every minute
-  private let refreshBeforeExpiration: TimeInterval = 300 // Refresh 5 minutes before expiration
-  
+  private let refreshCheckInterval: TimeInterval = 60  // Check every minute
+  private let refreshBeforeExpiration: TimeInterval = 300  // Refresh 5 minutes before expiration
+
   @Dependency(\.oauthClient) var oauthClient
   @Dependency(\.defaultDatabase) var database
 
@@ -32,7 +32,7 @@ actor MCPClientManager {
   /// Gets or creates a client for the specified server
   func client(for server: MCPServer) async throws -> Client {
     ensureTokenRefreshTimerStarted()
-    
+
     if let existingClient = clients[server.id] {
       return existingClient
     }
@@ -204,9 +204,9 @@ actor MCPClientManager {
       return transport
     }
   }
-  
+
   // MARK: - Token Refresh
-  
+
   private func startTokenRefreshTimer() {
     refreshTask = Task {
       while !Task.isCancelled {
@@ -215,40 +215,43 @@ actor MCPClientManager {
       }
     }
   }
-  
+
   private func ensureTokenRefreshTimerStarted() {
     if refreshTask == nil {
       startTokenRefreshTimer()
     }
   }
-  
+
   private func checkAndRefreshTokens() async {
     logger.info("Checking tokens for refresh")
-    
+
     // Get all servers from database
-    guard let servers = try? await database.read({ db in
-      try MCPServer.all.fetchAll(db)
-    }) else {
+    guard
+      let servers = try? await database.read({ db in
+        try MCPServer.all.fetchAll(db)
+      })
+    else {
       logger.error("Failed to fetch servers for token refresh")
       return
     }
-    
+
     // Check each server's token
     for server in servers {
       // Skip servers that don't use HTTP-based transport (OAuth is only for HTTP)
       guard server.transport == .streamableHTTP || server.transport == .sse else { continue }
-      
+
       // Get the stored token
       guard let storedToken = try? await keychainManager.retrieveStoredToken(for: server.id) else {
         continue
       }
-      
+
       // Check if token needs refresh
       guard let expiresAt = storedToken.token.expiresAt else { continue }
       let timeUntilExpiration = expiresAt.timeIntervalSinceNow
       if timeUntilExpiration <= refreshBeforeExpiration && storedToken.token.refreshToken != nil {
-        logger.info("Token for server \(server.name) expires in \(timeUntilExpiration) seconds, refreshing")
-        
+        logger.info(
+          "Token for server \(server.name) expires in \(timeUntilExpiration) seconds, refreshing")
+
         // Refresh the token
         Task {
           do {
@@ -261,15 +264,16 @@ actor MCPClientManager {
       }
     }
   }
-  
+
   /// Refreshes a token for a server, ensuring only one refresh happens at a time
-  func refreshToken(for server: MCPServer, storedToken: StoredOAuthToken) async throws -> OAuthToken {
+  func refreshToken(for server: MCPServer, storedToken: StoredOAuthToken) async throws -> OAuthToken
+  {
     // Check if there's already an active refresh for this server
     if let activeTask = activeRefreshTasks[server.id] {
       logger.info("Token refresh already in progress for server \(server.name), waiting for result")
       return try await activeTask.value
     }
-    
+
     // Create a new refresh task
     let refreshTask = Task<OAuthToken, any Error> {
       defer {
@@ -277,21 +281,23 @@ actor MCPClientManager {
           self.removeActiveRefreshTask(for: server.id)
         }
       }
-      
+
       guard let refreshToken = storedToken.token.refreshToken,
-            let serverURLString = server.url,
-            let serverURL = URL(string: serverURLString) else {
+        let serverURLString = server.url,
+        let serverURL = URL(string: serverURLString)
+      else {
         throw MCPClientError.missingRefreshToken
       }
-      
+
       // Construct the resource metadata URL from the server URL
-      let resourceMetadataURL = serverURL.appendingPathComponent(".well-known/oauth-protected-resource")
-      
+      let resourceMetadataURL = serverURL.appendingPathComponent(
+        ".well-known/oauth-protected-resource")
+
       // Get the metadata
       let (resourceMetadata, authServerMetadata) = try await oauthClient.discoverMetadata(
         resourceMetadataURL: resourceMetadataURL
       )
-      
+
       // Perform the refresh
       let newToken = try await oauthClient.refreshToken(
         refreshToken: refreshToken,
@@ -299,23 +305,23 @@ actor MCPClientManager {
         clientID: storedToken.clientID,
         resource: resourceMetadata?.resource
       )
-      
+
       // Store the new token with the same client ID
       try await storeToken(for: server, token: newToken, clientID: storedToken.clientID)
-      
+
       return newToken
     }
-    
+
     // Store the active task
     activeRefreshTasks[server.id] = refreshTask
-    
+
     return try await refreshTask.value
   }
-  
+
   private func removeActiveRefreshTask(for serverId: UUID) {
     activeRefreshTasks[serverId] = nil
   }
-  
+
   deinit {
     refreshTask?.cancel()
   }

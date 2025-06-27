@@ -23,13 +23,13 @@ struct ContextApp: App {
           "https://3fd20401248f7d1fcfed9e0a7ce389ad@o4509521009508352.ingest.us.sentry.io/4509521010229248"
       }
     #endif
-    
+
     // Disable SIGPIPE - otherwise this crashes the app when a pipe is broken
     signal(SIGPIPE, SIG_IGN)
-    
+
     updaterController = SPUStandardUpdaterController(
       startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
-    
+
     prepareDependencies {
       $0.defaultDatabase = try! appDatabase()
     }

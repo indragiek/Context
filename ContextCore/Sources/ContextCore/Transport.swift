@@ -389,7 +389,8 @@ private func logResponse(_ response: TransportResponse, logger: Logger?) {
       "[failedRequest] request: \(String(reflecting: request), privacy: .private), error: \(String(reflecting: error), privacy: .private)"
     )
   case let .serverNotification(notification):
-    logger.trace("[serverNotification] request: \(String(reflecting: notification), privacy: .private)")
+    logger.trace(
+      "[serverNotification] request: \(String(reflecting: notification), privacy: .private)")
   case let .serverRequest(request):
     logger.trace("[serverRequest] request: \(String(reflecting: request), privacy: .private)")
   case let .serverError(error):

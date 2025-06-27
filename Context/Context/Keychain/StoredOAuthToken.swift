@@ -7,7 +7,7 @@ import Foundation
 struct StoredOAuthToken: Codable {
   let token: OAuthToken
   let clientID: String
-  
+
   init(token: OAuthToken, clientID: String) {
     self.token = token
     self.clientID = clientID

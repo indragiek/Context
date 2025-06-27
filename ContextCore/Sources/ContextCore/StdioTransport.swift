@@ -169,7 +169,7 @@ public actor StdioTransport: Transport {
     let responseChannel = AsyncThrowingChannel<TransportResponse, Error>()
     let internalResponseChannel = AsyncChannel<TransportResponse>()
     let logChannel = AsyncThrowingChannel<String, Error>()
-    
+
     // Store channels immediately to prevent crashes in initialize()
     self.responseChannel = responseChannel
     self.internalResponseChannel = internalResponseChannel
@@ -178,7 +178,7 @@ public actor StdioTransport: Transport {
     let inputPipe = Pipe()
     let outputPipe = Pipe()
     let errorPipe = Pipe()
-    
+
     do {
       process = try await {
         let process = Process()
@@ -186,11 +186,11 @@ public actor StdioTransport: Transport {
         process.arguments = serverProcessInfo.arguments
         var environment = process.environment ?? [:]
         serverProcessInfo.environment?.forEach { environment[$0] = $1 }
-        
+
         // Get merged PATH from user's shell and current process
         let mergedPath = try await getMergedPath()
         environment["PATH"] = mergedPath
-        
+
         process.environment = environment
         process.currentDirectoryURL = serverProcessInfo.currentDirectoryURL
         process.standardInput = inputPipe
@@ -432,19 +432,19 @@ public actor StdioTransport: Transport {
     stderrBuffer = ""
     return buffer
   }
-  
+
   /// Gets the merged PATH from the user's default shell and current process environment.
   private func getMergedPath() async throws -> String {
     var shellPaths: [String] = []
     var currentProcessPaths: [String] = []
     var allPaths = Set<String>()
-    
+
     // Get user's default shell PATH
     let userShell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
     do {
       let shellProcess = Process()
       let outputPipe = Pipe()
-      
+
       shellProcess.executableURL = URL(fileURLWithPath: userShell)
       // Using `env | grep '^PATH='` instead of `echo $PATH` because most shells use a colon delimiter
       // for $PATH, but fish prints it as a list with a space delimiter instead. This has consistent
@@ -453,13 +453,15 @@ public actor StdioTransport: Transport {
       shellProcess.arguments = ["-l", "-c", "env | grep '^\(pathPrefix)'"]
       shellProcess.standardOutput = outputPipe
       shellProcess.standardError = Pipe()
-      
+
       try shellProcess.run()
       shellProcess.waitUntilExit()
-      
+
       if shellProcess.terminationStatus == 0 {
         let data = outputPipe.fileHandleForReading.readDataToEndOfFile()
-        if var shellPath = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) {
+        if var shellPath = String(data: data, encoding: .utf8)?.trimmingCharacters(
+          in: .whitespacesAndNewlines)
+        {
           if shellPath.hasPrefix(pathPrefix) {
             shellPath = String(shellPath.dropFirst(pathPrefix.count))
           }
@@ -475,7 +477,7 @@ public actor StdioTransport: Transport {
     } catch {
       logger.warning("Failed to get shell PATH: \(error)")
     }
-    
+
     // Get current process's PATH
     if let currentPath = ProcessInfo.processInfo.environment["PATH"] {
       for path in currentPath.split(separator: ":") {
@@ -486,13 +488,13 @@ public actor StdioTransport: Transport {
         }
       }
     }
-    
+
     let systemPaths = [
       "/usr/local/bin",
       "/usr/bin",
       "/bin",
       "/usr/sbin",
-      "/sbin"
+      "/sbin",
     ]
 
     var fallbackPaths: [String] = []
@@ -502,13 +504,13 @@ public actor StdioTransport: Transport {
         allPaths.insert(path)
       }
     }
-    
+
     // Combine paths: shell paths first, then current process paths, then fallback paths
     var orderedPaths: [String] = []
     orderedPaths.append(contentsOf: shellPaths)
     orderedPaths.append(contentsOf: currentProcessPaths)
     orderedPaths.append(contentsOf: fallbackPaths)
-    
+
     return orderedPaths.joined(separator: ":")
   }
 

@@ -25,13 +25,13 @@ struct MCPServer: Equatable, Identifiable {
 
   @Column(as: [String: String]?.JSONRepresentation.self)
   var headers: [String: String]?
-  
+
   @Column("watched_paths", as: [String]?.JSONRepresentation.self)
   var watchedPaths: [String]?
-  
+
   @Column("working_directory_path")
   var workingDirectoryPath: String?
-  
+
   @Column("auto_reload_enabled")
   var autoReloadEnabled: Bool = false
 }
