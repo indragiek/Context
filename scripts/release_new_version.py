@@ -769,26 +769,33 @@ def get_last_release_tag() -> Optional[str]:
 
 def get_commits_since_tag(tag: Optional[str]) -> List[Dict[str, str]]:
     """Get all commits since the given tag (or all commits if no tag)"""
-    cmd = ["git", "log", "--pretty=format:%H|%h|%s", "--reverse"]
+    # First get commits with full messages to check for exclude_changelog
+    cmd_full = ["git", "log", "--pretty=format:%H|%h|%B|--END--", "--reverse"]
     if tag:
-        cmd.append(f"{tag}..HEAD")
+        cmd_full.append(f"{tag}..HEAD")
     
-    result = run_command(cmd, show_output=False)
+    result = run_command(cmd_full, show_output=False)
     commits = []
     
-    for line in result.stdout.strip().split('\n'):
-        if not line:
+    # Split by our delimiter to separate commits
+    commit_texts = result.stdout.split('|--END--')
+    
+    for commit_text in commit_texts:
+        if not commit_text.strip():
             continue
-        parts = line.split('|', 2)
-        if len(parts) == 3:
-            full_sha, short_sha, message = parts
-            # Get only the first line of the commit message
-            first_line = message.split('\n')[0].strip()
-            # Skip commits with [exclude_changelog] in the message
-            if "[exclude_changelog]" not in first_line.lower():
+        
+        # Extract the hash info and message
+        lines = commit_text.strip().split('|', 2)
+        if len(lines) >= 3:
+            full_sha, short_sha, full_message = lines
+            
+            # Check entire commit message for [exclude_changelog]
+            if "[exclude_changelog]" not in full_message.lower():
+                # But only use the first line for the changelog entry
+                first_line = full_message.split('\n')[0].strip()
                 commits.append({
-                    'full_sha': full_sha,
-                    'short_sha': short_sha,
+                    'full_sha': full_sha.strip(),
+                    'short_sha': short_sha.strip(),
                     'message': first_line
                 })
     
