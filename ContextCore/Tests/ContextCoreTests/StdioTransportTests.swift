@@ -387,6 +387,141 @@ import Testing
 
     try await transport.close()
   }
+  
+  // MARK: - Race Condition Tests
+  
+  @Test func testInitializeAfterFailedStart() async throws {
+    // Create a transport with an invalid executable path
+    let serverProcessInfo = StdioTransport.ServerProcessInfo(
+      executableURL: URL(fileURLWithPath: "/non/existent/path/to/executable"),
+      arguments: []
+    )
+    
+    let transport = StdioTransport(
+      serverProcessInfo: serverProcessInfo,
+      clientInfo: Implementation(name: "TestClient", version: "1.0"),
+      clientCapabilities: ClientCapabilities()
+    )
+    
+    // Try to start the transport - this should fail because the executable doesn't exist
+    do {
+      try await transport.start()
+      Issue.record("Expected start() to fail with non-existent executable")
+    } catch {
+      // Expected error - the executable doesn't exist
+    }
+    
+    // Now try to initialize - this should throw TransportError.notStarted instead of crashing
+    do {
+      _ = try await transport.initialize { .string("test-id") }
+      Issue.record("Expected initialize() to throw TransportError.notStarted")
+    } catch TransportError.notStarted {
+      // This is the expected error - test passes
+    } catch {
+      Issue.record("Expected TransportError.notStarted but got \(error)")
+    }
+  }
+  
+  @Test func testReceiveAfterFailedStart() async throws {
+    let serverProcessInfo = StdioTransport.ServerProcessInfo(
+      executableURL: URL(fileURLWithPath: "/non/existent/path/to/executable"),
+      arguments: []
+    )
+    
+    let transport = StdioTransport(
+      serverProcessInfo: serverProcessInfo,
+      clientInfo: Implementation(name: "TestClient", version: "1.0"),
+      clientCapabilities: ClientCapabilities()
+    )
+    
+    // Try to start the transport - this should fail
+    do {
+      try await transport.start()
+      Issue.record("Expected start() to fail with non-existent executable")
+    } catch {
+      // Expected error
+    }
+    
+    // Now try to receive - this should throw TransportError.notStarted instead of crashing
+    do {
+      _ = try await transport.receive()
+      Issue.record("Expected receive() to throw TransportError.notStarted")
+    } catch TransportError.notStarted {
+      // This is the expected error - test passes
+    } catch {
+      Issue.record("Expected TransportError.notStarted but got \(error)")
+    }
+  }
+  
+  @Test func testReceiveLogsAfterFailedStart() async throws {
+    let serverProcessInfo = StdioTransport.ServerProcessInfo(
+      executableURL: URL(fileURLWithPath: "/non/existent/path/to/executable"),
+      arguments: []
+    )
+    
+    let transport = StdioTransport(
+      serverProcessInfo: serverProcessInfo,
+      clientInfo: Implementation(name: "TestClient", version: "1.0"),
+      clientCapabilities: ClientCapabilities()
+    )
+    
+    // Try to start the transport - this should fail
+    do {
+      try await transport.start()
+      Issue.record("Expected start() to fail with non-existent executable")
+    } catch {
+      // Expected error
+    }
+    
+    // Now try to receiveLogs - this should throw TransportError.notStarted instead of crashing
+    do {
+      _ = try await transport.receiveLogs()
+      Issue.record("Expected receiveLogs() to throw TransportError.notStarted")
+    } catch TransportError.notStarted {
+      // This is the expected error - test passes
+    } catch {
+      Issue.record("Expected TransportError.notStarted but got \(error)")
+    }
+  }
+  
+  @Test func testSendAfterFailedStart() async throws {
+    let serverProcessInfo = StdioTransport.ServerProcessInfo(
+      executableURL: URL(fileURLWithPath: "/non/existent/path/to/executable"),
+      arguments: []
+    )
+    
+    let transport = StdioTransport(
+      serverProcessInfo: serverProcessInfo,
+      clientInfo: Implementation(name: "TestClient", version: "1.0"),
+      clientCapabilities: ClientCapabilities()
+    )
+    
+    // Try to start the transport - this should fail
+    do {
+      try await transport.start()
+      Issue.record("Expected start() to fail with non-existent executable")
+    } catch {
+      // Expected error
+    }
+    
+    // Create a test request using InitializeRequest
+    let request = InitializeRequest(
+      id: .number(1),
+      protocolVersion: MCPProtocolVersion,
+      capabilities: ClientCapabilities(),
+      clientInfo: Implementation(name: "TestClient", version: "1.0")
+    )
+    
+    // Now try to send - this should throw TransportError.notStarted instead of crashing
+    do {
+      try await transport.send(request: request)
+      Issue.record("Expected send() to throw TransportError.notStarted")
+    } catch TransportError.notStarted {
+      // This is the expected error - test passes
+    } catch {
+      Issue.record("Expected TransportError.notStarted but got \(error)")
+    }
+  }
 }
 
 private struct StdioTransportTestFixtures {

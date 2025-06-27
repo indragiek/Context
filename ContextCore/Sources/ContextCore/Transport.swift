@@ -44,6 +44,9 @@ public enum TransportError: Error {
 
   /// Thrown when a request times out waiting for a response.
   case timeout
+
+  /// Thrown when attempting to use the transport before calling start().
+  case notStarted
 }
 
 extension TransportError: LocalizedError {
@@ -69,6 +72,8 @@ extension TransportError: LocalizedError {
       return "JSON-RPC batch cannot be empty"
     case .timeout:
       return "Request timed out"
+    case .notStarted:
+      return "Transport is not started. Make sure to call start() first"
     }
   }
 }

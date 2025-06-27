@@ -165,46 +165,66 @@ public actor StdioTransport: Transport {
       return
     }
 
+    // Initialize channels early to ensure they're available even if start fails
+    let responseChannel = AsyncThrowingChannel<TransportResponse, Error>()
+    let internalResponseChannel = AsyncChannel<TransportResponse>()
+    let logChannel = AsyncThrowingChannel<String, Error>()
+    
+    // Store channels immediately to prevent crashes in initialize()
+    self.responseChannel = responseChannel
+    self.internalResponseChannel = internalResponseChannel
+    self.logChannel = logChannel
+
     let inputPipe = Pipe()
     let outputPipe = Pipe()
     let errorPipe = Pipe()
-    process = try await {
-      let process = Process()
-      process.executableURL = serverProcessInfo.executableURL
-      process.arguments = serverProcessInfo.arguments
-      var environment = process.environment ?? [:]
-      serverProcessInfo.environment?.forEach { environment[$0] = $1 }
-      
-      // Get merged PATH from user's shell and current process
-      let mergedPath = try await getMergedPath()
-      environment["PATH"] = mergedPath
-      
-      process.environment = environment
-      process.currentDirectoryURL = serverProcessInfo.currentDirectoryURL
-      process.standardInput = inputPipe
-      process.standardOutput = outputPipe
-      process.standardError = errorPipe
+    
+    do {
+      process = try await {
+        let process = Process()
+        process.executableURL = serverProcessInfo.executableURL
+        process.arguments = serverProcessInfo.arguments
+        var environment = process.environment ?? [:]
+        serverProcessInfo.environment?.forEach { environment[$0] = $1 }
+        
+        // Get merged PATH from user's shell and current process
+        let mergedPath = try await getMergedPath()
+        environment["PATH"] = mergedPath
+        
+        process.environment = environment
+        process.currentDirectoryURL = serverProcessInfo.currentDirectoryURL
+        process.standardInput = inputPipe
+        process.standardOutput = outputPipe
+        process.standardError = errorPipe
 
-      let logger = self.logger
-      let connectionStateChannel = self.connectionStateChannel
-      process.terminationHandler = { p in
-        logger.info("Process exited with status code \(p.terminationStatus)")
-        Task {
-          await connectionStateChannel.send(.disconnected)
+        let logger = self.logger
+        let connectionStateChannel = self.connectionStateChannel
+        process.terminationHandler = { p in
+          logger.info("Process exited with status code \(p.terminationStatus)")
+          Task {
+            await connectionStateChannel.send(.disconnected)
+          }
         }
-      }
 
-      try process.run()
+        try process.run()
 
-      Task {
-        await connectionStateChannel.send(.connected)
-      }
-      return process
-    }()
-    self.inputPipe = inputPipe
+        Task {
+          await connectionStateChannel.send(.connected)
+        }
+        return process
+      }()
+      self.inputPipe = inputPipe
+    } catch {
+      // Clean up channels on failure
+      responseChannel.fail(error)
+      internalResponseChannel.finish()
+      logChannel.fail(error)
+      self.responseChannel = nil
+      self.internalResponseChannel = nil
+      self.logChannel = nil
+      throw error
+    }
 
-    let responseChannel = AsyncThrowingChannel<TransportResponse, Error>()
-    let internalResponseChannel = AsyncChannel<TransportResponse>()
     let getStderrBuffer: @Sendable () async -> String = { [weak self] in
       return await self?.flushStderrBuffer() ?? ""
     }
@@ -227,10 +247,7 @@ public actor StdioTransport: Transport {
         responseChannel.fail(error)
       }
     }
-    self.responseChannel = responseChannel
-    self.internalResponseChannel = internalResponseChannel
 
-    let logChannel = AsyncThrowingChannel<String, Error>()
     readLogsTask = Task {
       do {
         for try await data in readLines(fileHandle: errorPipe.fileHandleForReading) {
@@ -245,15 +262,13 @@ public actor StdioTransport: Transport {
         logChannel.fail(error)
       }
     }
-    self.logChannel = logChannel
   }
 
   public func initialize(idGenerator: @escaping IDGenerator) async throws
     -> InitializeResponse.Result
   {
     guard let internalResponseChannel = internalResponseChannel else {
-      fatalError(
-        "Cannot receive messages before stdout is available. Make sure to call start() first")
+      throw TransportError.notStarted
     }
     let initialize = InitializeRequest(
       id: idGenerator(),
@@ -352,17 +367,14 @@ public actor StdioTransport: Transport {
 
   public func receive() async throws -> AsyncThrowingChannel<TransportResponse, Error> {
     guard let responseChannel = responseChannel else {
-      fatalError(
-        "Cannot receive messages before stdout is available. Make sure to call start() first"
-      )
+      throw TransportError.notStarted
     }
     return responseChannel
   }
 
   public func receiveLogs() async throws -> AsyncThrowingChannel<String, Error> {
     guard let logChannel = logChannel else {
-      fatalError(
-        "Cannot receive logs before stderr is available. Make sure to call start() first")
+      throw TransportError.notStarted
     }
     return logChannel
   }
@@ -502,8 +514,7 @@ public actor StdioTransport: Transport {
 
   private func send(data: Data) throws {
     guard let inputPipe = inputPipe else {
-      fatalError(
-        "Cannot send messages before stdin is available. Make sure to call start() first")
+      throw TransportError.notStarted
     }
 
     // Validate that the data doesn't contain embedded newlines as required by the spec
