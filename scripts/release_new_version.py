@@ -93,9 +93,9 @@ class Config:
 
 def load_config(config_path: Optional[Path] = None) -> Config:
     """Load configuration from YAML file"""
-    # If no explicit path provided, look for release.yaml in current directory
+    # If no explicit path provided, look for app.yml in current directory
     if config_path is None:
-        config_path = Path("release.yaml")
+        config_path = Path("app.yml")
 
     if not config_path.exists():
         error_msg = f"""
@@ -103,9 +103,9 @@ def load_config(config_path: Optional[Path] = None) -> Config:
 
 The release automation script requires a configuration file to run.
 
-Please create a 'release.yaml' file in your project root with the following format:
+Please create an 'app.yml' file in your project root with the following format:
 
-[yellow]# Example release.yaml configuration[/yellow]
+[yellow]# Example app.yml configuration[/yellow]
 [dim]app_name: "YourApp"
 bundle_identifier: "com.yourcompany.YourApp"
 xcode_project: "YourApp/YourApp.xcodeproj"
@@ -508,7 +508,7 @@ Environment Variables:
         help="Path to directory where archives will be generated",
     )
     parser.add_argument(
-        "--config", type=Path, help="Path to configuration file (default: release.yaml)"
+        "--config", type=Path, help="Path to configuration file (default: app.yml)"
     )
     parser.add_argument(
         "--sentry-org", help="Sentry organization slug for uploading dSYMs"
