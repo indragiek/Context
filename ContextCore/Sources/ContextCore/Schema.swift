@@ -427,7 +427,7 @@ public struct LoggingMessageNotification {
       self.logger = logger
       self.data = data
     }
-    
+
     /// The severity of this log message.
     public let level: LoggingLevel
 
@@ -631,6 +631,11 @@ public struct ListPromptsResponse {
 
 /// A message in a prompt template, containing only role and content.
 public struct PromptMessage: Codable, Sendable {
+  public init(role: Role, content: Content) {
+    self.role = role
+    self.content = content
+  }
+
   /// The role of the message sender (user or assistant).
   public let role: Role
 
