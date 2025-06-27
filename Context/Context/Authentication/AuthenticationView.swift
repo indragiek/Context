@@ -201,11 +201,10 @@ struct AuthenticationView: View {
 
     Task {
       do {
-        // Use the new SwiftUI WebAuthenticationSession API with ephemeral session for security
         let result = try await webAuthenticationSession.authenticate(
           using: authURL,
           callbackURLScheme: "context",
-          preferredBrowserSession: .ephemeral
+          preferredBrowserSession: .shared
         )
 
         // Validate callback URL structure
