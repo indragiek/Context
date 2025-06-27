@@ -752,6 +752,132 @@ def show_release_notes_preview(changelog_items: str, version: str) -> None:
     console.print()
 
 
+def get_last_release_tag() -> Optional[str]:
+    """Get the most recent release tag (v*.*.*)"""
+    try:
+        result = run_command(
+            ["git", "tag", "-l", "v*.*.*", "--sort=-version:refname"],
+            show_output=False
+        )
+        tags = result.stdout.strip().split('\n')
+        if tags and tags[0]:
+            return tags[0]
+        return None
+    except Exception:
+        return None
+
+
+def get_commits_since_tag(tag: Optional[str]) -> List[Dict[str, str]]:
+    """Get all commits since the given tag (or all commits if no tag)"""
+    cmd = ["git", "log", "--pretty=format:%H|%h|%s", "--reverse"]
+    if tag:
+        cmd.append(f"{tag}..HEAD")
+    
+    result = run_command(cmd, show_output=False)
+    commits = []
+    
+    for line in result.stdout.strip().split('\n'):
+        if not line:
+            continue
+        parts = line.split('|', 2)
+        if len(parts) == 3:
+            full_sha, short_sha, message = parts
+            # Get only the first line of the commit message
+            first_line = message.split('\n')[0].strip()
+            # Skip commits with [exclude_changelog] in the message
+            if "[exclude_changelog]" not in first_line.lower():
+                commits.append({
+                    'full_sha': full_sha,
+                    'short_sha': short_sha,
+                    'message': first_line
+                })
+    
+    # Return in reverse order (newest first)
+    return list(reversed(commits))
+
+
+def format_changelog_entry(commit: Dict[str, str]) -> str:
+    """Format a commit as a changelog entry"""
+    assert CONFIG is not None, "CONFIG must be initialized"
+    github_url = f"https://github.com/{CONFIG['github_owner']}/{CONFIG['github_repo']}/commit/{commit['full_sha']}"
+    return f"* {commit['message']} ([{commit['short_sha']}]({github_url}))"
+
+
+def update_changelog_with_commits(rollback_manager: RollbackManager) -> bool:
+    """Offer to update changelog with commits since last release"""
+    changelog_path = Path("CHANGELOG.md")
+    
+    if not changelog_path.exists():
+        return False
+    
+    # Get commits since last release
+    last_tag = get_last_release_tag()
+    commits = get_commits_since_tag(last_tag)
+    
+    if not commits:
+        if not QUIET:
+            console.print(f"{Icons.INFO} No new commits found since last release")
+        return False
+    
+    # Format the commits as changelog entries
+    new_entries = [format_changelog_entry(commit) for commit in commits]
+    
+    # Show preview of new entries
+    if not QUIET:
+        console.print()
+        console.rule("[bold blue]Suggested Changelog Entries[/bold blue]")
+        console.print(f"\nFound {len(commits)} new commits since {last_tag or 'beginning'}:\n")
+        
+        preview_panel = Panel(
+            '\n'.join(new_entries),
+            title="[bold]New Changelog Entries[/bold]",
+            border_style="blue",
+            padding=(1, 2),
+        )
+        console.print(preview_panel)
+        console.print()
+        
+        if not Confirm.ask("[yellow]Add these entries to the changelog?[/yellow]", default=True):
+            return False
+    
+    # Backup the changelog before modifying
+    rollback_manager.backup_file(changelog_path)
+    
+    # Read the current changelog
+    with open(changelog_path, "r") as f:
+        content = f.read()
+    
+    # Find the Unreleased section
+    unreleased_match = re.search(r"(## Unreleased\n)(.*?)(?=\n## |$)", content, re.DOTALL)
+    if not unreleased_match:
+        console.print(f"{Icons.ERROR} Could not find '## Unreleased' section in CHANGELOG.md")
+        return False
+    
+    unreleased_header = unreleased_match.group(1)
+    existing_content = unreleased_match.group(2).strip()
+    
+    # Combine existing content with new entries
+    if existing_content:
+        new_content = existing_content + '\n\n' + '\n'.join(new_entries)
+    else:
+        new_content = '\n'.join(new_entries)
+    
+    # Replace the unreleased section
+    updated_content = content.replace(
+        unreleased_match.group(0),
+        unreleased_header + new_content + '\n'
+    )
+    
+    # Write the updated changelog
+    with open(changelog_path, "w") as f:
+        f.write(updated_content)
+    
+    if not QUIET:
+        console.print(f"{Icons.SUCCESS} Updated CHANGELOG.md with {len(commits)} new entries")
+    
+    return True
+
+
 def process_changelog(
     new_project: int, new_marketing: str, rollback_manager: RollbackManager
 ) -> str:
@@ -2079,6 +2205,13 @@ def main() -> None:
                 )
             if not QUIET:
                 console.print(f"{Icons.SUCCESS} Updated version numbers")
+
+        # Offer to update changelog with recent commits
+        if not QUIET:
+            console.print()
+            console.rule("[bold blue]Changelog Update[/bold blue]")
+        
+        update_changelog_with_commits(rollback_manager)
 
         # Process changelog
         if not QUIET:
