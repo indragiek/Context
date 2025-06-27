@@ -17,12 +17,6 @@ public enum Role: String, Codable, Sendable, Equatable {
 /// Optional annotations for the client. The client can use annotations to inform
 /// how objects are used or displayed.
 public struct Annotations: Codable, Sendable, Equatable {
-  // TODO: Remove once mock data is removed
-  public init(audience: [Role]? = nil, priority: Double? = nil) {
-    self.audience = audience
-    self.priority = priority
-  }
-
   /// Describes who the intended customer of this object or data is
   ///
   /// It can include multiple entries to indicate content useful for multiple audiences (e.g., `
@@ -433,7 +427,7 @@ public struct LoggingMessageNotification {
       self.logger = logger
       self.data = data
     }
-
+    
     /// The severity of this log message.
     public let level: LoggingLevel
 
@@ -460,15 +454,6 @@ public struct StderrNotification {
 
 /// Describes a resource available from the server.
 public struct Resource: Codable, Sendable, Equatable {
-  // TODO: Remove once mock data is removed
-  public init(uri: String, name: String? = nil, description: String? = nil, mimeType: String? = nil)
-  {
-    self.uri = uri
-    self.name = name
-    self.description = description
-    self.mimeType = mimeType
-  }
-
   /// The URI used to identify and retrieve this resource.
   public let uri: String
 
@@ -485,18 +470,6 @@ public struct Resource: Codable, Sendable, Equatable {
 
 /// Describes a resource template that the client can use to construct URIs for resources.
 public struct ResourceTemplate: Codable, Sendable, Equatable {
-  // TODO: Remove once mock data is removed
-  public init(
-    uriTemplate: String, name: String, description: String? = nil, mimeType: String? = nil,
-    annotations: Annotations? = nil
-  ) {
-    self.uriTemplate = uriTemplate
-    self.name = name
-    self.description = description
-    self.mimeType = mimeType
-    self.annotations = annotations
-  }
-
   /// A URI template according to RFC 6570 for constructing resource URIs.
   public let uriTemplate: String
 
@@ -613,13 +586,6 @@ public struct ListResourceTemplatesResponse {
 
 /// Definition for a prompt template that the client can use.
 public struct Prompt: Codable, Sendable, Equatable {
-  // TODO: remove once mock data is removed
-  public init(name: String, description: String? = nil, arguments: [PromptArgument]? = nil) {
-    self.name = name
-    self.description = description
-    self.arguments = arguments
-  }
-
   /// The name of the prompt template.
   public let name: String
 
@@ -632,13 +598,6 @@ public struct Prompt: Codable, Sendable, Equatable {
 
 /// Describes an argument that can be passed to a prompt.
 public struct PromptArgument: Codable, Sendable, Equatable {
-  // TODO: remove once mock data is removed
-  public init(name: String, description: String? = nil, required: Bool? = nil) {
-    self.name = name
-    self.description = description
-    self.required = required
-  }
-
   /// The name of the argument.
   public let name: String
 
@@ -672,12 +631,6 @@ public struct ListPromptsResponse {
 
 /// A message in a prompt template, containing only role and content.
 public struct PromptMessage: Codable, Sendable {
-  // TODO: remove once mock data is removed
-  public init(role: Role, content: Content) {
-    self.role = role
-    self.content = content
-  }
-
   /// The role of the message sender (user or assistant).
   public let role: Role
 
@@ -701,7 +654,6 @@ public struct GetPromptRequest {
 @JSONRPCResponse
 public struct GetPromptResponse {
   public struct Result: Codable, Sendable {
-    // TODO: remove once mock data is removed
     public init(description: String? = nil, messages: [PromptMessage]) {
       self.description = description
       self.messages = messages
@@ -1009,26 +961,8 @@ public struct ToolAnnotations: Codable, Sendable, Equatable {
 
 /// Definition for a tool the client can call.
 public struct Tool: Codable, Sendable, Equatable {
-  // TODO: remove once mock data is removed
-  public init(
-    name: String, description: String? = nil, inputSchema: Tool.InputSchema,
-    annotations: ToolAnnotations? = nil
-  ) {
-    self.name = name
-    self.description = description
-    self.inputSchema = inputSchema
-    self.annotations = annotations
-  }
-
   /// A JSON Schema object defining the expected parameters for the tool.
   public struct InputSchema: Codable, Sendable, Equatable {
-    // TODO: remove once mock data is removed
-    public init(type: String, properties: [String: JSONValue]? = nil, required: [String]? = nil) {
-      self.type = type
-      self.properties = properties
-      self.required = required
-    }
-
     public let type: String  // object
     public let properties: [String: JSONValue]?
     public let required: [String]?
@@ -1085,15 +1019,7 @@ public struct CallToolRequest {
 /// The server's response to `CallToolRequest`
 @JSONRPCResponse
 public struct CallToolResponse {
-  // TODO: remove once mock data is removed
-  public init(jsonrpc: String, result: CallToolResponse.Result, id: JSONRPCRequestID) {
-    self.jsonrpc = jsonrpc
-    self.result = result
-    self.id = id
-  }
-
   public struct Result: Codable, Sendable {
-    // TODO: Remove once mock data is removed
     public init(content: [Content], isError: Bool? = nil) {
       self.content = content
       self.isError = isError
