@@ -967,6 +967,11 @@ CODE_SIGN_STYLE = Automatic
 // Use Apple Development for all targets by default
 CODE_SIGN_IDENTITY = Apple Development
 
+// Build universal binary for both Intel and Apple Silicon
+ARCHS = x86_64 arm64
+ONLY_ACTIVE_ARCH = NO
+VALID_ARCHS = x86_64 arm64
+
 // For the export step, xcodebuild will use the Developer ID from the export options plist
 """
 
@@ -1081,6 +1086,8 @@ def build_xcode_archive(
     <false/>
     <key>signingCertificate</key>
     <string>Developer ID Application</string>
+    <key>thinning</key>
+    <string>&lt;none&gt;</string>
 </dict>
 </plist>"""
 
@@ -1106,6 +1113,24 @@ def build_xcode_archive(
         app_path = export_path / "Context.app"
         if not app_path.exists():
             raise ReleaseError(f"Exported app not found at {app_path}")
+
+        # Verify the binary is universal
+        binary_path = app_path / "Contents" / "MacOS" / CONFIG['app_name']
+        if binary_path.exists():
+            result = run_command(
+                ["lipo", "-info", str(binary_path)],
+                show_output=False
+            )
+            if "x86_64" not in result.stdout or "arm64" not in result.stdout:
+                console.print(f"{Icons.WARNING} Binary architecture check: {result.stdout}")
+                if "x86_64" not in result.stdout:
+                    console.print(f"{Icons.ERROR} Missing x86_64 architecture!")
+                if "arm64" not in result.stdout:
+                    console.print(f"{Icons.ERROR} Missing arm64 architecture!")
+                raise ReleaseError("Binary is not universal (missing x86_64 or arm64)")
+            else:
+                if VERBOSE:
+                    console.print(f"{Icons.SUCCESS} Verified universal binary: {result.stdout.strip()}")
 
         # Note: Don't re-sign here - we'll sign after cleaning in final location
 
@@ -1411,6 +1436,22 @@ def create_dmg(product_folder: Path, dmg_path: Path) -> None:
     )
 
 
+def verify_universal_binary(app_path: Path) -> None:
+    """Verify that the app contains a universal binary"""
+    assert CONFIG is not None, "CONFIG must be initialized"
+    
+    binary_path = app_path / "Contents" / "MacOS" / CONFIG['app_name']
+    if binary_path.exists():
+        result = run_command(
+            ["lipo", "-info", str(binary_path)],
+            show_output=False
+        )
+        if "x86_64" not in result.stdout or "arm64" not in result.stdout:
+            raise ReleaseError(f"Binary is not universal: {result.stdout}")
+        if VERBOSE:
+            console.print(f"{Icons.SUCCESS} Verified universal binary: {result.stdout.strip()}")
+
+
 def sign_dmg(dmg_path: Path) -> None:
     """Sign DMG with Developer ID certificate"""
     # Clean the DMG of any extended attributes before signing
@@ -1581,6 +1622,9 @@ def create_and_notarize_dmg(
             task, description="Cleaning and re-signing app for notarization..."
         )
         clean_and_sign_app(final_app_path)
+        
+        # Verify the binary is still universal after signing
+        verify_universal_binary(final_app_path)
 
         # Create DMG
         progress.update(task, description="Creating DMG...")
