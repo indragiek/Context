@@ -112,7 +112,8 @@ xcode_project: "YourApp/YourApp.xcodeproj"
 scheme: "YourApp"
 website_url: "https://www.yourapp.com/"
 github_owner: "yourusername"
-github_repo: "YourApp"[/dim]
+github_repo: "YourApp"
+minimum_system_version: "15.0"  # Optional, defaults to "15.0"[/dim]
 
 You can also specify a custom configuration file path using:
   [cyan]./release_new_version.py --config /path/to/config.yaml ...[/cyan]
@@ -787,19 +788,7 @@ def process_changelog(
     with open(changelog_path, "w") as f:
         f.write(updated_content)
 
-    # Generate HTML release notes
-    release_notes_dir = Path("release_notes")
-    release_notes_dir.mkdir(exist_ok=True)
-
-    html_content = generate_html_from_markdown(changelog_items, new_marketing)
-    html_path = release_notes_dir / f"{new_marketing}.html"
-
-    # Track the created HTML file
-    rollback_manager.track_created_file(html_path)
-
-    with open(html_path, "w") as f:
-        f.write(html_content)
-
+    # Don't generate HTML file anymore - we'll embed it directly in appcast.xml
     return changelog_items
 
 
@@ -1571,6 +1560,7 @@ def update_appcast(
     project_version: int,
     signature: str,
     length: str,
+    changelog_items: str,
     rollback_manager: RollbackManager,
 ) -> None:
     """Update appcast.xml with new release information"""
@@ -1609,10 +1599,28 @@ def update_appcast(
         new_item, f"{{{sparkle_ns}}}shortVersionString"
     ).text = marketing_version
 
-    # Add release notes link
+    # Add minimum system version
+    min_sys_version = CONFIG.get("minimum_system_version", "15.0")
     etree.SubElement(
-        new_item, f"{{{sparkle_ns}}}releaseNotesLink"
-    ).text = f"https://raw.githubusercontent.com/{CONFIG['github_owner']}/{CONFIG['github_repo']}/refs/heads/main/release_notes/{marketing_version}.html"
+        new_item, f"{{{sparkle_ns}}}minimumSystemVersion"
+    ).text = min_sys_version
+
+    # Add description with HTML release notes in CDATA
+    description = etree.SubElement(new_item, "description")
+    # Convert markdown to HTML
+    html_content = markdown2.markdown(
+        changelog_items,
+        extras=[
+            "fenced-code-blocks",
+            "tables",
+            "strike",
+            "target-blank-links",
+            "task_list",
+            "code-friendly",
+        ],
+    )
+    # Wrap in CDATA
+    description.text = etree.CDATA(html_content)
 
     # Add publication date
     pub_date = etree.SubElement(new_item, "pubDate")
@@ -1936,12 +1944,7 @@ def verify_release(
     else:
         verification_results.append((Icons.SUCCESS, "DMG notarization verified"))
 
-    # Verify release notes exist
-    release_notes_path = Path("release_notes") / f"{marketing_version}.html"
-    if not release_notes_path.exists():
-        raise ReleaseError(f"Release notes not found at {release_notes_path}")
-
-    verification_results.append((Icons.SUCCESS, "Release notes found"))
+    # No longer verify release notes files since we embed them in appcast.xml
 
     # Verify appcast was updated
     appcast_path = Path("appcast.xml")
@@ -2141,7 +2144,7 @@ def main() -> None:
             # Update appcast
             with console.status("Updating appcast.xml..."):
                 update_appcast(
-                    new_marketing, new_project, signature, length, rollback_manager
+                    new_marketing, new_project, signature, length, changelog_items, rollback_manager
                 )
             if not QUIET:
                 console.print(f"{Icons.SUCCESS} Updated appcast.xml")
