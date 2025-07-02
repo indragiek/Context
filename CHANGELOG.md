@@ -1,5 +1,8 @@
 ## Unreleased
 
+## Version 1.0.5 (105)
+* Implement missing SQLite uuid() function ([cb33360](https://github.com/indragiek/Context/commit/cb33360a73b5a2a5d661f330439341f226d13731))
+
 ## Version 1.0.4 (104)
 * Fix crash due to partial initialization of StdioTransport ([ec0e988](https://github.com/indragiek/Context/commit/ec0e9886be179cc3bb00eb56d0e95d7f2d2d8ad7))
 * Fix broken handling of legacy SSE transport ([4bac2d6](https://github.com/indragiek/Context/commit/4bac2d6405270ac7cb1f9b9d95204156db8f6410))
