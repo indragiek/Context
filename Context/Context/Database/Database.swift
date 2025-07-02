@@ -15,12 +15,23 @@ func appDatabase() throws -> any DatabaseWriter {
   print("Database path: \(databasePath)")
 
   var configuration = Configuration()
+  let configureDatabase: @Sendable (Database) -> Void = { db in
+    // Previous versions of the app did not provide an implementation of the uuid()
+    // function, which does not exist in SQLite.
+    let uuid = DatabaseFunction("uuid", argumentCount: 0, pure: true) { _ in
+      UUID().uuidString
+    }
+    db.add(function: uuid)
+  }
   #if DEBUG
     configuration.prepareDatabase { db in
       db.trace { print("SQL: \($0)") }
+      configureDatabase(db)
     }
   #else
-    configuration.prepareDatabase { _ in }
+    configuration.prepareDatabase { db in
+      configureDatabase(db)
+    }
   #endif
 
   let dbWriter = try DatabasePool(path: databasePath, configuration: configuration)
