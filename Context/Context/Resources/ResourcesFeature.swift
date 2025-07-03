@@ -28,6 +28,14 @@ struct ResourcesFeature {
     var hasLoadedOnce = false
     var selectedSegment: ResourceSegment = .resources
 
+    // Pagination state
+    var resourcesNextCursor: String?
+    var templatesNextCursor: String?
+    var isLoadingMoreResources = false
+    var isLoadingMoreTemplates = false
+    var hasMoreResources = true  // Assume there might be more until proven otherwise
+    var hasMoreTemplates = true  // Assume there might be more until proven otherwise
+
     var filteredResources: [Resource] {
       if searchQuery.isEmpty {
         return resources
@@ -70,6 +78,12 @@ struct ResourcesFeature {
     case connectionStateChanged(Client.ConnectionState)
     case reconnect
     case prepareForReconnection
+    case loadMoreResources
+    case moreResourcesLoaded(resources: [Resource], nextCursor: String?)
+    case loadMoreResourcesFailed(any Error)
+    case loadMoreTemplates
+    case moreTemplatesLoaded(templates: [ResourceTemplate], nextCursor: String?)
+    case loadMoreTemplatesFailed(any Error)
   }
 
   @Dependency(\.mcpClientManager) var mcpClientManager
@@ -89,9 +103,13 @@ struct ResourcesFeature {
               return
             }
 
-            let (resources, _) = try await client.listResources()
-            let (templates, _) = try await client.listResourceTemplates()
+            let (resources, resourcesNextCursor) = try await client.listResources()
+            let (templates, templatesNextCursor) = try await client.listResourceTemplates()
             await send(.resourcesLoaded(resources: resources, templates: templates))
+
+            // Store pagination cursors
+            await send(.moreResourcesLoaded(resources: [], nextCursor: resourcesNextCursor))
+            await send(.moreTemplatesLoaded(templates: [], nextCursor: templatesNextCursor))
           } catch {
             await send(.loadingFailed(error))
           }
@@ -153,6 +171,10 @@ struct ResourcesFeature {
       case let .searchQueryChanged(query):
         state.searchQuery = query
 
+        // Note: We don't reset pagination state when searching.
+        // The filtered results will show items from all loaded pages.
+        // This provides a better UX as users can search across all loaded data.
+
         // Only update selection for the currently selected segment
         if state.selectedSegment == .resources {
           if let selectedResourceID = state.selectedResourceID {
@@ -208,6 +230,15 @@ struct ResourcesFeature {
         state.searchQuery = ""
         state.error = nil
         state.hasLoadedOnce = false
+
+        // Reset pagination state
+        state.resourcesNextCursor = nil
+        state.templatesNextCursor = nil
+        state.isLoadingMoreResources = false
+        state.isLoadingMoreTemplates = false
+        state.hasMoreResources = true
+        state.hasMoreTemplates = true
+
         return .none
 
       case let .connectionStateChanged(connectionState):
@@ -225,6 +256,76 @@ struct ResourcesFeature {
       case .prepareForReconnection:
         state.isLoading = true
         state.error = nil
+        return .none
+
+      case .loadMoreResources:
+        guard !state.isLoadingMoreResources,
+          state.hasMoreResources,
+          let cursor = state.resourcesNextCursor
+        else {
+          return .none
+        }
+
+        state.isLoadingMoreResources = true
+
+        return .run { [server = state.server] send in
+          do {
+            guard let client = await mcpClientManager.existingClient(for: server) else {
+              await send(.loadMoreResourcesFailed(NotConnectedError()))
+              return
+            }
+
+            let (resources, nextCursor) = try await client.listResources(cursor: cursor)
+            await send(.moreResourcesLoaded(resources: resources, nextCursor: nextCursor))
+          } catch {
+            await send(.loadMoreResourcesFailed(error))
+          }
+        }
+
+      case let .moreResourcesLoaded(resources, nextCursor):
+        state.isLoadingMoreResources = false
+        state.resources.append(contentsOf: resources)
+        state.resourcesNextCursor = nextCursor
+        state.hasMoreResources = nextCursor != nil
+        return .none
+
+      case .loadMoreResourcesFailed:
+        state.isLoadingMoreResources = false
+        return .none
+
+      case .loadMoreTemplates:
+        guard !state.isLoadingMoreTemplates,
+          state.hasMoreTemplates,
+          let cursor = state.templatesNextCursor
+        else {
+          return .none
+        }
+
+        state.isLoadingMoreTemplates = true
+
+        return .run { [server = state.server] send in
+          do {
+            guard let client = await mcpClientManager.existingClient(for: server) else {
+              await send(.loadMoreTemplatesFailed(NotConnectedError()))
+              return
+            }
+
+            let (templates, nextCursor) = try await client.listResourceTemplates(cursor: cursor)
+            await send(.moreTemplatesLoaded(templates: templates, nextCursor: nextCursor))
+          } catch {
+            await send(.loadMoreTemplatesFailed(error))
+          }
+        }
+
+      case let .moreTemplatesLoaded(templates, nextCursor):
+        state.isLoadingMoreTemplates = false
+        state.resourceTemplates.append(contentsOf: templates)
+        state.templatesNextCursor = nextCursor
+        state.hasMoreTemplates = nextCursor != nil
+        return .none
+
+      case .loadMoreTemplatesFailed:
+        state.isLoadingMoreTemplates = false
         return .none
       }
     }

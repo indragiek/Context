@@ -85,6 +85,17 @@ struct ResourcesView: View {
                         NSPasteboard.general.setString(resource.uri, forType: .string)
                       }
                     }
+                    .onAppear {
+                      // Load more when we're 5 items from the end
+                      let bufferSize = 5
+                      if let index = viewStore.filteredResources.firstIndex(where: {
+                        $0.id == resource.id
+                      }),
+                        index >= viewStore.filteredResources.count - bufferSize
+                      {
+                        viewStore.send(.loadMoreResources)
+                      }
+                    }
                   }
                 } else {
                   // Show only templates
@@ -105,7 +116,47 @@ struct ResourcesView: View {
                         NSPasteboard.general.setString(template.uriTemplate, forType: .string)
                       }
                     }
+                    .onAppear {
+                      // Load more when we're 5 items from the end
+                      let bufferSize = 5
+                      if let index = viewStore.filteredResourceTemplates.firstIndex(where: {
+                        $0.id == template.id
+                      }),
+                        index >= viewStore.filteredResourceTemplates.count - bufferSize
+                      {
+                        viewStore.send(.loadMoreTemplates)
+                      }
+                    }
                   }
+                }
+
+                // Show loading indicator when fetching more items
+                if viewStore.selectedSegment == .resources && viewStore.isLoadingMoreResources {
+                  HStack {
+                    Spacer()
+                    ProgressView()
+                      .scaleEffect(0.8)
+                    Text("Loading more resources...")
+                      .font(.caption)
+                      .foregroundColor(.secondary)
+                    Spacer()
+                  }
+                  .padding(.vertical, 8)
+                  .id("resources-loading-more")
+                } else if viewStore.selectedSegment == .templates
+                  && viewStore.isLoadingMoreTemplates
+                {
+                  HStack {
+                    Spacer()
+                    ProgressView()
+                      .scaleEffect(0.8)
+                    Text("Loading more templates...")
+                      .font(.caption)
+                      .foregroundColor(.secondary)
+                    Spacer()
+                  }
+                  .padding(.vertical, 8)
+                  .id("templates-loading-more")
                 }
               }
               .onChange(of: viewStore.searchQuery) { _, _ in
