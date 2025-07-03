@@ -1,5 +1,6 @@
 // Copyright © 2025 Indragie Karunaratne. All rights reserved.
 
+import AppKit
 import ComposableArchitecture
 import Foundation
 import SharingGRDB
@@ -34,6 +35,7 @@ struct RootsFeature {
     case save
     case saved(Result<Void, any Error>)
     case errorDismissed
+    case browseButtonTapped(RootItem.ID)
 
     enum Field {
       case name
@@ -152,6 +154,25 @@ struct RootsFeature {
       case .errorDismissed:
         state.errorMessage = nil
         return .none
+        
+      case let .browseButtonTapped(id):
+        return .run { send in
+          await MainActor.run {
+            let panel = NSOpenPanel()
+            panel.canChooseFiles = true
+            panel.canChooseDirectories = true
+            panel.allowsMultipleSelection = false
+            panel.message = "Select a file or directory for the root"
+            
+            if panel.runModal() == .OK, let url = panel.url {
+              let fileURI = url.absoluteString
+              Task {
+                await send(.uriChanged(id, fileURI))
+                await send(.save)
+              }
+            }
+          }
+        }
       }
     }
   }
