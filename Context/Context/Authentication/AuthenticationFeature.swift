@@ -25,7 +25,7 @@ struct AuthenticationFeature {
 
     // OAuth parameters
     var clientID = "com.indragie.Context"  // Made mutable for dynamic registration
-    let redirectURI = "context://oauth/callback"
+    let redirectURI = OAuthConstants.callbackURL.absoluteString
     var oAuthState: OAuthClient.StateParameter?  // Generated fresh for each auth attempt
     var isRegisteredClient: Bool = false  // Track if we've dynamically registered
 

@@ -2,10 +2,6 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>SUPublicEDKey</key>
-	<string>oHCnTChJwkguvr4nCfAJupUglweocNBqjRXu3b7NLoU=</string>
-	<key>SUFeedURL</key>
-	<string>https://stats.store/api/v1/appcast/appcast.xml</string>
 	<key>CFBundleDocumentTypes</key>
 	<array>
 		<dict>
@@ -34,9 +30,13 @@
 			<string>com.indragie.Context</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>context</string>
+				<string>app.contextmcp</string>
 			</array>
 		</dict>
 	</array>
+	<key>SUFeedURL</key>
+	<string>https://stats.store/api/v1/appcast/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>oHCnTChJwkguvr4nCfAJupUglweocNBqjRXu3b7NLoU=</string>
 </dict>
 </plist>

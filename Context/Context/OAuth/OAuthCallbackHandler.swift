@@ -4,7 +4,7 @@ import Foundation
 import SwiftUI
 import os
 
-/// Handles OAuth callback URLs for the context:// URL scheme.
+/// Handles OAuth callback URLs for the app.contextmcp:// URL scheme.
 @MainActor
 @Observable
 final class OAuthCallbackHandler {
@@ -26,13 +26,13 @@ final class OAuthCallbackHandler {
 
   /// Handles an OAuth callback URL.
   ///
-  /// Expected format: context://oauth/callback?code=XXX&state=YYY
-  /// or error format: context://oauth/callback?error=XXX&error_description=YYY&state=ZZZ
+  /// Expected format: app.contextmcp://oauth/callback?code=XXX&state=YYY
+  /// or error format: app.contextmcp://oauth/callback?error=XXX&error_description=YYY&state=ZZZ
   func handleURL(_ url: URL) -> Bool {
     // Strict validation of callback URL structure
-    guard url.scheme == "context",
-      url.host == "oauth",
-      url.path == "/callback"
+    guard url.scheme == OAuthConstants.urlScheme,
+      url.host == OAuthConstants.callbackHost,
+      url.path == OAuthConstants.callbackPath
     else {
       logger.warning("Received URL with incorrect structure: \(url, privacy: .private)")
       return false
