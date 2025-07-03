@@ -503,7 +503,7 @@ class MockURLProtocol: URLProtocol {
       code: "auth_code_from_third_party",
       authServerMetadata: authServerMetadata,
       clientID: "com.indragie.Context",
-      redirectURI: "context://oauth/callback",
+      redirectURI: "app.contextmcp://oauth/callback",
       pkce: pkce,
       resource: URL(string: "https://mcp.example.com/api")!
     )
