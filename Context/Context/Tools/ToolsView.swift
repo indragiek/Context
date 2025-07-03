@@ -39,18 +39,51 @@ struct ToolsView: View {
             description: Text("No tools match '\(viewStore.searchQuery)'")
           )
         } else {
-          List(
-            viewStore.filteredTools,
-            selection: $selection
-          ) { tool in
-            ToolRow(
-              tool: tool,
-              isSelected: viewStore.selectedToolName == tool.name
-            )
-            .contextMenu {
-              Button("Copy Name") {
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(tool.name, forType: .string)
+          ScrollViewReader { proxy in
+            List(
+              viewStore.filteredTools,
+              selection: $selection
+            ) { tool in
+              ToolRow(
+                tool: tool,
+                isSelected: viewStore.selectedToolName == tool.name
+              )
+              .id(tool.name)
+              .contextMenu {
+                Button("Copy Name") {
+                  NSPasteboard.general.clearContents()
+                  NSPasteboard.general.setString(tool.name, forType: .string)
+                }
+              }
+              .onAppear {
+                // Load more when we're 5 items from the end
+                let bufferSize = 5
+                if let index = viewStore.filteredTools.firstIndex(where: { $0.name == tool.name }),
+                  index >= viewStore.filteredTools.count - bufferSize
+                {
+                  viewStore.send(.loadMoreTools)
+                }
+              }
+
+              // Show loading indicator when fetching more items
+              if viewStore.isLoadingMore {
+                HStack {
+                  Spacer()
+                  ProgressView()
+                    .scaleEffect(0.8)
+                  Text("Loading more tools...")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                  Spacer()
+                }
+                .padding(.vertical, 8)
+                .id("tools-loading-more")
+              }
+            }
+            .onChange(of: viewStore.searchQuery) { _, _ in
+              // Reset scroll position to top for any search query change
+              if let firstTool = viewStore.filteredTools.first {
+                proxy.scrollTo(firstTool.name, anchor: .top)
               }
             }
           }

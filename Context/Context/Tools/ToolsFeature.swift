@@ -18,6 +18,11 @@ struct ToolsFeature {
     var error: NotConnectedError?
     var hasLoadedOnce = false
 
+    // Pagination state
+    var nextCursor: String?
+    var isLoadingMore = false
+    var hasMore = true  // Assume there might be more until proven otherwise
+
     init(server: MCPServer) {
       self.server = server
     }
@@ -65,6 +70,9 @@ struct ToolsFeature {
     case connectionStateChanged(Client.ConnectionState)
     case reconnect
     case prepareForReconnection
+    case loadMoreTools
+    case moreToolsLoaded(tools: [Tool], nextCursor: String?)
+    case loadMoreToolsFailed(any Error)
   }
 
   @Dependency(\.toolCache) var toolCache
@@ -85,8 +93,9 @@ struct ToolsFeature {
               return
             }
 
-            let (tools, _) = try await client.listTools()
+            let (tools, nextCursor) = try await client.listTools()
             await send(.toolsLoaded(tools))
+            await send(.moreToolsLoaded(tools: [], nextCursor: nextCursor))
           } catch {
             await send(.loadingFailed(error))
           }
@@ -147,6 +156,12 @@ struct ToolsFeature {
         state.searchQuery = ""
         state.error = nil
         state.hasLoadedOnce = false
+
+        // Reset pagination state
+        state.nextCursor = nil
+        state.isLoadingMore = false
+        state.hasMore = true
+
         return .none
 
       case let .connectionStateChanged(connectionState):
@@ -163,6 +178,41 @@ struct ToolsFeature {
       case .prepareForReconnection:
         state.isLoading = true
         state.error = nil
+        return .none
+
+      case .loadMoreTools:
+        guard !state.isLoadingMore,
+          state.hasMore,
+          let cursor = state.nextCursor
+        else {
+          return .none
+        }
+
+        state.isLoadingMore = true
+
+        return .run { [server = state.server] send in
+          do {
+            guard let client = await mcpClientManager.existingClient(for: server) else {
+              await send(.loadMoreToolsFailed(NotConnectedError()))
+              return
+            }
+
+            let (tools, nextCursor) = try await client.listTools(cursor: cursor)
+            await send(.moreToolsLoaded(tools: tools, nextCursor: nextCursor))
+          } catch {
+            await send(.loadMoreToolsFailed(error))
+          }
+        }
+
+      case let .moreToolsLoaded(tools, nextCursor):
+        state.isLoadingMore = false
+        state.tools.append(contentsOf: tools)
+        state.nextCursor = nextCursor
+        state.hasMore = nextCursor != nil
+        return .none
+
+      case .loadMoreToolsFailed:
+        state.isLoadingMore = false
         return .none
       }
     }

@@ -33,6 +33,11 @@ struct PromptsFeature {
     var error: NotConnectedError?
     var hasLoadedOnce = false
 
+    // Pagination state
+    var nextCursor: String?
+    var isLoadingMore = false
+    var hasMore = true  // Assume there might be more until proven otherwise
+
     init(server: MCPServer) {
       self.server = server
     }
@@ -80,6 +85,9 @@ struct PromptsFeature {
     case connectionStateChanged(Client.ConnectionState)
     case reconnect
     case prepareForReconnection
+    case loadMorePrompts
+    case morePromptsLoaded(prompts: [Prompt], nextCursor: String?)
+    case loadMorePromptsFailed(any Error)
   }
 
   @Dependency(\.promptCache) var promptCache
@@ -100,8 +108,9 @@ struct PromptsFeature {
               return
             }
 
-            let (prompts, _) = try await client.listPrompts()
+            let (prompts, nextCursor) = try await client.listPrompts()
             await send(.promptsLoaded(prompts))
+            await send(.morePromptsLoaded(prompts: [], nextCursor: nextCursor))
           } catch {
             await send(.loadingFailed(error))
           }
@@ -162,6 +171,12 @@ struct PromptsFeature {
         state.searchQuery = ""
         state.error = nil
         state.hasLoadedOnce = false
+
+        // Reset pagination state
+        state.nextCursor = nil
+        state.isLoadingMore = false
+        state.hasMore = true
+
         return .none
 
       case let .connectionStateChanged(connectionState):
@@ -178,6 +193,41 @@ struct PromptsFeature {
       case .prepareForReconnection:
         state.isLoading = true
         state.error = nil
+        return .none
+
+      case .loadMorePrompts:
+        guard !state.isLoadingMore,
+          state.hasMore,
+          let cursor = state.nextCursor
+        else {
+          return .none
+        }
+
+        state.isLoadingMore = true
+
+        return .run { [server = state.server] send in
+          do {
+            guard let client = await mcpClientManager.existingClient(for: server) else {
+              await send(.loadMorePromptsFailed(NotConnectedError()))
+              return
+            }
+
+            let (prompts, nextCursor) = try await client.listPrompts(cursor: cursor)
+            await send(.morePromptsLoaded(prompts: prompts, nextCursor: nextCursor))
+          } catch {
+            await send(.loadMorePromptsFailed(error))
+          }
+        }
+
+      case let .morePromptsLoaded(prompts, nextCursor):
+        state.isLoadingMore = false
+        state.prompts.append(contentsOf: prompts)
+        state.nextCursor = nextCursor
+        state.hasMore = nextCursor != nil
+        return .none
+
+      case .loadMorePromptsFailed:
+        state.isLoadingMore = false
         return .none
       }
     }
