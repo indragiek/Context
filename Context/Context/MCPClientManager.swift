@@ -137,12 +137,27 @@ actor MCPClientManager {
       return client
     } catch let error as StreamableHTTPTransportError {
       if case .authenticationRequired = error {
-        if let existingToken = try? await keychainManager.retrieveToken(for: server.id),
-          existingToken.isExpired,
-          existingToken.refreshToken != nil
+        // Check if we have an expired token with a refresh token
+        if let storedToken = try? await keychainManager.retrieveStoredToken(for: server.id),
+          storedToken.token.isExpired,
+          storedToken.token.refreshToken != nil
         {
-          logger.info("Token expired for server \(server.name), attempting refresh")
-          throw error
+          logger.info("Token expired for server \(server.name), attempting automatic refresh")
+          
+          // Attempt to refresh the token
+          do {
+            _ = try await refreshToken(for: server, storedToken: storedToken)
+            logger.info("Successfully refreshed token during connection for server \(server.name)")
+            
+            // The transport should already have the new token set by refreshToken
+            // Try connecting again with the refreshed token
+            try await client.connect()
+            return client
+          } catch let refreshError {
+            logger.error("Failed to refresh token during connection for server \(server.name): \(refreshError)")
+            // If refresh fails, throw the original authentication error
+            throw error
+          }
         }
       }
       throw error
@@ -212,8 +227,7 @@ actor MCPClientManager {
           logger.info("Set existing OAuth token for server \(server.name)")
         } else {
           logger.info("Existing OAuth token for server \(server.name) has expired")
-          // Clean up expired token
-          try? await keychainManager.deleteToken(for: server.id)
+          // Don't delete the token here - we might be able to refresh it in createClient
         }
       }
 
