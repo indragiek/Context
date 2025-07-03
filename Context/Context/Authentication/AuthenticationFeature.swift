@@ -54,13 +54,18 @@ struct AuthenticationFeature {
       serverName: String,
       serverURL: URL,
       resourceMetadataURL: URL,
-      expiredToken: OAuthToken? = nil
+      expiredToken: OAuthToken? = nil,
+      clientID: String? = nil
     ) {
       self.serverID = serverID
       self.serverName = serverName
       self.serverURL = serverURL
       self.resourceMetadataURL = resourceMetadataURL
       self.expiredToken = expiredToken
+      // Use provided clientID or default
+      if let clientID = clientID {
+        self.clientID = clientID
+      }
     }
   }
 

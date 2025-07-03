@@ -80,7 +80,8 @@ struct ServerFeature {
       serverName: String,
       serverURL: URL,
       resourceMetadataURL: URL,
-      expiredToken: OAuthToken?
+      expiredToken: OAuthToken?,
+      clientID: String?
     )
   }
 
@@ -224,7 +225,7 @@ struct ServerFeature {
           return .run { send in
             // Check if we have an expired token with a refresh token
             let keychainManager = KeychainManager()
-            let expiredToken = try? await keychainManager.retrieveToken(for: serverID)
+            let storedToken = try? await keychainManager.retrieveStoredToken(for: serverID)
 
             await send(
               .showAuthenticationSheet(
@@ -232,7 +233,8 @@ struct ServerFeature {
                 serverName: serverName,
                 serverURL: serverURL,
                 resourceMetadataURL: resourceMetadataURL,
-                expiredToken: expiredToken
+                expiredToken: storedToken?.token,
+                clientID: storedToken?.clientID
               ))
           }
         }
@@ -399,14 +401,15 @@ struct ServerFeature {
         return .none
 
       case let .showAuthenticationSheet(
-        serverID, serverName, serverURL, resourceMetadataURL, expiredToken):
+        serverID, serverName, serverURL, resourceMetadataURL, expiredToken, clientID):
         // Show authentication sheet with optional expired token
         state.authenticationState = AuthenticationFeature.State(
           serverID: serverID,
           serverName: serverName,
           serverURL: serverURL,
           resourceMetadataURL: resourceMetadataURL,
-          expiredToken: expiredToken
+          expiredToken: expiredToken,
+          clientID: clientID
         )
         return .none
 
