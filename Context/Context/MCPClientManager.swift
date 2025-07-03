@@ -53,6 +53,18 @@ actor MCPClientManager {
 
     let transport = try await createTransport(for: server)
     let client = Client(transport: transport, logger: logger)
+    
+    // Set roots before storing the client
+    let roots = try await database.read { db in
+      try MCPRoot.all.fetchAll(db)
+    }
+    
+    if !roots.isEmpty {
+      let mcpRoots = roots.map { Root(uri: $0.uri, name: $0.name) }
+      await client.setRoots(mcpRoots)
+      logger.debug("Set \(roots.count) roots for unconnected client \(server.id)")
+    }
+    
     clients[server.id] = client
     return client
   }
@@ -127,7 +139,7 @@ actor MCPClientManager {
   }
   
   /// Sets roots for all active clients
-  func setRootsForAllClients(_ roots: [(name: String, uri: String)]) async {
+  func setRootsForAllClients(_ roots: [MCPRoot]) async {
     logger.debug("Setting roots for all clients: \(roots.count) roots")
     
     for (serverId, client) in clients {
@@ -152,9 +164,8 @@ actor MCPClientManager {
       }
       
       if !roots.isEmpty {
-        let rootsData = roots.map { (name: $0.name, uri: $0.uri) }
-        let roots = rootsData.map { Root(uri: $0.uri, name: $0.name) }
-        await client.setRoots(roots)
+        let mcpRoots = roots.map { Root(uri: $0.uri, name: $0.name) }
+        await client.setRoots(mcpRoots)
         logger.debug("Set \(roots.count) roots for newly connected client \(server.id)")
       }
       

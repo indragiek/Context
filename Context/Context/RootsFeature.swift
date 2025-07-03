@@ -132,10 +132,8 @@ struct RootsFeature {
             }
 
             // Update all clients with new roots
-            await clientManager.setRootsForAllClients(
-              roots.map { root in
-                (name: root.name, uri: root.uri)
-              })
+            let mcpRoots = roots.map { MCPRoot(id: $0.id, name: $0.name, uri: $0.uri) }
+            await clientManager.setRootsForAllClients(mcpRoots)
 
             await send(.saved(.success(())))
           } catch {
