@@ -15,6 +15,9 @@ actor MCPClientManager {
   private var clients: [UUID: Client] = [:]
   private let logger = Logger(subsystem: "com.indragie.Context", category: "MCPClientManager")
   private let keychainManager = KeychainManager()
+  
+  // Token refresh failure notifications
+  private var tokenRefreshFailureCallbacks: [UUID: @Sendable (UUID, URL) async -> Void] = [:]
 
   // Token refresh state
   private var refreshTask: Task<Void, Never>?
@@ -81,6 +84,19 @@ actor MCPClientManager {
     return clients[server.id]
   }
 
+  /// Registers a callback to be notified when token refresh fails for a server
+  func setTokenRefreshFailureCallback(
+    for serverId: UUID,
+    callback: @escaping @Sendable (UUID, URL) async -> Void
+  ) {
+    tokenRefreshFailureCallbacks[serverId] = callback
+  }
+  
+  /// Removes the token refresh failure callback for a server
+  func removeTokenRefreshFailureCallback(for serverId: UUID) {
+    tokenRefreshFailureCallbacks[serverId] = nil
+  }
+
   /// Stores an OAuth token for a server.
   func storeToken(for server: MCPServer, token: OAuthToken, clientID: String) async throws {
     try await keychainManager.storeToken(for: server.id, token: token, clientID: clientID)
@@ -89,7 +105,7 @@ actor MCPClientManager {
       let transport = await client.transport as? StreamableHTTPTransport
     {
       await transport.setAuthorizationToken(token.accessToken)
-      logger.info("Updated OAuth token for connected server \(server.name)")
+      logger.debug("Updated authentication for server \(server.name)")
     }
   }
 
@@ -106,7 +122,7 @@ actor MCPClientManager {
       let transport = await client.transport as? StreamableHTTPTransport
     {
       await transport.setAuthorizationToken(nil)
-      logger.info("Cleared OAuth token for connected server \(server.name)")
+      logger.debug("Cleared authentication for server \(server.name)")
     }
   }
 
@@ -121,12 +137,27 @@ actor MCPClientManager {
       return client
     } catch let error as StreamableHTTPTransportError {
       if case .authenticationRequired = error {
-        if let existingToken = try? await keychainManager.retrieveToken(for: server.id),
-          existingToken.isExpired,
-          existingToken.refreshToken != nil
+        // Check if we have an expired token with a refresh token
+        if let storedToken = try? await keychainManager.retrieveStoredToken(for: server.id),
+          storedToken.token.isExpired,
+          storedToken.token.refreshToken != nil
         {
-          logger.info("Token expired for server \(server.name), attempting refresh")
-          throw error
+          logger.debug("Authentication expired for server \(server.name), attempting refresh")
+          
+          // Attempt to refresh the token
+          do {
+            _ = try await refreshToken(for: server, storedToken: storedToken)
+            logger.debug("Successfully refreshed authentication for server \(server.name)")
+            
+            // The transport should already have the new token set by refreshToken
+            // Try connecting again with the refreshed token
+            try await client.connect()
+            return client
+          } catch let refreshError {
+            logger.error("Failed to refresh authentication for server \(server.name): \(refreshError)")
+            // If refresh fails, throw the original authentication error
+            throw error
+          }
         }
       }
       throw error
@@ -193,11 +224,10 @@ actor MCPClientManager {
       if let token = try? await keychainManager.retrieveToken(for: server.id) {
         if !token.isExpired {
           await transport.setAuthorizationToken(token.accessToken)
-          logger.info("Set existing OAuth token for server \(server.name)")
+          logger.debug("Restored authentication for server \(server.name)")
         } else {
-          logger.info("Existing OAuth token for server \(server.name) has expired")
-          // Clean up expired token
-          try? await keychainManager.deleteToken(for: server.id)
+          logger.debug("Existing authentication for server \(server.name) has expired")
+          // Don't delete the token here - we might be able to refresh it in createClient
         }
       }
 
@@ -278,7 +308,7 @@ actor MCPClientManager {
   }
 
   private func checkAndRefreshTokens() async {
-    logger.info("Checking tokens for refresh")
+    logger.debug("Checking authentication status")
 
     // Get all servers from database
     guard
@@ -286,7 +316,7 @@ actor MCPClientManager {
         try MCPServer.all.fetchAll(db)
       })
     else {
-      logger.error("Failed to fetch servers for token refresh")
+      logger.error("Failed to fetch servers for authentication check")
       return
     }
 
@@ -308,12 +338,25 @@ actor MCPClientManager {
           "Token for server \(server.name) expires in \(timeUntilExpiration) seconds, refreshing")
 
         // Refresh the token
-        Task {
+        Task { [weak self] in
+          guard let self = self else { return }
           do {
-            _ = try await refreshToken(for: server, storedToken: storedToken)
-            logger.info("Successfully refreshed token for server \(server.name)")
+            _ = try await self.refreshToken(for: server, storedToken: storedToken)
+            self.logger.debug("Successfully refreshed authentication for server \(server.name)")
           } catch {
-            logger.error("Failed to refresh token for server \(server.name): \(error)")
+            self.logger.error("Failed to refresh authentication for server \(server.name): \(error)")
+            
+            // Get the resource metadata URL for authentication
+            if let urlString = server.url,
+               let serverURL = URL(string: urlString) {
+              let resourceMetadataURL = serverURL.appendingPathComponent(
+                ".well-known/oauth-protected-resource")
+              
+              // Call the registered callback if available
+              if let callback = await self.tokenRefreshFailureCallbacks[server.id] {
+                await callback(server.id, resourceMetadataURL)
+              }
+            }
           }
         }
       }
@@ -325,7 +368,7 @@ actor MCPClientManager {
   {
     // Check if there's already an active refresh for this server
     if let activeTask = activeRefreshTasks[server.id] {
-      logger.info("Token refresh already in progress for server \(server.name), waiting for result")
+      logger.debug("Authentication refresh already in progress for server \(server.name)")
       return try await activeTask.value
     }
 

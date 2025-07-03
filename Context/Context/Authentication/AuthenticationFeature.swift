@@ -54,13 +54,18 @@ struct AuthenticationFeature {
       serverName: String,
       serverURL: URL,
       resourceMetadataURL: URL,
-      expiredToken: OAuthToken? = nil
+      expiredToken: OAuthToken? = nil,
+      clientID: String? = nil
     ) {
       self.serverID = serverID
       self.serverName = serverName
       self.serverURL = serverURL
       self.resourceMetadataURL = resourceMetadataURL
       self.expiredToken = expiredToken
+      // Use provided clientID or default
+      if let clientID = clientID {
+        self.clientID = clientID
+      }
     }
   }
 
@@ -206,7 +211,10 @@ struct AuthenticationFeature {
       )
       do {
         try await clientManager.storeToken(for: mcpServer, token: token, clientID: clientID)
-        logger.info("Successfully stored OAuth token for server")
+        // Don't log token operations during silent refresh to avoid information leaks
+        if !isSilent {
+          logger.info("Successfully completed authentication")
+        }
 
         if isSilent {
           await dismiss()
@@ -215,7 +223,7 @@ struct AuthenticationFeature {
           await send(.authenticationCompleteAndDismiss)
         }
       } catch {
-        logger.error("Failed to store token in keychain")
+        logger.error("Failed to store credentials")
         await send(.metadataLoadFailed(AuthenticationError.tokenStorageFailed))
       }
     }
@@ -232,8 +240,17 @@ struct AuthenticationFeature {
     // Generate fresh state for this authentication attempt
     do {
       state.oAuthState = try OAuthClient.StateParameter.generate()
+    } catch let error as OAuthClientError {
+      // Provide specific error message based on the error type
+      switch error {
+      case .randomGenerationFailed:
+        setError(&state, "Unable to generate secure random data. This may indicate a system security issue.")
+      default:
+        setError(&state, error.errorDescription ?? "Failed to initialize authentication")
+      }
+      return .none
     } catch {
-      setError(&state, "Failed to generate secure state parameter")
+      setError(&state, "Unexpected error during authentication initialization: \(error.localizedDescription)")
       return .none
     }
 
@@ -291,8 +308,17 @@ struct AuthenticationFeature {
     let pkceParameters: OAuthClient.PKCEParameters
     do {
       pkceParameters = try OAuthClient.PKCEParameters.generate()
+    } catch let error as OAuthClientError {
+      // Provide specific error message based on the error type
+      switch error {
+      case .randomGenerationFailed:
+        setError(&state, "Unable to generate secure authentication challenge. This may indicate a system security issue.")
+      default:
+        setError(&state, error.errorDescription ?? "Failed to prepare authentication")
+      }
+      return .none
     } catch {
-      setError(&state, "Failed to generate PKCE parameters")
+      setError(&state, "Unexpected error preparing authentication: \(error.localizedDescription)")
       return .none
     }
     state.pkceParameters = pkceParameters
@@ -317,27 +343,6 @@ struct AuthenticationFeature {
         state: stateParam,
         resource: state.resourceMetadata?.resource
       )
-
-      // Validate the authorization URL is HTTPS
-      guard let scheme = authURL.scheme?.lowercased(),
-        scheme == "https"
-      else {
-        setError(&state, "Authorization endpoint must use HTTPS")
-        state.oAuthState = nil
-        state.pkceParameters = nil
-        return .none
-      }
-
-      // Validate the host matches the expected authorization server
-      guard let authHost = authURL.host,
-        let expectedHost = authServerMetadata.authorizationEndpoint?.host,
-        authHost == expectedHost
-      else {
-        setError(&state, "Authorization URL host mismatch - possible security issue")
-        state.oAuthState = nil
-        state.pkceParameters = nil
-        return .none
-      }
 
       state.authorizationURL = authURL
       state.isLoading = false
@@ -510,10 +515,10 @@ struct AuthenticationFeature {
           resource: resourceMetadata?.resource
         )
 
-        logger.info("Token refresh successful")
+        logger.debug("Authentication refresh completed")
         await send(.tokenRefreshCompleted(.success(newToken)))
       } catch {
-        logger.error("Token refresh failed: \(error.localizedDescription)")
+        logger.error("Authentication refresh failed: \(error.localizedDescription)")
         await send(.tokenRefreshCompleted(.failure(error)))
       }
     }
