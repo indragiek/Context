@@ -13,7 +13,37 @@ enum DXTTestError: Error {
 
 @Suite(.serialized, .timeLimit(.minutes(1))) struct DXTTransportTests {
   
+  /// Check if a command is available in the system PATH or at UV_PATH
+  private func checkCommandAvailable(_ command: String) async -> Bool {
+    // First check if UV_PATH is set and points to a valid executable
+    if command == "uv", let uvPath = ProcessInfo.processInfo.environment["UV_PATH"] {
+      return FileManager.default.isExecutableFile(atPath: uvPath)
+    }
+    
+    // Otherwise check if command is in PATH
+    do {
+      let process = Process()
+      process.executableURL = URL(fileURLWithPath: "/usr/bin/which")
+      process.arguments = [command]
+      
+      let pipe = Pipe()
+      process.standardOutput = pipe
+      process.standardError = Pipe()
+      
+      try process.run()
+      process.waitUntilExit()
+      
+      return process.terminationStatus == 0
+    } catch {
+      return false
+    }
+  }
+  
   @Test func testLoadPythonDXT() async throws {
+    // Check if uv is available before running this test
+    let uvAvailable = await checkCommandAvailable("uv")
+    try #require(uvAvailable, "uv is not installed - skipping Python DXT test")
+    
     let dxtPath = TestFixtures.dxtPath(name: "file-manager-python")
     let extractedPath = try extractDXT(at: dxtPath)
     defer { try? FileManager.default.removeItem(at: extractedPath) }

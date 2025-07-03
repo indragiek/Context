@@ -685,6 +685,11 @@ public actor DXTTransport: Transport {
     // Apply substitutions to command with circular reference protection
     command = applySubstitutions(command, substitutions: substitutions)
     
+    // Special handling for uv command - use UV_PATH if available
+    if command == "uv", let uvPath = ProcessInfo.processInfo.environment["UV_PATH"] {
+      command = uvPath
+    }
+    
     // Get shell path from environment
     let shellPath = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
     var shellArgs = ["-l", "-c"]
