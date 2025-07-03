@@ -385,7 +385,7 @@ class MockURLProtocol: URLProtocol {
         code: "invalid_code",
         authServerMetadata: authServerMetadata,
         clientID: "test_client",
-        redirectURI: "context://oauth/callback",
+        redirectURI: "app.contextmcp://oauth/callback",
         pkce: pkce,
         resource: nil
       )
@@ -440,7 +440,7 @@ class MockURLProtocol: URLProtocol {
         code: "valid_code",
         authServerMetadata: authServerMetadata,
         clientID: "test_client",
-        redirectURI: "context://oauth/callback",
+        redirectURI: "app.contextmcp://oauth/callback",
         pkce: pkce,
         resource: nil
       )
@@ -533,7 +533,7 @@ class MockURLProtocol: URLProtocol {
     )
 
     let registrationRequest = ClientRegistrationRequest(
-      redirectUris: ["context://oauth/callback"],
+      redirectUris: ["app.contextmcp://oauth/callback"],
       clientName: "Context MCP Client",
       scope: "read write",
       grantTypes: ["authorization_code", "refresh_token"],
@@ -553,7 +553,7 @@ class MockURLProtocol: URLProtocol {
       // Verify request body
       if let body = request.httpBody {
         let decodedRequest = try JSONDecoder().decode(ClientRegistrationRequest.self, from: body)
-        #expect(decodedRequest.redirectUris == ["context://oauth/callback"])
+        #expect(decodedRequest.redirectUris == ["app.contextmcp://oauth/callback"])
         #expect(decodedRequest.clientName == "Context MCP Client")
       }
 
@@ -562,7 +562,7 @@ class MockURLProtocol: URLProtocol {
           "client_id": "dynamic_client_id_123",
           "client_secret": null,
           "client_id_issued_at": 1234567890,
-          "redirect_uris": ["context://oauth/callback"],
+          "redirect_uris": ["app.contextmcp://oauth/callback"],
           "client_name": "Context MCP Client",
           "scope": "read write",
           "grant_types": ["authorization_code", "refresh_token"],
@@ -591,7 +591,7 @@ class MockURLProtocol: URLProtocol {
     #expect(registrationResponse.clientId == "dynamic_client_id_123")
     #expect(registrationResponse.clientSecret == nil)
     #expect(registrationResponse.clientIdIssuedAt == 1_234_567_890)
-    #expect(registrationResponse.redirectUris == ["context://oauth/callback"])
+    #expect(registrationResponse.redirectUris == ["app.contextmcp://oauth/callback"])
     #expect(registrationResponse.clientName == "Context MCP Client")
     #expect(registrationResponse.tokenEndpointAuthMethod == "none")
 
@@ -614,7 +614,7 @@ class MockURLProtocol: URLProtocol {
     )
 
     let registrationRequest = ClientRegistrationRequest(
-      redirectUris: ["context://oauth/callback", "https://malicious.com/callback"],
+      redirectUris: ["app.contextmcp://oauth/callback", "https://malicious.com/callback"],
       clientName: "Context MCP Client"
     )
 
@@ -675,7 +675,7 @@ class MockURLProtocol: URLProtocol {
     )
 
     let registrationRequest = ClientRegistrationRequest(
-      redirectUris: ["context://oauth/callback"],
+      redirectUris: ["app.contextmcp://oauth/callback"],
       clientName: "Context MCP Client"
     )
 
@@ -713,7 +713,7 @@ class MockURLProtocol: URLProtocol {
     )
 
     let registrationRequest = ClientRegistrationRequest(
-      redirectUris: ["context://oauth/callback"],
+      redirectUris: ["app.contextmcp://oauth/callback"],
       clientName: "Context MCP Client",
       grantTypes: ["unsupported_grant_type"]  // Invalid grant type
     )
@@ -774,7 +774,7 @@ class MockURLProtocol: URLProtocol {
     )
 
     let registrationRequest = ClientRegistrationRequest(
-      redirectUris: ["context://oauth/callback"],
+      redirectUris: ["app.contextmcp://oauth/callback"],
       clientName: "Context MCP Client",
       grantTypes: ["authorization_code", "client_credentials"],
       tokenEndpointAuthMethod: "client_secret_basic"  // Requesting confidential client
@@ -790,7 +790,7 @@ class MockURLProtocol: URLProtocol {
           "client_secret": "super_secret_password_789",
           "client_id_issued_at": 1234567890,
           "client_secret_expires_at": 0,
-          "redirect_uris": ["context://oauth/callback"],
+          "redirect_uris": ["app.contextmcp://oauth/callback"],
           "client_name": "Context MCP Client",
           "grant_types": ["authorization_code", "client_credentials"],
           "token_endpoint_auth_method": "client_secret_basic"
