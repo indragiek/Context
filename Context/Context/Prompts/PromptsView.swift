@@ -40,22 +40,49 @@ struct PromptsView: View {
         } else {
           ScrollViewReader { proxy in
             List(
-              viewStore.filteredPrompts,
               selection: viewStore.binding(
                 get: \.selectedPromptName,
                 send: PromptsFeature.Action.promptSelected
               )
-            ) { prompt in
-              PromptRow(
-                prompt: prompt,
-                isSelected: viewStore.selectedPromptName == prompt.name
-              )
-              .id(prompt.name)
-              .contextMenu {
-                Button("Copy Name") {
-                  NSPasteboard.general.clearContents()
-                  NSPasteboard.general.setString(prompt.name, forType: .string)
+            ) {
+              ForEach(viewStore.filteredPrompts) { prompt in
+                PromptRow(
+                  prompt: prompt,
+                  isSelected: viewStore.selectedPromptName == prompt.name
+                )
+                .id(prompt.name)
+                .contextMenu {
+                  Button("Copy Name") {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(prompt.name, forType: .string)
+                  }
                 }
+                .onAppear {
+                  // Load more when we're 5 items from the end
+                  let bufferSize = 5
+                  if let index = viewStore.filteredPrompts.firstIndex(where: {
+                    $0.name == prompt.name
+                  }),
+                    index >= viewStore.filteredPrompts.count - bufferSize
+                  {
+                    viewStore.send(.loadMorePrompts)
+                  }
+                }
+              }
+
+              // Show loading indicator when fetching more items
+              if viewStore.isLoadingMore {
+                HStack {
+                  Spacer()
+                  ProgressView()
+                    .scaleEffect(0.8)
+                  Text("Loading more prompts...")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                  Spacer()
+                }
+                .padding(.vertical, 8)
+                .id("prompts-loading-more")
               }
             }
             .onChange(of: viewStore.searchQuery) { _, _ in
