@@ -59,11 +59,9 @@ actor MCPClientManager {
       try MCPRoot.all.fetchAll(db)
     }
     
-    if !roots.isEmpty {
-      let mcpRoots = roots.map { Root(uri: $0.uri, name: $0.name) }
-      await client.setRoots(mcpRoots)
-      logger.debug("Set \(roots.count) roots for unconnected client \(server.id)")
-    }
+    let mcpRoots = roots.map { Root(uri: $0.uri, name: $0.name) }
+    await client.setRoots(mcpRoots)
+    logger.debug("Set \(roots.count) roots for unconnected client \(server.id)")
     
     clients[server.id] = client
     return client
@@ -144,8 +142,13 @@ actor MCPClientManager {
     
     for (serverId, client) in clients {
       let mcpRoots = roots.map { Root(uri: $0.uri, name: $0.name) }
+      logger.debug("Setting \(mcpRoots.count) roots for client \(serverId)")
       await client.setRoots(mcpRoots)
-      logger.debug("Set roots for client \(serverId)")
+      logger.debug("Successfully set roots for client \(serverId)")
+    }
+    
+    if clientCount == 0 {
+      logger.warning("No active clients to update with new roots")
     }
   }
 
@@ -163,11 +166,9 @@ actor MCPClientManager {
         try MCPRoot.all.fetchAll(db)
       }
       
-      if !roots.isEmpty {
-        let mcpRoots = roots.map { Root(uri: $0.uri, name: $0.name) }
-        await client.setRoots(mcpRoots)
-        logger.debug("Set \(roots.count) roots for newly connected client \(server.id)")
-      }
+      let mcpRoots = roots.map { Root(uri: $0.uri, name: $0.name) }
+      await client.setRoots(mcpRoots)
+      logger.debug("Set \(roots.count) roots for newly connected client \(server.id)")
       
       return client
     } catch let error as StreamableHTTPTransportError {

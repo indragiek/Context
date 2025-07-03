@@ -47,6 +47,11 @@ struct RootsView: View {
                   shouldFocus: item.shouldFocusName,
                   onFocusHandled: {
                     store.send(.focusHandled(item.id, field: .name))
+                  },
+                  onEditingChanged: { editing in
+                    if !editing {
+                      store.send(.save)
+                    }
                   }
                 )
                 .onSubmit {
@@ -66,6 +71,11 @@ struct RootsView: View {
                     shouldFocus: item.shouldFocusURI,
                     onFocusHandled: {
                       store.send(.focusHandled(item.id, field: .uri))
+                    },
+                    onEditingChanged: { editing in
+                      if !editing {
+                        store.send(.save)
+                      }
                     }
                   )
                   .onSubmit {
