@@ -5,15 +5,30 @@
     <description>Most recent changes with links to updates.</description>
     <language>en</language>
     <item>
+      <title>Version 1.0.6 (106)</title>
+      <link>https://www.contextmcp.app/</link>
+      <sparkle:version>106</sparkle:version>
+      <sparkle:shortVersionString>1.0.6</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[<ul>
+<li>Implement support for Anthropic dxt (Desktop Extension) format (#4)</li>
+<li>Fix servers not appearing in sidebar after importing servers (#8)</li>
+<li>Fix broken OAuth token refresh and remove HTTPS requirement for OAuth (#7)</li>
+</ul>
+]]></description>
+      <pubDate>Thu, 03 Jul 2025 18:25:52 +0000</pubDate>
+      <enclosure url="https://github.com/indragiek/Context/releases/download/v1.0.6/Context_v1.0.6.dmg" sparkle:edSignature="0l0/3xVdlNO2qxL5XjZYSaOucFHZ3r0Zo4XbYNfM7FDSbS45b1PF7qjxsz/+sxLYKO0yr0e+EXCI1vfOaeK3Dw==" length="12967803" type="application/octet-stream"/>
+    </item>
+    <item>
       <title>Version 1.0.5 (105)</title>
       <link>https://www.contextmcp.app/</link>
       <sparkle:version>105</sparkle:version>
       <sparkle:shortVersionString>1.0.5</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
-      <description><![CDATA[<ul>
-<li>Implement missing SQLite uuid() function (<a rel="noopener" target="_blank" href="https://github.com/indragiek/Context/commit/cb33360a73b5a2a5d661f330439341f226d13731">cb33360</a>)</li>
-</ul>
-]]></description>
+      <description>&lt;ul&gt;
+&lt;li&gt;Implement missing SQLite uuid() function (&lt;a rel="noopener" target="_blank" href="https://github.com/indragiek/Context/commit/cb33360a73b5a2a5d661f330439341f226d13731"&gt;cb33360&lt;/a&gt;)&lt;/li&gt;
+&lt;/ul&gt;
+</description>
       <pubDate>Wed, 02 Jul 2025 14:51:33 +0000</pubDate>
       <enclosure url="https://github.com/indragiek/Context/releases/download/v1.0.5/Context_v1.0.5.dmg" sparkle:edSignature="jLv/gBPvrxvrhHNnsk2ZI4ZJgMJxeuTwh0QPh/63cMan5Slwmka+l5F9MsmnOvdC6lNn/wl2BjaxN+utZacrAQ==" length="12155980" type="application/octet-stream"/>
     </item>
