@@ -151,6 +151,9 @@ struct AppFeature {
             .openAddServerWithDXT(tempDir: tempDir, manifest: manifest, manifestData: manifestData))
         )
 
+      case .sidebarFeature(.delegate(.serverImportCompleted)):
+        return .send(.syncServersFromDatabase)
+        
       case .sidebarFeature:
         return .none
 
