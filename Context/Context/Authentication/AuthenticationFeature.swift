@@ -211,7 +211,10 @@ struct AuthenticationFeature {
       )
       do {
         try await clientManager.storeToken(for: mcpServer, token: token, clientID: clientID)
-        logger.info("Successfully stored OAuth token for server")
+        // Don't log token operations during silent refresh to avoid information leaks
+        if !isSilent {
+          logger.info("Successfully completed authentication")
+        }
 
         if isSilent {
           await dismiss()
@@ -220,7 +223,7 @@ struct AuthenticationFeature {
           await send(.authenticationCompleteAndDismiss)
         }
       } catch {
-        logger.error("Failed to store token in keychain")
+        logger.error("Failed to store credentials")
         await send(.metadataLoadFailed(AuthenticationError.tokenStorageFailed))
       }
     }
@@ -494,10 +497,10 @@ struct AuthenticationFeature {
           resource: resourceMetadata?.resource
         )
 
-        logger.info("Token refresh successful")
+        logger.debug("Authentication refresh completed")
         await send(.tokenRefreshCompleted(.success(newToken)))
       } catch {
-        logger.error("Token refresh failed: \(error.localizedDescription)")
+        logger.error("Authentication refresh failed: \(error.localizedDescription)")
         await send(.tokenRefreshCompleted(.failure(error)))
       }
     }
