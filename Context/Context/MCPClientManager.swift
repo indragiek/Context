@@ -144,8 +144,8 @@ actor MCPClientManager {
         throw MCPClientError.missingCommand
       }
 
-      let shellPath = "/bin/sh"
-      var shellArgs = ["-c"]
+      let shellPath = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
+      var shellArgs = ["-l", "-c"]
 
       var commandString = command
       if let args = server.args, !args.isEmpty {
@@ -202,6 +202,61 @@ actor MCPClientManager {
       }
 
       return transport
+
+    case .dxt:
+      guard let urlString = server.url,
+        let dxtDirectoryURL = URL(string: urlString)
+      else {
+        throw MCPClientError.invalidURL
+      }
+      
+      // Resolve user config from keychain if needed
+      var resolvedUserConfig: DXTUserConfigurationValues?
+      if let userConfig = server.dxtUserConfig {
+        let dxtConfigKeychain = DXTConfigKeychain()
+        resolvedUserConfig = try await userConfig.resolvingKeychainReferences { uuid in
+          try await dxtConfigKeychain.retrieveValue(for: uuid)
+        }
+        
+        // Check if any values were missing from keychain
+        let originalKeys = Set(userConfig.values.keys)
+        let resolvedKeys: Set<String>
+        if let resolved = resolvedUserConfig {
+          resolvedKeys = Set(resolved.values.keys)
+        } else {
+          resolvedKeys = Set()
+        }
+        let missingKeys = originalKeys.subtracting(resolvedKeys)
+        
+        if !missingKeys.isEmpty {
+          // Update the database to remove references to missing keys
+          var cleanedConfig = userConfig
+          for missingKey in missingKeys {
+            cleanedConfig.values.removeValue(forKey: missingKey)
+          }
+          
+          // Update server in database
+          var updatedServer = server
+          updatedServer.dxtUserConfig = cleanedConfig.values.isEmpty ? nil : cleanedConfig
+          let serverToUpdate = updatedServer
+          try await database.write { db in
+            try MCPServer.update(serverToUpdate).execute(db)
+          }
+          
+          // Throw error indicating which field needs to be configured
+          let firstMissing = missingKeys.sorted().first ?? "unknown"
+          throw MCPClientError.missingConfiguration(
+            "Missing configuration value for '\(firstMissing)'. Please edit the server and provide this value."
+          )
+        }
+      }
+
+      return try await DXTTransport(
+        dxtDirectory: dxtDirectoryURL,
+        clientInfo: clientInfo,
+        clientCapabilities: clientCapabilities,
+        userConfig: resolvedUserConfig
+      )
     }
   }
 
@@ -332,6 +387,7 @@ enum MCPClientError: LocalizedError {
   case invalidURL
   case unsupportedTransport(TransportType)
   case missingRefreshToken
+  case missingConfiguration(String)
 
   var errorDescription: String? {
     switch self {
@@ -343,6 +399,8 @@ enum MCPClientError: LocalizedError {
       return "Transport type \(type.rawValue) is not supported"
     case .missingRefreshToken:
       return "No refresh token available"
+    case .missingConfiguration(let message):
+      return message
     }
   }
 }

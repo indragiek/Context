@@ -14,6 +14,17 @@ enum SidebarItem: Equatable, Hashable {
   case server(id: UUID)
 }
 
+private enum SidebarError: LocalizedError {
+  case serverNotFound
+
+  var errorDescription: String? {
+    switch self {
+    case .serverNotFound:
+      return "Server not found"
+    }
+  }
+}
+
 @Reducer
 struct SidebarFeature {
   let logger: Logger
@@ -52,11 +63,14 @@ struct SidebarFeature {
     case deleteServerTapped(MCPServer)
     case sidebarItemSelected(SidebarItem)
     case serverSelected(UUID)
+    case openAddServerWithDXT(tempDir: URL, manifest: DXTManifest, manifestData: Data)
 
     // Server CRUD operations
     case renameServer(id: UUID, newName: String)
+    case proceedWithRename(serverId: UUID, newName: String)
+    case showRenameError(String)
     case confirmDeleteServer(MCPServer)
-    case serverAdded(MCPServer)
+    case serverUpdated(MCPServer, MCPServer)  // original, updated
     case serverRenamed(id: UUID, newName: String)
 
     // Operation results
@@ -83,11 +97,11 @@ struct SidebarFeature {
       case initialServerLoad
       case newServersAdded([UUID])
       case serverAdded(UUID)
+      case openAddServerWithDXT(tempDir: URL, manifest: DXTManifest, manifestData: Data)
     }
   }
 
-  @Dependency(\.defaultDatabase) var database
-  @Dependency(\.mcpClientManager) var mcpClientManager
+  @Dependency(\.serverStore) var serverStore
 
   var body: some ReducerOf<Self> {
     CombineReducers {
@@ -112,8 +126,15 @@ struct SidebarFeature {
       switch action {
       case .addServerButtonTapped:
         state.addServer = AddServerFeature.State()
-        let existingNames = Set(state.servers.map { $0.server.name })
-        return .send(.addServer(.presented(.setExistingServerNames(existingNames))))
+        return .none
+
+      case let .openAddServerWithDXT(tempDir, manifest, manifestData):
+        state.addServer = AddServerFeature.State()
+        return .send(
+          .addServer(
+            .presented(
+              .loadDXTFile(tempDir: tempDir, manifest: manifest, manifestData: manifestData)))
+        )
 
       case .importMenuItemTapped:
         state.importWizard = ImportWizardFeature.State()
@@ -121,36 +142,42 @@ struct SidebarFeature {
 
       case let .editServerTapped(server):
         state.editServer = AddServerFeature.State(editingServer: server)
-        let existingNames = Set(state.servers.map { $0.server.name })
-        return .send(.editServer(.presented(.setExistingServerNames(existingNames))))
+        return .none
 
       case let .deleteServerTapped(server):
         state.deleteConfirmation = deleteConfirmationAlert(for: server)
         return .none
 
       case let .renameServer(id: serverId, newName: newName):
-        let existingNames = state.servers
-          .filter { $0.id != serverId }
-          .map { $0.server.name }
+        return .run { [serverStore] send in
+          let validationResult = try await serverStore.validateServerName(
+            newName,
+            excludingServerID: serverId
+          )
 
-        if existingNames.contains(newName) {
-          logger.warning("Rename failed: Server with that name already exists")
-          state.renameError = AlertState {
-            TextState("Rename Failed")
-          } actions: {
-            ButtonState(role: .cancel) {
-              TextState("OK")
-            }
-          } message: {
-            TextState(
-              "A server with the name \"" + newName
-                + "\" already exists. Please choose a different name."
-            )
+          switch validationResult {
+          case .valid:
+            await send(.proceedWithRename(serverId: serverId, newName: newName))
+          case .invalid(let reason):
+            await send(.showRenameError(reason))
           }
-          return .none
         }
 
-        return renameServerEffect(serverId: serverId, newName: newName)
+      case let .proceedWithRename(serverId: serverId, newName: newName):
+        return renameServerEffect(serverId: serverId, newName: newName, fetchedServers: state.fetchedServers)
+
+      case let .showRenameError(reason):
+        logger.warning("Rename failed: \(reason)")
+        state.renameError = AlertState {
+          TextState("Rename Failed")
+        } actions: {
+          ButtonState(role: .cancel) {
+            TextState("OK")
+          }
+        } message: {
+          TextState(reason)
+        }
+        return .none
 
       case let .confirmDeleteServer(server):
         logger.info("Deleting server")
@@ -203,14 +230,29 @@ struct SidebarFeature {
         state.serverDeletedID = nil
         return .none
 
-      case let .serverAdded(server):
-        _ = state.$servers.withLock { servers in
-          servers.append(ServerFeature.State(server: server))
+      case let .serverUpdated(originalServer, updatedServer):
+        let connectionPropertiesChanged =
+          originalServer.transport != updatedServer.transport
+          || originalServer.command != updatedServer.command
+          || originalServer.url != updatedServer.url
+          || originalServer.args != updatedServer.args
+          || originalServer.environment != updatedServer.environment
+          || originalServer.headers != updatedServer.headers
+          || originalServer.dxtUserConfig != updatedServer.dxtUserConfig
+
+        if !connectionPropertiesChanged {
+          logger.debug("Server edited: only name changed")
+          return .send(.serverRenamed(id: originalServer.id, newName: updatedServer.name))
+        } else {
+          logger.info("Server edited: connection properties changed")
+          state.$servers.withLock { servers in
+            if var serverState = servers[id: originalServer.id] {
+              serverState.server = updatedServer
+              servers[id: originalServer.id] = serverState
+            }
+          }
+          return .send(.delegate(.serverUpdated(originalServer.id)))
         }
-        return .merge(
-          .send(.serverSelected(server.id)),
-          .send(.delegate(.serverAdded(server.id)))
-        )
 
       case .importWizard(.dismiss):
         return .none
@@ -220,47 +262,13 @@ struct SidebarFeature {
 
       case let .addServer(.presented(.serverSaved(.success(serverId)))):
         logger.info("New server added successfully with ID: \(serverId)")
-        return .run { [database] send in
-          do {
-            let server = try await database.read { db in
-              try MCPServer.where { $0.id == serverId }.fetchOne(db)
-            }
-            if let server = server {
-              await send(.serverAdded(server))
-            }
-          } catch {
-            logger.error("Failed to fetch newly added server: \(error)")
-          }
-        }
+        // Server is already saved in AddServerFeature, notify parent to sync
+        return .send(.delegate(.serverAdded(serverId)))
 
-      case .editServer(.presented(.serverSaved(.success(_)))):
-        if let editState = state.editServer,
-          case .edit(let originalServer) = editState.mode
-        {
-          let editedServer = createServer(from: editState)
-
-          let connectionPropertiesChanged =
-            originalServer.transport != editedServer.transport
-            || originalServer.command != editedServer.command
-            || originalServer.url != editedServer.url || originalServer.args != editedServer.args
-            || originalServer.environment != editedServer.environment
-            || originalServer.headers != editedServer.headers
-
-          if !connectionPropertiesChanged {
-            logger.debug("Server edited: only name changed")
-            return .send(.serverRenamed(id: originalServer.id, newName: editedServer.name))
-          } else {
-            logger.info("Server edited: connection properties changed")
-            state.$servers.withLock { servers in
-              if var serverState = servers[id: originalServer.id] {
-                serverState.server = editedServer
-                servers[id: originalServer.id] = serverState
-              }
-            }
-            return .send(.delegate(.serverUpdated(originalServer.id)))
-          }
-        }
-        return .none
+      case let .editServer(.presented(.serverSaved(.success(serverId)))):
+        logger.info("Server edited successfully with ID: \(serverId)")
+        // Server is already updated in AddServerFeature, notify parent to sync
+        return .send(.delegate(.serverUpdated(serverId)))
 
       case .addServer, .editServer:
         return .none
@@ -324,17 +332,14 @@ struct SidebarFeature {
     }
   }
 
-  private func renameServerEffect(serverId: UUID, newName: String) -> Effect<Action> {
-    .run { [database] send in
+  private func renameServerEffect(serverId: UUID, newName: String, fetchedServers: [MCPServer]) -> Effect<Action> {
+    .run { [serverStore] send in
       do {
-        try await database.write { db in
-          let servers = try MCPServer.where { $0.id == serverId }.fetchAll(db)
-          guard var server = servers.first else {
-            throw AppError.serverNotFound
-          }
-          server.name = newName
-          try MCPServer.update(server).execute(db)
+        guard var server = fetchedServers.first(where: { $0.id == serverId }) else {
+          throw SidebarError.serverNotFound
         }
+        server.name = newName
+        try await serverStore.updateServer(server)
         logger.info("Successfully renamed server")
         await send(.serverRenamed(id: serverId, newName: newName))
       } catch {
@@ -344,20 +349,10 @@ struct SidebarFeature {
   }
 
   private func deleteServerEffect(server: MCPServer) -> Effect<Action> {
-    .run { [database, mcpClientManager] send in
+    .run { [serverStore] send in
       do {
-        try? await mcpClientManager.disconnect(server: server)
-
-        do {
-          try await mcpClientManager.deleteToken(for: server)
-          logger.info("Deleted OAuth token for server \(server.name)")
-        } catch {
-          logger.warning("Failed to delete OAuth token for server \(server.name): \(error)")
-        }
-
-        try await database.write { db in
-          try MCPServer.delete().where { $0.id == server.id }.execute(db)
-        }
+        // ServerStore handles all cleanup: disconnection, OAuth tokens, keychain, DXT directories
+        try await serverStore.deleteServer(server)
         logger.info("Successfully deleted server")
         await send(.serverDeleteResult(.success(())))
       } catch {
@@ -382,37 +377,4 @@ struct SidebarFeature {
     }
   }
 
-  private func createServer(from state: AddServerFeature.State) -> MCPServer {
-    let id: UUID
-    switch state.mode {
-    case .add:
-      id = UUID()
-    case .edit(let originalServer):
-      id = originalServer.id
-    }
-
-    var server = MCPServer(
-      id: id,
-      name: state.serverName,
-      transport: state.transport
-    )
-
-    switch state.transport {
-    case .stdio:
-      server.command = state.command
-      let filteredArgs = state.arguments.map { $0.value }.filter { !$0.isEmpty }
-      server.args = filteredArgs.isEmpty ? nil : filteredArgs
-      let validEnv = state.environmentVariables.filter { !$0.name.isEmpty && !$0.value.isEmpty }
-      let envDict = Dictionary(uniqueKeysWithValues: validEnv.map { ($0.name, $0.value) })
-      server.environment = envDict.isEmpty ? nil : envDict
-
-    case .sse, .streamableHTTP:
-      server.url = state.url
-      let validHeaders = state.headers.filter { !$0.key.isEmpty && !$0.value.isEmpty }
-      let headerDict = Dictionary(uniqueKeysWithValues: validHeaders.map { ($0.key, $0.value) })
-      server.headers = headerDict.isEmpty ? nil : headerDict
-    }
-
-    return server
-  }
 }

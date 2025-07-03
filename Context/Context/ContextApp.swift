@@ -43,8 +43,18 @@ struct ContextApp: App {
         }
       )
       .frame(minWidth: 900, minHeight: 600)
+      .handlesExternalEvents(preferring: [], allowing: ["*"])
       .onOpenURL { url in
-        _ = oauthHandler.handleURL(url)
+        if url.pathExtension == "dxt" {
+          // Handle DXT file opening
+          NotificationCenter.default.post(
+            name: .openDXTFile,
+            object: url
+          )
+        } else {
+          // Handle OAuth callbacks
+          _ = oauthHandler.handleURL(url)
+        }
       }
     }
     .defaultSize(width: 1050, height: 675)
@@ -111,4 +121,5 @@ extension Notification.Name {
   static let importMCPServers = Notification.Name("importMCPServers")
   static let addMCPServer = Notification.Name("addMCPServer")
   static let giveFeedback = Notification.Name("giveFeedback")
+  static let openDXTFile = Notification.Name("openDXTFile")
 }

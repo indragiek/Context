@@ -1,5 +1,6 @@
 // Copyright © 2025 Indragie Karunaratne. All rights reserved.
 
+import ContextCore
 import Foundation
 import SharingGRDB
 
@@ -7,6 +8,7 @@ enum TransportType: String, Codable, QueryBindable, Equatable {
   case stdio = "stdio"
   case sse = "sse"
   case streamableHTTP = "streamable_http"
+  case dxt = "dxt"
 }
 
 @Table("mcp_servers")
@@ -34,4 +36,7 @@ struct MCPServer: Equatable, Identifiable {
 
   @Column("auto_reload_enabled")
   var autoReloadEnabled: Bool = false
+
+  @Column("dxt_user_config", as: DXTUserConfigurationValues?.JSONRepresentation.self)
+  var dxtUserConfig: DXTUserConfigurationValues?
 }

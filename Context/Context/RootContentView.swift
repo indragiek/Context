@@ -25,6 +25,11 @@ struct RootContentView: View {
         openWindow(id: "feedback")
       }
     #endif
+    .onReceive(NotificationCenter.default.publisher(for: .openDXTFile)) { notification in
+      if let url = notification.object as? URL {
+        store.send(.openDXTFile(url))
+      }
+    }
     .sheet(
       isPresented: Binding(
         get: { store.withState(\.welcome.isVisible) },
@@ -35,6 +40,9 @@ struct RootContentView: View {
     }
     .alert(
       $store.scope(state: \.referenceServersAlert, action: \.referenceServersAlert)
+    )
+    .alert(
+      $store.scope(state: \.dxtReplaceAlert, action: \.dxtReplaceAlert)
     )
     .task {
       store.send(.onAppear)

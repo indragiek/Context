@@ -527,6 +527,8 @@ struct ServerRow: View {
       return .green
     case .streamableHTTP:
       return .orange
+    case .dxt:
+      return .purple
     }
   }
 }
