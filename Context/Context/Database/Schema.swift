@@ -40,3 +40,10 @@ struct MCPServer: Equatable, Identifiable {
   @Column("dxt_user_config", as: DXTUserConfigurationValues?.JSONRepresentation.self)
   var dxtUserConfig: DXTUserConfigurationValues?
 }
+
+@Table("mcp_roots")
+struct MCPRoot: Equatable, Identifiable {
+  let id: UUID
+  var name: String
+  var uri: String
+}
