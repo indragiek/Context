@@ -439,8 +439,8 @@ public actor DXTTransport: Transport {
     }
     
     // Check that the binary is within the DXT directory (no symlinks escaping)
-    let realPath = try url.resolvingSymlinksInPath()
-    let dxtRealPath = try url.deletingLastPathComponent().resolvingSymlinksInPath()
+    let realPath = url.resolvingSymlinksInPath()
+    let dxtRealPath = url.deletingLastPathComponent().resolvingSymlinksInPath()
     
     guard realPath.path.hasPrefix(dxtRealPath.path) else {
       throw DXTTransportError.binaryPathEscape
@@ -578,7 +578,7 @@ public actor DXTTransport: Transport {
           substitutions[substituteKey] = String(value)
         case .boolean(let value):
           substitutions[substituteKey] = String(value)
-        case .stringArray(let values):
+        case .stringArray(_):
           // Arrays will be handled specially in args substitution
           continue
         case .keychainReference:

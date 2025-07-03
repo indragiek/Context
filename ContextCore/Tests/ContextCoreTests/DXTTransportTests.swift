@@ -385,7 +385,7 @@ enum DXTTestError: Error {
     let processInfo = try DXTTransport.buildProcessInfo(
       manifest: manifest,
       dxtDirectory: tempDir,
-      userConfig: [:]
+      userConfig: DXTUserConfigurationValues()
     )
     
     // The process info will have shell args: [shell, -c, command]
@@ -469,7 +469,7 @@ enum DXTTestError: Error {
     let processInfo = try DXTTransport.buildProcessInfo(
       manifest: manifest,
       dxtDirectory: tempDir,
-      userConfig: [:]
+      userConfig: DXTUserConfigurationValues()
     )
     
     // Verify working directory substitution
@@ -942,7 +942,8 @@ enum DXTTestError: Error {
     )
     
     // Verify the transport was created successfully
-    #expect(transport.manifest.name == "test-user-config")
+    let manifestName = await transport.manifest.name
+    #expect(manifestName == "test-user-config")
   }
   
   @Test func testUserConfigArrayExpansion() async throws {
@@ -978,10 +979,19 @@ enum DXTTestError: Error {
       try? FileManager.default.removeItem(at: tempDir)
     }
     
-    // Test with array values
+    // Test with array values - use temp directories that exist
+    let tempDir1 = FileManager.default.temporaryDirectory.appendingPathComponent("test-dir-1-\(UUID().uuidString)")
+    let tempDir2 = FileManager.default.temporaryDirectory.appendingPathComponent("test-dir-2-\(UUID().uuidString)")
+    try FileManager.default.createDirectory(at: tempDir1, withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(at: tempDir2, withIntermediateDirectories: true)
+    defer {
+      try? FileManager.default.removeItem(at: tempDir1)
+      try? FileManager.default.removeItem(at: tempDir2)
+    }
+    
     let userConfig = DXTUserConfigurationValues(values: [
       "allowed_dirs": DXTUserConfigurationValues.ConfigValue(
-        value: .stringArray(["/home/user/docs", "/home/user/projects"]),
+        value: .stringArray([tempDir1.path, tempDir2.path]),
         isSensitive: false,
         configType: "directory"
       )
@@ -995,7 +1005,8 @@ enum DXTTestError: Error {
     )
     
     // The args should be expanded to ["--dir", "/home/user/docs", "/home/user/projects", "--end"]
-    #expect(transport.manifest.name == "test-array-config")
+    let manifestName = await transport.manifest.name
+    #expect(manifestName == "test-array-config")
   }
   
   @Test func testMissingRequiredUserConfig() async throws {
