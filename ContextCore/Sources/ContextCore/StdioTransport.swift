@@ -89,7 +89,7 @@ public enum StdioTransportError: Error, LocalizedError, Equatable {
 /// https://modelcontextprotocol.io/specification/2025-03-26/basic/transports#stdio
 public actor StdioTransport: Transport {
   /// Configuration for starting the MCP server process.
-  public struct ServerProcessInfo {
+  public struct ServerProcessInfo: Sendable {
     /// The URL to the server executable. This must be a local file URL.
     public let executableURL: URL
 
@@ -180,16 +180,12 @@ public actor StdioTransport: Transport {
     let errorPipe = Pipe()
 
     do {
-      process = try await {
+      process = try {
         let process = Process()
         process.executableURL = serverProcessInfo.executableURL
         process.arguments = serverProcessInfo.arguments
         var environment = process.environment ?? [:]
         serverProcessInfo.environment?.forEach { environment[$0] = $1 }
-
-        // Get merged PATH from user's shell and current process
-        let mergedPath = try await getMergedPath()
-        environment["PATH"] = mergedPath
 
         process.environment = environment
         process.currentDirectoryURL = serverProcessInfo.currentDirectoryURL
@@ -431,87 +427,6 @@ public actor StdioTransport: Transport {
     let buffer = stderrBuffer.trimmingCharacters(in: .whitespacesAndNewlines)
     stderrBuffer = ""
     return buffer
-  }
-
-  /// Gets the merged PATH from the user's default shell and current process environment.
-  private func getMergedPath() async throws -> String {
-    var shellPaths: [String] = []
-    var currentProcessPaths: [String] = []
-    var allPaths = Set<String>()
-
-    // Get user's default shell PATH
-    let userShell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
-    do {
-      let shellProcess = Process()
-      let outputPipe = Pipe()
-
-      shellProcess.executableURL = URL(fileURLWithPath: userShell)
-      // Using `env | grep '^PATH='` instead of `echo $PATH` because most shells use a colon delimiter
-      // for $PATH, but fish prints it as a list with a space delimiter instead. This has consistent
-      // behavior across shells.
-      let pathPrefix = "PATH="
-      shellProcess.arguments = ["-l", "-c", "env | grep '^\(pathPrefix)'"]
-      shellProcess.standardOutput = outputPipe
-      shellProcess.standardError = Pipe()
-
-      try shellProcess.run()
-      shellProcess.waitUntilExit()
-
-      if shellProcess.terminationStatus == 0 {
-        let data = outputPipe.fileHandleForReading.readDataToEndOfFile()
-        if var shellPath = String(data: data, encoding: .utf8)?.trimmingCharacters(
-          in: .whitespacesAndNewlines)
-        {
-          if shellPath.hasPrefix(pathPrefix) {
-            shellPath = String(shellPath.dropFirst(pathPrefix.count))
-          }
-          for path in shellPath.split(separator: ":") {
-            let pathStr = String(path)
-            if !allPaths.contains(pathStr) {
-              shellPaths.append(pathStr)
-              allPaths.insert(pathStr)
-            }
-          }
-        }
-      }
-    } catch {
-      logger.warning("Failed to get shell PATH: \(error)")
-    }
-
-    // Get current process's PATH
-    if let currentPath = ProcessInfo.processInfo.environment["PATH"] {
-      for path in currentPath.split(separator: ":") {
-        let pathStr = String(path)
-        if !allPaths.contains(pathStr) {
-          currentProcessPaths.append(pathStr)
-          allPaths.insert(pathStr)
-        }
-      }
-    }
-
-    let systemPaths = [
-      "/usr/local/bin",
-      "/usr/bin",
-      "/bin",
-      "/usr/sbin",
-      "/sbin",
-    ]
-
-    var fallbackPaths: [String] = []
-    for path in systemPaths {
-      if !allPaths.contains(path) {
-        fallbackPaths.append(path)
-        allPaths.insert(path)
-      }
-    }
-
-    // Combine paths: shell paths first, then current process paths, then fallback paths
-    var orderedPaths: [String] = []
-    orderedPaths.append(contentsOf: shellPaths)
-    orderedPaths.append(contentsOf: currentProcessPaths)
-    orderedPaths.append(contentsOf: fallbackPaths)
-
-    return orderedPaths.joined(separator: ":")
   }
 
   private func send(data: Data) throws {

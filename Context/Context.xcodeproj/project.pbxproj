@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		03170A3C2DD121620037EE9A /* ContextCore in Frameworks */ = {isa = PBXBuildFile; productRef = 03170A3B2DD121620037EE9A /* ContextCore */; };
+		033742732E0E7555000CB545 /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = 033742722E0E7555000CB545 /* ZIPFoundation */; };
 		033C2B3C2DF009CE00759652 /* MarkdownUI in Frameworks */ = {isa = PBXBuildFile; productRef = 033C2B3B2DF009CE00759652 /* MarkdownUI */; };
 		0382543D2DEA3B890096CC9D /* HighlightSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 0382543C2DEA3B890096CC9D /* HighlightSwift */; };
 		0382544C2DEA6B8F0096CC9D /* SharingGRDB in Frameworks */ = {isa = PBXBuildFile; productRef = 0382544B2DEA6B8F0096CC9D /* SharingGRDB */; };
@@ -86,6 +87,7 @@
 				03C8520B2E0337AB00869408 /* SentrySwiftUI in Frameworks */,
 				03C852092E0337AB00869408 /* Sentry in Frameworks */,
 				0382543D2DEA3B890096CC9D /* HighlightSwift in Frameworks */,
+				033742732E0E7555000CB545 /* ZIPFoundation in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -155,6 +157,7 @@
 				03C852082E0337AB00869408 /* Sentry */,
 				03C8520A2E0337AB00869408 /* SentrySwiftUI */,
 				03DE6A832E0BB6F1004A32EE /* Sparkle */,
+				033742722E0E7555000CB545 /* ZIPFoundation */,
 			);
 			productName = Context;
 			productReference = 03170A0F2DD121420037EE9A /* Context.app */;
@@ -246,6 +249,7 @@
 				033C2B3A2DF009CE00759652 /* XCRemoteSwiftPackageReference "swift-markdown-ui" */,
 				03C852072E0337AB00869408 /* XCRemoteSwiftPackageReference "sentry-cocoa" */,
 				03DE6A822E0BB6F1004A32EE /* XCRemoteSwiftPackageReference "Sparkle" */,
+				033742712E0E7555000CB545 /* XCRemoteSwiftPackageReference "ZIPFoundation" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 03170A102DD121420037EE9A /* Products */;
@@ -666,6 +670,14 @@
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		033742712E0E7555000CB545 /* XCRemoteSwiftPackageReference "ZIPFoundation" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/weichsel/ZIPFoundation.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.9.19;
+			};
+		};
 		033C2B3A2DF009CE00759652 /* XCRemoteSwiftPackageReference "swift-markdown-ui" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/gonzalezreal/swift-markdown-ui";
@@ -720,6 +732,11 @@
 		03170A3B2DD121620037EE9A /* ContextCore */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = ContextCore;
+		};
+		033742722E0E7555000CB545 /* ZIPFoundation */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 033742712E0E7555000CB545 /* XCRemoteSwiftPackageReference "ZIPFoundation" */;
+			productName = ZIPFoundation;
 		};
 		033C2B3B2DF009CE00759652 /* MarkdownUI */ = {
 			isa = XCSwiftPackageProductDependency;

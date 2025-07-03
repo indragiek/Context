@@ -46,6 +46,12 @@ func appDatabase() throws -> any DatabaseWriter {
     .execute(db)
   }
 
+  migrator.registerMigration("Add 'dxt_user_config' column to 'mcp_servers'") { db in
+    try db.alter(table: "mcp_servers") { t in
+      t.add(column: "dxt_user_config", .text)
+    }
+  }
+
   try migrator.migrate(dbWriter)
   return dbWriter
 }

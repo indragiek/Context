@@ -17,6 +17,7 @@ let package = Package(
     .package(
       url: "https://github.com/apple/swift-async-algorithms.git",
       branch: "main"),
+    .package(url: "https://github.com/weichsel/ZIPFoundation.git", from: "0.9.0"),
   ],
   targets: [
     .macro(
@@ -42,6 +43,7 @@ let package = Package(
         "ContextCore",
         "ContextCoreMacros",
         .product(name: "SwiftSyntaxMacrosTestSupport", package: "swift-syntax"),
+        .product(name: "ZIPFoundation", package: "ZIPFoundation"),
       ],
       resources: [
         .copy("mcp-servers")

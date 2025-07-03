@@ -9,7 +9,6 @@ struct JSONViewerToolbar: View {
   @Binding var selectedTab: JSONValueView.Tab
   @Binding var searchText: String
   @Binding var showCopiedMessage: Bool
-  @FocusState private var isSearchFieldFocused: Bool
   let jsonValue: JSONValue
 
   @State private var shareURL: URL?
@@ -60,43 +59,8 @@ struct JSONViewerToolbar: View {
   private var toolbarButtons: some View {
     HStack(spacing: 8) {
       // Search field
-      HStack(spacing: 4) {
-        Image(systemName: "magnifyingglass")
-          .font(.system(size: 11, weight: .medium))
-          .foregroundColor(.secondary)
-
-        TextField("Search", text: $searchText)
-          .textFieldStyle(.plain)
-          .font(.system(size: 12))
-          .focused($isSearchFieldFocused)
-
-        // Always reserve space for the X button to prevent layout jumping
-        ZStack {
-          if !searchText.isEmpty {
-            Button(action: {
-              searchText = ""
-            }) {
-              Image(systemName: "xmark.circle.fill")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundColor(.secondary)
-                .opacity(0.7)
-            }
-            .buttonStyle(.plain)
-            .transition(.scale.combined(with: .opacity))
-          }
-        }
-        .frame(width: 16, height: 16)
-      }
-      .frame(width: 140)
-      .padding(.horizontal, 8)
-      .padding(.vertical, 4)
-      .background(
-        RoundedRectangle(cornerRadius: 6)
-          .fill(Color(NSColor.textBackgroundColor))
-          .stroke(
-            isSearchFieldFocused ? Color.accentColor : Color(NSColor.separatorColor),
-            lineWidth: isSearchFieldFocused ? 2 : 0.5)
-      )
+      SearchField(text: $searchText)
+        .frame(width: 140)
 
       // "Copied!" indicator
       if showCopiedMessage {

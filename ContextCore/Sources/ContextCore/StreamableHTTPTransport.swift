@@ -982,7 +982,7 @@ public enum StreamableHTTPTransportError: Error, LocalizedError {
       return "Server sent invalid session ID: \(sessionID)"
     case .reconnectionFailed:
       return "Failed to reconnect to server after maximum number of attempts"
-    case .authenticationRequired(let resourceMetadataURL, _):
+    case .authenticationRequired:
       return "Server requires authentication"
     }
   }

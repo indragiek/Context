@@ -47,6 +47,13 @@ public struct TestFixtures {
   public static func createSamplingTransport() -> StdioTransport {
     return createStdioTransport(serverName: "echo-sampling")
   }
+  
+  /// Returns the path to a DXT test file
+  public static func dxtPath(name: String) -> URL {
+    let bundle = Bundle.module
+    return bundle.url(
+      forResource: name, withExtension: "dxt", subdirectory: "mcp-servers")!
+  }
 }
 
 /// HTTP test server for running Python MCP servers over HTTP
