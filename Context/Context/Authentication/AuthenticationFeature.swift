@@ -318,27 +318,6 @@ struct AuthenticationFeature {
         resource: state.resourceMetadata?.resource
       )
 
-      // Validate the authorization URL is HTTPS
-      guard let scheme = authURL.scheme?.lowercased(),
-        scheme == "https"
-      else {
-        setError(&state, "Authorization endpoint must use HTTPS")
-        state.oAuthState = nil
-        state.pkceParameters = nil
-        return .none
-      }
-
-      // Validate the host matches the expected authorization server
-      guard let authHost = authURL.host,
-        let expectedHost = authServerMetadata.authorizationEndpoint?.host,
-        authHost == expectedHost
-      else {
-        setError(&state, "Authorization URL host mismatch - possible security issue")
-        state.oAuthState = nil
-        state.pkceParameters = nil
-        return .none
-      }
-
       state.authorizationURL = authURL
       state.isLoading = false
       state.loadingStep = .openingBrowser
