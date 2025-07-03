@@ -83,6 +83,7 @@ struct ServerFeature {
       expiredToken: OAuthToken?,
       clientID: String?
     )
+    case tokenRefreshFailed(serverID: UUID, resourceMetadataURL: URL)
   }
 
   @Dependency(\.mcpClientManager) var mcpClientManager
@@ -120,6 +121,14 @@ struct ServerFeature {
         return .run { [server = state.server] send in
           do {
             _ = try await mcpClientManager.createUnconnectedClient(for: server)
+            
+            // Register for token refresh failure notifications
+            await mcpClientManager.setTokenRefreshFailureCallback(
+              for: server.id
+            ) { serverId, resourceMetadataURL in
+              await send(.tokenRefreshFailed(serverID: serverId, resourceMetadataURL: resourceMetadataURL))
+            }
+            
             await send(.startConnection)
           } catch {
             await send(.connectionError(error))
@@ -183,7 +192,11 @@ struct ServerFeature {
         return .merge(
           .cancel(id: CancelID.connectionStateSubscription(state.server.id)),
           .cancel(id: CancelID.errorStreamSubscription(state.server.id)),
-          .cancel(id: CancelID.pingTimer(state.server.id))
+          .cancel(id: CancelID.pingTimer(state.server.id)),
+          .run { [serverId = state.server.id] _ in
+            // Remove the token refresh failure callback
+            await mcpClientManager.removeTokenRefreshFailureCallback(for: serverId)
+          }
         )
 
       case let .connectionStateChanged(connectionState):
@@ -435,6 +448,34 @@ struct ServerFeature {
 
       case .authenticationFeature:
         return .none
+        
+      case let .tokenRefreshFailed(serverID, resourceMetadataURL):
+        // Only show authentication if we don't already have it open
+        guard state.authenticationState == nil else { return .none }
+        
+        let serverName = state.server.name
+        guard let urlString = state.server.url,
+          let serverURL = URL(string: urlString)
+        else {
+          logger.error("Invalid server URL for token refresh failure")
+          return .none
+        }
+        
+        return .run { send in
+          // Retrieve the expired token and clientID from keychain
+          let keychainManager = KeychainManager()
+          let storedToken = try? await keychainManager.retrieveStoredToken(for: serverID)
+          
+          await send(
+            .showAuthenticationSheet(
+              serverID: serverID,
+              serverName: serverName,
+              serverURL: serverURL,
+              resourceMetadataURL: resourceMetadataURL,
+              expiredToken: storedToken?.token,
+              clientID: storedToken?.clientID
+            ))
+        }
       }
     }
     .ifLet(\.$authenticationState, action: \.authenticationFeature) {

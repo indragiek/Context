@@ -15,6 +15,9 @@ actor MCPClientManager {
   private var clients: [UUID: Client] = [:]
   private let logger = Logger(subsystem: "com.indragie.Context", category: "MCPClientManager")
   private let keychainManager = KeychainManager()
+  
+  // Token refresh failure notifications
+  private var tokenRefreshFailureCallbacks: [UUID: @Sendable (UUID, URL) async -> Void] = [:]
 
   // Token refresh state
   private var refreshTask: Task<Void, Never>?
@@ -79,6 +82,19 @@ actor MCPClientManager {
   /// Gets an existing client if one exists, without creating a new one
   func existingClient(for server: MCPServer) async -> Client? {
     return clients[server.id]
+  }
+
+  /// Registers a callback to be notified when token refresh fails for a server
+  func setTokenRefreshFailureCallback(
+    for serverId: UUID,
+    callback: @escaping @Sendable (UUID, URL) async -> Void
+  ) {
+    tokenRefreshFailureCallbacks[serverId] = callback
+  }
+  
+  /// Removes the token refresh failure callback for a server
+  func removeTokenRefreshFailureCallback(for serverId: UUID) {
+    tokenRefreshFailureCallbacks[serverId] = nil
   }
 
   /// Stores an OAuth token for a server.
@@ -308,12 +324,25 @@ actor MCPClientManager {
           "Token for server \(server.name) expires in \(timeUntilExpiration) seconds, refreshing")
 
         // Refresh the token
-        Task {
+        Task { [weak self] in
+          guard let self = self else { return }
           do {
-            _ = try await refreshToken(for: server, storedToken: storedToken)
-            logger.info("Successfully refreshed token for server \(server.name)")
+            _ = try await self.refreshToken(for: server, storedToken: storedToken)
+            self.logger.info("Successfully refreshed token for server \(server.name)")
           } catch {
-            logger.error("Failed to refresh token for server \(server.name): \(error)")
+            self.logger.error("Failed to refresh token for server \(server.name): \(error)")
+            
+            // Get the resource metadata URL for authentication
+            if let urlString = server.url,
+               let serverURL = URL(string: urlString) {
+              let resourceMetadataURL = serverURL.appendingPathComponent(
+                ".well-known/oauth-protected-resource")
+              
+              // Call the registered callback if available
+              if let callback = await self.tokenRefreshFailureCallbacks[server.id] {
+                await callback(server.id, resourceMetadataURL)
+              }
+            }
           }
         }
       }
