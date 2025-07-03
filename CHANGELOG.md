@@ -1,5 +1,9 @@
 ## Unreleased
 
+* Implement support for Anthropic dxt (Desktop Extension) format (#4)
+* Fix servers not appearing in sidebar after importing servers (#8)
+* Fix broken OAuth token refresh and remove HTTPS requirement for OAuth (#7)
+
 ## Version 1.0.5 (105)
 * Implement missing SQLite uuid() function ([cb33360](https://github.com/indragiek/Context/commit/cb33360a73b5a2a5d661f330439341f226d13731))
 
