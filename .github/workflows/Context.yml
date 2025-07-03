@@ -1,0 +1,36 @@
+name: "Context Build (macOS)"
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+
+    runs-on: macos-15
+    timeout-minutes: 10
+
+    steps:
+    - uses: maxim-lobanov/setup-xcode@v1.6.0
+      with:
+        xcode-version: "16.3"
+    - uses: actions/checkout@v4
+    - uses: actions/cache@v4
+      with:
+        path: ./ContextCore/.build
+        key: ${{ runner.os }}-spm-${{ hashFiles('**/Package.resolved') }}
+        restore-keys: |
+          ${{ runner.os }}-spm-
+    - uses: irgaly/xcode-cache@v1
+      with:
+        key: xcode-cache-deriveddata-${{ github.workflow }}-${{ github.sha }}
+        restore-keys: xcode-cache-deriveddata-${{ github.workflow }}-
+    - name: Build macOS app
+      working-directory: ./Context
+      run: |
+        set -o pipefail
+        xcodebuild -project "Context.xcodeproj" -scheme "Context" -sdk macosx -configuration Debug -skipMacroValidation -skipPackagePluginValidation build | xcbeautify --renderer github-actions
+      env:
+        NSUnbufferedIO: YES
