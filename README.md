@@ -64,7 +64,7 @@ _Support for protocol version 2025-06-18 is a work-in-progress_
 | Sampling | ❌ Not Supported |
 | Elicitation | ❌ Not Supported |
 | Completion | ❌ Not Supported |
-| Pagination | ❌ Not Supported |
+| Pagination | ✅ Supported |
 
 ## Project Structure
 
