@@ -11,36 +11,62 @@ struct ResourcesView: View {
 
   var body: some View {
     WithViewStore(self.store, observe: { $0 }) { viewStore in
-      Group {
-        if viewStore.isLoading {
-          ProgressView()
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if let error = viewStore.error {
-          ContentUnavailableView {
-            Label("Failed to Load Resources", systemImage: "exclamationmark.triangle")
-          } description: {
-            Text(error.localizedDescription)
-          } actions: {
-            if error.isLikelyConnectionError {
-              Button("Reconnect") {
-                viewStore.send(.reconnect)
-              }
+      VStack(spacing: 0) {
+        // Segmented Control
+        if !viewStore.isLoading && viewStore.error == nil && viewStore.hasLoadedOnce {
+          Picker(
+            "",
+            selection: viewStore.binding(
+              get: \.selectedSegment,
+              send: ResourcesFeature.Action.segmentChanged
+            )
+          ) {
+            ForEach(ResourcesFeature.ResourceSegment.allCases, id: \.self) { segment in
+              Text(segment.rawValue).tag(segment)
             }
           }
-        } else if viewStore.filteredResources.isEmpty && viewStore.filteredResourceTemplates.isEmpty
-        {
-          ContentUnavailableView(
-            viewStore.searchQuery.isEmpty ? "No Resources" : "No Results",
-            systemImage: "folder",
-            description: Text(
-              viewStore.searchQuery.isEmpty
-                ? "No resources available" : "No resources match '\(viewStore.searchQuery)'")
-          )
-        } else {
-          List(selection: $selection) {
-            // Static Resources Section
-            if !viewStore.filteredResources.isEmpty {
-              Section("Resources") {
+          .pickerStyle(.segmented)
+          .labelsHidden()
+          .padding(.horizontal)
+          .padding(.vertical, 8)
+          .background(Color(NSColor.controlBackgroundColor))
+
+          Divider()
+        }
+
+        Group {
+          if viewStore.isLoading {
+            ProgressView()
+              .frame(maxWidth: .infinity, maxHeight: .infinity)
+          } else if let error = viewStore.error {
+            ContentUnavailableView {
+              Label("Failed to Load Resources", systemImage: "exclamationmark.triangle")
+            } description: {
+              Text(error.localizedDescription)
+            } actions: {
+              if error.isLikelyConnectionError {
+                Button("Reconnect") {
+                  viewStore.send(.reconnect)
+                }
+              }
+            }
+          } else if (viewStore.selectedSegment == .resources && viewStore.filteredResources.isEmpty)
+            || (viewStore.selectedSegment == .templates
+              && viewStore.filteredResourceTemplates.isEmpty)
+          {
+            let itemType = viewStore.selectedSegment == .resources ? "resources" : "templates"
+            ContentUnavailableView(
+              viewStore.searchQuery.isEmpty ? "No \(itemType.capitalized)" : "No Results",
+              systemImage: "folder",
+              description: Text(
+                viewStore.searchQuery.isEmpty
+                  ? "No \(itemType) available" : "No \(itemType) match '\(viewStore.searchQuery)'")
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+          } else {
+            List(selection: $selection) {
+              if viewStore.selectedSegment == .resources {
+                // Show only resources
                 ForEach(viewStore.filteredResources) { resource in
                   ResourceRow(
                     name: resource.name,
@@ -58,12 +84,8 @@ struct ResourcesView: View {
                     }
                   }
                 }
-              }
-            }
-
-            // Resource Templates Section
-            if !viewStore.filteredResourceTemplates.isEmpty {
-              Section("Resource Templates") {
+              } else {
+                // Show only templates
                 ForEach(viewStore.filteredResourceTemplates) { template in
                   ResourceRow(
                     name: template.name,
@@ -90,7 +112,9 @@ struct ResourcesView: View {
         text: viewStore.binding(
           get: \.searchQuery,
           send: ResourcesFeature.Action.searchQueryChanged
-        ), prompt: "Search resources..."
+        ),
+        prompt: viewStore.selectedSegment == .resources
+          ? "Search resources..." : "Search resource templates..."
       )
       .onAppear {
         viewStore.send(.onAppear)

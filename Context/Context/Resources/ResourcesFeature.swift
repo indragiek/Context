@@ -7,6 +7,11 @@ import SharingGRDB
 
 @Reducer
 struct ResourcesFeature {
+  enum ResourceSegment: String, CaseIterable {
+    case resources = "Resources"
+    case templates = "Templates"
+  }
+
   @ObservableState
   struct State: Equatable {
     let server: MCPServer
@@ -16,10 +21,12 @@ struct ResourcesFeature {
     var selectedResourceTemplateID: String?
     var lastSelectedResourceID: String?  // Preserved across reconnects
     var lastSelectedTemplateID: String?  // Preserved across reconnects
+    var lastSelectedSegment: ResourceSegment = .resources  // Preserved across reconnects
     var searchQuery: String = ""
     var isLoading = true
     var error: NotConnectedError?
     var hasLoadedOnce = false
+    var selectedSegment: ResourceSegment = .resources
 
     var filteredResources: [Resource] {
       if searchQuery.isEmpty {
@@ -58,6 +65,7 @@ struct ResourcesFeature {
     case resourceSelected(String?)
     case resourceTemplateSelected(String?)
     case searchQueryChanged(String)
+    case segmentChanged(ResourceSegment)
     case clearState
     case connectionStateChanged(Client.ConnectionState)
     case reconnect
@@ -95,6 +103,9 @@ struct ResourcesFeature {
         state.resourceTemplates = templates
         state.hasLoadedOnce = true
         state.error = nil
+
+        // Restore segment selection
+        state.selectedSegment = state.lastSelectedSegment
 
         var selectionRestored = false
 
@@ -142,34 +153,43 @@ struct ResourcesFeature {
       case let .searchQueryChanged(query):
         state.searchQuery = query
 
-        if let selectedResourceID = state.selectedResourceID {
-          if !state.filteredResources.contains(where: { $0.id == selectedResourceID }) {
-            state.selectedResourceID = nil
-            if let firstResource = state.filteredResources.first {
-              state.selectedResourceID = firstResource.id
+        // Only update selection for the currently selected segment
+        if state.selectedSegment == .resources {
+          if let selectedResourceID = state.selectedResourceID {
+            if !state.filteredResources.contains(where: { $0.id == selectedResourceID }) {
+              state.selectedResourceID = nil
+              if let firstResource = state.filteredResources.first {
+                state.selectedResourceID = firstResource.id
+              }
             }
+          } else if state.selectedResourceID == nil && !state.filteredResources.isEmpty {
+            // If no selection and we have filtered results, select the first one
+            state.selectedResourceID = state.filteredResources.first?.id
           }
-        }
-
-        if let selectedTemplateID = state.selectedResourceTemplateID {
-          if !state.filteredResourceTemplates.contains(where: { $0.id == selectedTemplateID }) {
-            state.selectedResourceTemplateID = nil
-            if state.selectedResourceID == nil,
-              let firstTemplate = state.filteredResourceTemplates.first
-            {
-              state.selectedResourceTemplateID = firstTemplate.id
+        } else {
+          // Templates segment
+          if let selectedTemplateID = state.selectedResourceTemplateID {
+            if !state.filteredResourceTemplates.contains(where: { $0.id == selectedTemplateID }) {
+              state.selectedResourceTemplateID = nil
+              if let firstTemplate = state.filteredResourceTemplates.first {
+                state.selectedResourceTemplateID = firstTemplate.id
+              }
             }
+          } else if state.selectedResourceTemplateID == nil
+            && !state.filteredResourceTemplates.isEmpty
+          {
+            // If no selection and we have filtered results, select the first one
+            state.selectedResourceTemplateID = state.filteredResourceTemplates.first?.id
           }
         }
 
-        if state.selectedResourceID == nil && state.selectedResourceTemplateID == nil {
-          if let firstResource = state.filteredResources.first {
-            state.selectedResourceID = firstResource.id
-          } else if let firstTemplate = state.filteredResourceTemplates.first {
-            state.selectedResourceTemplateID = firstTemplate.id
-          }
-        }
+        return .none
 
+      case let .segmentChanged(segment):
+        state.selectedSegment = segment
+        state.lastSelectedSegment = segment
+        // Clear search when switching segments for better UX
+        state.searchQuery = ""
         return .none
 
       case .clearState:
@@ -179,6 +199,7 @@ struct ResourcesFeature {
         if state.selectedResourceTemplateID != nil {
           state.lastSelectedTemplateID = state.selectedResourceTemplateID
         }
+        state.lastSelectedSegment = state.selectedSegment
 
         state.resources = []
         state.resourceTemplates = []
