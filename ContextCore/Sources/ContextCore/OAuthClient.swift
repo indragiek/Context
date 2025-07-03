@@ -128,7 +128,6 @@ public enum OAuthClientError: Error, LocalizedError {
   case networkError(Error)
   case randomGenerationFailed
   case invalidState
-  case insecureConnection
   case invalidRedirectURI
   case missingRegistrationEndpoint
   case invalidRegistrationResponse
@@ -157,8 +156,6 @@ public enum OAuthClientError: Error, LocalizedError {
       return "Failed to generate secure random data"
     case .invalidState:
       return "Invalid or mismatched state parameter"
-    case .insecureConnection:
-      return "HTTPS is required for OAuth endpoints"
     case .invalidRedirectURI:
       return "Invalid redirect URI"
     case .missingRegistrationEndpoint:
@@ -296,12 +293,6 @@ public struct ClientRegistrationResponse: Codable, Sendable {
   }
 }
 
-/// Checks if a URL is a localhost URL (allowing HTTP for localhost connections).
-private func isLocalhostURL(_ url: URL) -> Bool {
-  guard url.scheme == "http" else { return false }
-  guard let host = url.host else { return false }
-  return host == "localhost" || host == "127.0.0.1" || host == "::1" || host == "[::1]"
-}
 
 /// OAuth 2.0 client implementing authorization code flow with PKCE.
 public actor OAuthClient {
@@ -436,10 +427,6 @@ public actor OAuthClient {
     resource: ProtectedResourceMetadata?,
     authServer: AuthorizationServerMetadata
   ) {
-    // Validate HTTPS requirement (allow HTTP for localhost)
-    guard resourceMetadataURL.scheme == "https" || isLocalhostURL(resourceMetadataURL) else {
-      throw OAuthClientError.insecureConnection
-    }
 
     logger.info("Discovering OAuth metadata")
     logger.info("Resource metadata URL: \(resourceMetadataURL)")
@@ -497,10 +484,6 @@ public actor OAuthClient {
       throw OAuthClientError.invalidAuthorizationServerMetadata
     }
 
-    // Validate authorization server URL is HTTPS (allow HTTP for localhost)
-    guard authServerURL.scheme == "https" || isLocalhostURL(authServerURL) else {
-      throw OAuthClientError.insecureConnection
-    }
 
     let authServerMetadataURL = authServerURL.appendingPathComponent(
       ".well-known/oauth-authorization-server")
@@ -575,10 +558,6 @@ public actor OAuthClient {
       throw OAuthClientError.missingAuthorizationEndpoint
     }
 
-    // Validate HTTPS requirement for authorization endpoint (allow HTTP for localhost)
-    guard authEndpoint.scheme == "https" || isLocalhostURL(authEndpoint) else {
-      throw OAuthClientError.insecureConnection
-    }
 
     guard URL(string: redirectURI) != nil else {
       throw OAuthClientError.invalidRedirectURI
@@ -665,10 +644,6 @@ public actor OAuthClient {
       throw OAuthClientError.missingTokenEndpoint
     }
 
-    // Validate HTTPS requirement for token endpoint (allow HTTP for localhost)
-    guard tokenEndpoint.scheme == "https" || isLocalhostURL(tokenEndpoint) else {
-      throw OAuthClientError.insecureConnection
-    }
 
     var request = URLRequest(url: tokenEndpoint)
     request.httpMethod = "POST"
@@ -761,10 +736,6 @@ public actor OAuthClient {
       throw OAuthClientError.missingTokenEndpoint
     }
 
-    // Validate HTTPS requirement for token endpoint (allow HTTP for localhost)
-    guard tokenEndpoint.scheme == "https" || isLocalhostURL(tokenEndpoint) else {
-      throw OAuthClientError.insecureConnection
-    }
 
     var request = URLRequest(url: tokenEndpoint)
     request.httpMethod = "POST"
@@ -832,10 +803,6 @@ public actor OAuthClient {
       throw OAuthClientError.missingRegistrationEndpoint
     }
 
-    // Validate HTTPS requirement for registration endpoint (allow HTTP for localhost)
-    guard registrationEndpoint.scheme == "https" || isLocalhostURL(registrationEndpoint) else {
-      throw OAuthClientError.insecureConnection
-    }
 
     // Validate redirect URIs in the request
     if let redirectUris = registrationRequest.redirectUris {
