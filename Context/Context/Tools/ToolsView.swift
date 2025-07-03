@@ -39,18 +39,27 @@ struct ToolsView: View {
             description: Text("No tools match '\(viewStore.searchQuery)'")
           )
         } else {
-          List(
-            viewStore.filteredTools,
-            selection: $selection
-          ) { tool in
-            ToolRow(
-              tool: tool,
-              isSelected: viewStore.selectedToolName == tool.name
-            )
-            .contextMenu {
-              Button("Copy Name") {
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(tool.name, forType: .string)
+          ScrollViewReader { proxy in
+            List(
+              viewStore.filteredTools,
+              selection: $selection
+            ) { tool in
+              ToolRow(
+                tool: tool,
+                isSelected: viewStore.selectedToolName == tool.name
+              )
+              .id(tool.name)
+              .contextMenu {
+                Button("Copy Name") {
+                  NSPasteboard.general.clearContents()
+                  NSPasteboard.general.setString(tool.name, forType: .string)
+                }
+              }
+            }
+            .onChange(of: viewStore.searchQuery) { _, _ in
+              // Reset scroll position to top for any search query change
+              if let firstTool = viewStore.filteredTools.first {
+                proxy.scrollTo(firstTool.name, anchor: .top)
               }
             }
           }

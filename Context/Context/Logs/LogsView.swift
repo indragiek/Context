@@ -31,49 +31,58 @@ struct LogsView: View {
             )
           }
         } else {
-          Table(
-            viewStore.filteredLogs,
-            selection: viewStore.binding(
-              get: \.selectedLogIDs,
-              send: LogsFeature.Action.logSelected
-            )
-          ) {
-            TableColumn("") { cachedLogEntry in
-              let logEntry = cachedLogEntry.logEntry
-              HStack(alignment: .center) {
-                logMessageView(for: logEntry.params)
-                  .textSelection(.enabled)
+          ScrollViewReader { proxy in
+            Table(
+              viewStore.filteredLogs,
+              selection: viewStore.binding(
+                get: \.selectedLogIDs,
+                send: LogsFeature.Action.logSelected
+              )
+            ) {
+              TableColumn("") { cachedLogEntry in
+                let logEntry = cachedLogEntry.logEntry
+                HStack(alignment: .center) {
+                  logMessageView(for: logEntry.params)
+                    .textSelection(.enabled)
 
-                Spacer()
+                  Spacer()
 
-                LogLevelLabel(
-                  level: logEntry.params.level,
-                  isSelected: viewStore.selectedLogIDs.contains(logEntry.id)
-                )
+                  LogLevelLabel(
+                    level: logEntry.params.level,
+                    isSelected: viewStore.selectedLogIDs.contains(logEntry.id)
+                  )
 
-                Text(logEntry.timestamp, style: .time)
-                  .font(.caption)
-                  .foregroundColor(.secondary)
+                  Text(logEntry.timestamp, style: .time)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                }
+                .padding(.vertical, 4)
+                .contentShape(Rectangle())
+                .id(logEntry.id)
               }
-              .padding(.vertical, 4)
-              .contentShape(Rectangle())
             }
-          }
-          .tableColumnHeaders(.hidden)
-          .contextMenu(forSelectionType: LogEntry.ID.self) { items in
-            if let logID = items.first,
-              let cachedLogEntry = viewStore.filteredLogs.first(where: { $0.id == logID })
-            {
-              let logEntry = cachedLogEntry.logEntry
-              Button("Copy Message") {
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(
-                  logDisplayText(for: logEntry.params), forType: .string)
-              }
+            .tableColumnHeaders(.hidden)
+            .contextMenu(forSelectionType: LogEntry.ID.self) { items in
+              if let logID = items.first,
+                let cachedLogEntry = viewStore.filteredLogs.first(where: { $0.id == logID })
+              {
+                let logEntry = cachedLogEntry.logEntry
+                Button("Copy Message") {
+                  NSPasteboard.general.clearContents()
+                  NSPasteboard.general.setString(
+                    logDisplayText(for: logEntry.params), forType: .string)
+                }
 
-              Button("Copy JSON") {
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(cachedLogEntry.jsonString, forType: .string)
+                Button("Copy JSON") {
+                  NSPasteboard.general.clearContents()
+                  NSPasteboard.general.setString(cachedLogEntry.jsonString, forType: .string)
+                }
+              }
+            }
+            .onChange(of: viewStore.searchQuery) { _, _ in
+              // Reset scroll position to top for any search query change
+              if let firstLog = viewStore.filteredLogs.first {
+                proxy.scrollTo(firstLog.logEntry.id, anchor: .top)
               }
             }
           }

@@ -64,43 +64,59 @@ struct ResourcesView: View {
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
           } else {
-            List(selection: $selection) {
-              if viewStore.selectedSegment == .resources {
-                // Show only resources
-                ForEach(viewStore.filteredResources) { resource in
-                  ResourceRow(
-                    name: resource.name,
-                    description: resource.description,
-                    uri: resource.uri,
-                    mimeType: resource.mimeType,
-                    isTemplate: false,
-                    isSelected: viewStore.selectedResourceID == resource.id
-                  )
-                  .tag(resource.id)
-                  .contextMenu {
-                    Button("Copy URI") {
-                      NSPasteboard.general.clearContents()
-                      NSPasteboard.general.setString(resource.uri, forType: .string)
+            ScrollViewReader { proxy in
+              List(selection: $selection) {
+                if viewStore.selectedSegment == .resources {
+                  // Show only resources
+                  ForEach(viewStore.filteredResources) { resource in
+                    ResourceRow(
+                      name: resource.name,
+                      description: resource.description,
+                      uri: resource.uri,
+                      mimeType: resource.mimeType,
+                      isTemplate: false,
+                      isSelected: viewStore.selectedResourceID == resource.id
+                    )
+                    .tag(resource.id)
+                    .id(resource.id)
+                    .contextMenu {
+                      Button("Copy URI") {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(resource.uri, forType: .string)
+                      }
+                    }
+                  }
+                } else {
+                  // Show only templates
+                  ForEach(viewStore.filteredResourceTemplates) { template in
+                    ResourceRow(
+                      name: template.name,
+                      description: template.description,
+                      uri: template.uriTemplate,
+                      mimeType: template.mimeType,
+                      isTemplate: true,
+                      isSelected: viewStore.selectedResourceTemplateID == template.id
+                    )
+                    .tag(template.id)
+                    .id(template.id)
+                    .contextMenu {
+                      Button("Copy URI Template") {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(template.uriTemplate, forType: .string)
+                      }
                     }
                   }
                 }
-              } else {
-                // Show only templates
-                ForEach(viewStore.filteredResourceTemplates) { template in
-                  ResourceRow(
-                    name: template.name,
-                    description: template.description,
-                    uri: template.uriTemplate,
-                    mimeType: template.mimeType,
-                    isTemplate: true,
-                    isSelected: viewStore.selectedResourceTemplateID == template.id
-                  )
-                  .tag(template.id)
-                  .contextMenu {
-                    Button("Copy URI Template") {
-                      NSPasteboard.general.clearContents()
-                      NSPasteboard.general.setString(template.uriTemplate, forType: .string)
-                    }
+              }
+              .onChange(of: viewStore.searchQuery) { _, _ in
+                // Reset scroll position to top for any search query change
+                if viewStore.selectedSegment == .resources {
+                  if let firstResource = viewStore.filteredResources.first {
+                    proxy.scrollTo(firstResource.id, anchor: .top)
+                  }
+                } else {
+                  if let firstTemplate = viewStore.filteredResourceTemplates.first {
+                    proxy.scrollTo(firstTemplate.id, anchor: .top)
                   }
                 }
               }

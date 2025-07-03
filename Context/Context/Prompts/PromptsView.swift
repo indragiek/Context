@@ -38,21 +38,30 @@ struct PromptsView: View {
             description: Text("No prompts match '\(viewStore.searchQuery)'")
           )
         } else {
-          List(
-            viewStore.filteredPrompts,
-            selection: viewStore.binding(
-              get: \.selectedPromptName,
-              send: PromptsFeature.Action.promptSelected
-            )
-          ) { prompt in
-            PromptRow(
-              prompt: prompt,
-              isSelected: viewStore.selectedPromptName == prompt.name
-            )
-            .contextMenu {
-              Button("Copy Name") {
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(prompt.name, forType: .string)
+          ScrollViewReader { proxy in
+            List(
+              viewStore.filteredPrompts,
+              selection: viewStore.binding(
+                get: \.selectedPromptName,
+                send: PromptsFeature.Action.promptSelected
+              )
+            ) { prompt in
+              PromptRow(
+                prompt: prompt,
+                isSelected: viewStore.selectedPromptName == prompt.name
+              )
+              .id(prompt.name)
+              .contextMenu {
+                Button("Copy Name") {
+                  NSPasteboard.general.clearContents()
+                  NSPasteboard.general.setString(prompt.name, forType: .string)
+                }
+              }
+            }
+            .onChange(of: viewStore.searchQuery) { _, _ in
+              // Reset scroll position to top for any search query change
+              if let firstPrompt = viewStore.filteredPrompts.first {
+                proxy.scrollTo(firstPrompt.name, anchor: .top)
               }
             }
           }
