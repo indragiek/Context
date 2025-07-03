@@ -98,6 +98,7 @@ struct SidebarFeature {
       case newServersAdded([UUID])
       case serverAdded(UUID)
       case openAddServerWithDXT(tempDir: URL, manifest: DXTManifest, manifestData: Data)
+      case serverImportCompleted
     }
   }
 
@@ -255,7 +256,7 @@ struct SidebarFeature {
         }
 
       case .importWizard(.dismiss):
-        return .none
+        return .send(.delegate(.serverImportCompleted))
 
       case .importWizard:
         return .none
