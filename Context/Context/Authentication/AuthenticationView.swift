@@ -201,16 +201,17 @@ struct AuthenticationView: View {
 
     Task {
       do {
+        let urlScheme = OAuthConstants.urlScheme
         let result = try await webAuthenticationSession.authenticate(
           using: authURL,
-          callbackURLScheme: "context",
+          callbackURLScheme: urlScheme,
           preferredBrowserSession: .shared
         )
 
         // Validate callback URL structure
-        guard result.scheme == "context",
-          result.host == "oauth",
-          result.path == "/callback"
+        guard result.scheme == urlScheme,
+          result.host == OAuthConstants.callbackHost,
+          result.path == OAuthConstants.callbackPath
         else {
           store.send(
             .metadataLoadFailed(
