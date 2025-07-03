@@ -21,6 +21,7 @@ struct ContextApp: App {
       SentrySDK.start { options in
         options.dsn =
           "https://3fd20401248f7d1fcfed9e0a7ce389ad@o4509521009508352.ingest.us.sentry.io/4509521010229248"
+        options.enableAppHangTracking = false
       }
     #endif
 
