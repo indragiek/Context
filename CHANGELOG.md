@@ -1,5 +1,7 @@
 ## Unreleased
 
+## Version 1.0.6 (106)
+
 * Implement support for Anthropic dxt (Desktop Extension) format (#4)
 * Fix servers not appearing in sidebar after importing servers (#8)
 * Fix broken OAuth token refresh and remove HTTPS requirement for OAuth (#7)
