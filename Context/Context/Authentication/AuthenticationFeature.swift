@@ -240,8 +240,17 @@ struct AuthenticationFeature {
     // Generate fresh state for this authentication attempt
     do {
       state.oAuthState = try OAuthClient.StateParameter.generate()
+    } catch let error as OAuthClientError {
+      // Provide specific error message based on the error type
+      switch error {
+      case .randomGenerationFailed:
+        setError(&state, "Unable to generate secure random data. This may indicate a system security issue.")
+      default:
+        setError(&state, error.errorDescription ?? "Failed to initialize authentication")
+      }
+      return .none
     } catch {
-      setError(&state, "Failed to generate secure state parameter")
+      setError(&state, "Unexpected error during authentication initialization: \(error.localizedDescription)")
       return .none
     }
 
@@ -299,8 +308,17 @@ struct AuthenticationFeature {
     let pkceParameters: OAuthClient.PKCEParameters
     do {
       pkceParameters = try OAuthClient.PKCEParameters.generate()
+    } catch let error as OAuthClientError {
+      // Provide specific error message based on the error type
+      switch error {
+      case .randomGenerationFailed:
+        setError(&state, "Unable to generate secure authentication challenge. This may indicate a system security issue.")
+      default:
+        setError(&state, error.errorDescription ?? "Failed to prepare authentication")
+      }
+      return .none
     } catch {
-      setError(&state, "Failed to generate PKCE parameters")
+      setError(&state, "Unexpected error preparing authentication: \(error.localizedDescription)")
       return .none
     }
     state.pkceParameters = pkceParameters

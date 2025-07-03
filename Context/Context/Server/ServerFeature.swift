@@ -238,7 +238,16 @@ struct ServerFeature {
           return .run { send in
             // Check if we have an expired token with a refresh token
             let keychainManager = KeychainManager()
-            let storedToken = try? await keychainManager.retrieveStoredToken(for: serverID)
+            let storedToken: StoredOAuthToken?
+            
+            do {
+              storedToken = try await keychainManager.retrieveStoredToken(for: serverID)
+            } catch {
+              // Log keychain error but continue with authentication
+              // The user can still authenticate even if we can't retrieve the old token
+              logger.error("Failed to retrieve stored credentials: \(error.localizedDescription)")
+              storedToken = nil
+            }
 
             await send(
               .showAuthenticationSheet(
@@ -464,7 +473,16 @@ struct ServerFeature {
         return .run { send in
           // Retrieve the expired token and clientID from keychain
           let keychainManager = KeychainManager()
-          let storedToken = try? await keychainManager.retrieveStoredToken(for: serverID)
+          let storedToken: StoredOAuthToken?
+          
+          do {
+            storedToken = try await keychainManager.retrieveStoredToken(for: serverID)
+          } catch {
+            // Log keychain error but continue with authentication
+            // The user can still authenticate even if we can't retrieve the old token
+            logger.error("Failed to retrieve stored credentials for refresh: \(error.localizedDescription)")
+            storedToken = nil
+          }
           
           await send(
             .showAuthenticationSheet(
