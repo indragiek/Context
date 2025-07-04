@@ -33,6 +33,7 @@ struct RootsFeature {
     case selectRoot(RootItem.ID?)
     case focusHandled(RootItem.ID, field: Field)
     case save
+    case debouncedSave
     case saved(Result<Void, any Error>)
     case errorDismissed
     case browseButtonTapped(RootItem.ID)
@@ -45,6 +46,10 @@ struct RootsFeature {
 
   @Dependency(\.defaultDatabase) var database
   @Dependency(\.mcpClientManager) var clientManager
+  
+  enum CancelID {
+    case saveDebounce
+  }
 
   var body: some ReducerOf<Self> {
     Reduce { state, action in
@@ -72,7 +77,7 @@ struct RootsFeature {
       case .addRoot:
         let newItem = RootItem(
           id: UUID(),
-          name: "New Root",
+          name: "Root \(state.roots.count + 1)",
           uri: "",
           shouldFocusName: true,
           shouldFocusURI: false
@@ -119,20 +124,27 @@ struct RootsFeature {
         return .none
 
       case .save:
+        // Debounce saves to avoid excessive operations
+        return .run { send in
+          await send(.debouncedSave)
+        }
+        .debounce(id: CancelID.saveDebounce, for: .milliseconds(500), scheduler: DispatchQueue.main)
+        
+      case .debouncedSave:
         let roots = state.roots
         return .run { send in
           do {
+            // Create MCPRoot array once
+            let mcpRoots = roots.map { MCPRoot(id: $0.id, name: $0.name, uri: $0.uri) }
+            
             try await database.write { db in
               // Delete all existing roots
               try db.execute(sql: "DELETE FROM mcp_roots")
-
               // Insert new roots
-              let mcpRoots = roots.map { MCPRoot(id: $0.id, name: $0.name, uri: $0.uri) }
               try MCPRoot.insert { mcpRoots }.execute(db)
             }
 
             // Update all clients with new roots
-            let mcpRoots = roots.map { MCPRoot(id: $0.id, name: $0.name, uri: $0.uri) }
             await clientManager.setRootsForAllClients(mcpRoots)
 
             await send(.saved(.success(())))
@@ -164,10 +176,8 @@ struct RootsFeature {
             
             if panel.runModal() == .OK, let url = panel.url {
               let fileURI = url.absoluteString
-              Task {
-                await send(.uriChanged(id, fileURI))
-                await send(.save)
-              }
+              send(.uriChanged(id, fileURI))
+              send(.save)
             }
           }
         }

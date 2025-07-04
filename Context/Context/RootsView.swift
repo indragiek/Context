@@ -158,6 +158,9 @@ struct RootsView: View {
       .task {
         store.send(.task)
       }
+      .onDisappear {
+        store.send(.save)
+      }
     }
   }
 

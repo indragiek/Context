@@ -146,10 +146,6 @@ actor MCPClientManager {
       await client.setRoots(mcpRoots)
       logger.debug("Successfully set roots for client \(serverId)")
     }
-    
-    if clientCount == 0 {
-      logger.warning("No active clients to update with new roots")
-    }
   }
 
   // MARK: - Private
