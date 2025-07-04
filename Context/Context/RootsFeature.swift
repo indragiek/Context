@@ -138,9 +138,7 @@ struct RootsFeature {
             let mcpRoots = roots.map { MCPRoot(id: $0.id, name: $0.name, uri: $0.uri) }
             
             try await database.write { db in
-              // Delete all existing roots
-              try db.execute(sql: "DELETE FROM mcp_roots")
-              // Insert new roots
+              try MCPRoot.delete().execute(db)
               try MCPRoot.insert { mcpRoots }.execute(db)
             }
 
