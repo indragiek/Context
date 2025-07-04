@@ -60,7 +60,7 @@ _Support for protocol version 2025-06-18 is a work-in-progress_
 | Tools | ✅ Supported |
 | Logging | ✅ Supported |
 | **Advanced Features** | |
-| Roots | ❌ Not Supported |
+| Roots | ✅ Not Supported |
 | Sampling | ❌ Not Supported |
 | Elicitation | ❌ Not Supported |
 | Completion | ❌ Not Supported |
