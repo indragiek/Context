@@ -124,7 +124,6 @@ struct RootsFeature {
         return .none
 
       case .save:
-        // Debounce saves to avoid excessive operations
         return .run { send in
           await send(.debouncedSave)
         }
@@ -134,17 +133,13 @@ struct RootsFeature {
         let roots = state.roots
         return .run { send in
           do {
-            // Create MCPRoot array once
             let mcpRoots = roots.map { MCPRoot(id: $0.id, name: $0.name, uri: $0.uri) }
-            
             try await database.write { db in
               try MCPRoot.delete().execute(db)
               try MCPRoot.insert { mcpRoots }.execute(db)
             }
 
-            // Update all clients with new roots
             await clientManager.setRootsForAllClients(mcpRoots)
-
             await send(.saved(.success(())))
           } catch {
             await send(.saved(.failure(error)))
