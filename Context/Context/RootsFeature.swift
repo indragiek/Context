@@ -33,7 +33,6 @@ struct RootsFeature {
     case selectRoot(RootItem.ID?)
     case focusHandled(RootItem.ID, field: Field)
     case save
-    case debouncedSave
     case saved(Result<Void, any Error>)
     case errorDismissed
     case browseButtonTapped(RootItem.ID)
@@ -124,12 +123,6 @@ struct RootsFeature {
         return .none
 
       case .save:
-        return .run { send in
-          await send(.debouncedSave)
-        }
-        .debounce(id: CancelID.saveDebounce, for: .milliseconds(500), scheduler: DispatchQueue.main)
-        
-      case .debouncedSave:
         let roots = state.roots
         return .run { send in
           do {
@@ -145,6 +138,7 @@ struct RootsFeature {
             await send(.saved(.failure(error)))
           }
         }
+        .debounce(id: CancelID.saveDebounce, for: .milliseconds(500), scheduler: DispatchQueue.main)
 
       case .saved(.success):
         state.errorMessage = nil
@@ -166,7 +160,7 @@ struct RootsFeature {
             panel.canChooseDirectories = true
             panel.allowsMultipleSelection = false
             panel.message = "Select a file or directory for the root"
-            
+
             if panel.runModal() == .OK, let url = panel.url {
               let fileURI = url.absoluteString
               send(.uriChanged(id, fileURI))
