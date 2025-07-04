@@ -53,6 +53,16 @@ actor MCPClientManager {
 
     let transport = try await createTransport(for: server)
     let client = Client(transport: transport, logger: logger)
+    
+    // Set roots before storing the client
+    let roots = try await database.read { db in
+      try MCPRoot.all.fetchAll(db)
+    }
+    
+    let mcpRoots = roots.map { Root(uri: $0.uri, name: $0.name) }
+    await client.setRoots(mcpRoots)
+    logger.debug("Set \(roots.count) roots for unconnected client \(server.id)")
+    
     clients[server.id] = client
     return client
   }
@@ -125,6 +135,18 @@ actor MCPClientManager {
       logger.debug("Cleared authentication for server \(server.name)")
     }
   }
+  
+  /// Sets roots for all active clients
+  func setRootsForAllClients(_ roots: [MCPRoot]) async {
+    logger.debug("Setting roots for all clients: \(roots.count) roots")
+    
+    for (serverId, client) in clients {
+      let mcpRoots = roots.map { Root(uri: $0.uri, name: $0.name) }
+      logger.debug("Setting \(mcpRoots.count) roots for client \(serverId)")
+      await client.setRoots(mcpRoots)
+      logger.debug("Successfully set roots for client \(serverId)")
+    }
+  }
 
   // MARK: - Private
 
@@ -134,6 +156,16 @@ actor MCPClientManager {
 
     do {
       try await client.connect()
+      
+      // Set roots after connecting
+      let roots = try await database.read { db in
+        try MCPRoot.all.fetchAll(db)
+      }
+      
+      let mcpRoots = roots.map { Root(uri: $0.uri, name: $0.name) }
+      await client.setRoots(mcpRoots)
+      logger.debug("Set \(roots.count) roots for newly connected client \(server.id)")
+      
       return client
     } catch let error as StreamableHTTPTransportError {
       if case .authenticationRequired = error {

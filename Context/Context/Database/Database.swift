@@ -63,6 +63,19 @@ func appDatabase() throws -> any DatabaseWriter {
     }
   }
 
+  migrator.registerMigration("Create 'mcp_roots' table") { db in
+    try #sql(
+      """
+      CREATE TABLE "mcp_roots" (
+        "id" TEXT PRIMARY KEY NOT NULL ON CONFLICT REPLACE DEFAULT (uuid()),
+        "name" TEXT NOT NULL,
+        "uri" TEXT NOT NULL
+      )
+      """
+    )
+    .execute(db)
+  }
+
   try migrator.migrate(dbWriter)
   return dbWriter
 }

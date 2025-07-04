@@ -1,22 +1,32 @@
+import ComposableArchitecture
 import Sparkle
 import SwiftUI
 
 struct SettingsView: View {
   private let updater: SPUUpdater
+  private let rootsStore: StoreOf<RootsFeature>
 
   init(updater: SPUUpdater) {
     self.updater = updater
+    self.rootsStore = Store(initialState: RootsFeature.State()) {
+      RootsFeature()
+    }
   }
 
   var body: some View {
     TabView {
+      RootsView(store: rootsStore)
+        .tabItem {
+          Label("Roots", systemImage: "folder")
+        }
+        .tag(0)
       UpdaterSettingsView(updater: updater)
         .tabItem {
           Label("Updates", systemImage: "arrow.down.circle")
         }
-        .tag(0)
+        .tag(1)
     }
-    .frame(width: 500, height: 200)
+    .frame(width: 600, height: 350)
   }
 }
 

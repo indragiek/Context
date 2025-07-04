@@ -7,20 +7,25 @@ struct FocusedTextField: View {
   @Binding var text: String
   let shouldFocus: Bool
   let onFocusHandled: (() -> Void)?
+  let onEditingChanged: ((Bool) -> Void)?
   @FocusState private var isFocused: Bool
 
   init(
     placeholder: String = "", text: Binding<String>, shouldFocus: Bool,
-    onFocusHandled: (() -> Void)? = nil
+    onFocusHandled: (() -> Void)? = nil,
+    onEditingChanged: ((Bool) -> Void)? = nil
   ) {
     self.placeholder = placeholder
     self._text = text
     self.shouldFocus = shouldFocus
     self.onFocusHandled = onFocusHandled
+    self.onEditingChanged = onEditingChanged
   }
 
   var body: some View {
-    TextField(placeholder, text: $text)
+    TextField(placeholder, text: $text, onEditingChanged: { editing in
+      onEditingChanged?(editing)
+    })
       .focused($isFocused)
       .onAppear {
         if shouldFocus {
