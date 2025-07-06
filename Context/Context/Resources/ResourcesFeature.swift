@@ -23,9 +23,10 @@ struct ResourcesFeature {
     var lastSelectedTemplateID: String?  // Preserved across reconnects
     var lastSelectedSegment: ResourceSegment = .resources  // Preserved across reconnects
     var searchQuery: String = ""
-    var isLoading = true
+    var isLoading = false
     var error: NotConnectedError?
     var hasLoadedOnce = false
+    var hasRequestedInitialLoad = false
     var selectedSegment: ResourceSegment = .resources
 
     // Pagination state
@@ -84,6 +85,7 @@ struct ResourcesFeature {
     case loadMoreTemplates
     case moreTemplatesLoaded(templates: [ResourceTemplate], nextCursor: String?)
     case loadMoreTemplatesFailed(any Error)
+    case loadIfNeeded
   }
 
   @Dependency(\.mcpClientManager) var mcpClientManager
@@ -230,6 +232,7 @@ struct ResourcesFeature {
         state.searchQuery = ""
         state.error = nil
         state.hasLoadedOnce = false
+        state.hasRequestedInitialLoad = false
 
         // Reset pagination state
         state.resourcesNextCursor = nil
@@ -256,6 +259,7 @@ struct ResourcesFeature {
       case .prepareForReconnection:
         state.isLoading = true
         state.error = nil
+        state.hasRequestedInitialLoad = false
         return .none
 
       case .loadMoreResources:
@@ -327,6 +331,18 @@ struct ResourcesFeature {
       case .loadMoreTemplatesFailed:
         state.isLoadingMoreTemplates = false
         return .none
+
+      case .loadIfNeeded:
+        // Only load if we haven't loaded yet and haven't already requested a load
+        guard !state.hasLoadedOnce && !state.hasRequestedInitialLoad else {
+          return .none
+        }
+
+        state.hasRequestedInitialLoad = true
+        state.isLoading = true
+        state.error = nil
+
+        return .send(.onConnected)
       }
     }
   }

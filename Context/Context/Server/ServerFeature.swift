@@ -46,9 +46,10 @@ struct ServerFeature {
     var hasConnectedSuccessfully = false
     @Presents var authenticationState: AuthenticationFeature.State?
 
-    init(server: MCPServer) {
+    init(server: MCPServer, selectedTab: ServerTab = .tools) {
       self.id = server.id
       self.server = server
+      self.selectedTab = selectedTab
       self.toolsFeature = ToolsFeature.State(server: server)
       self.promptsFeature = PromptsFeature.State(server: server)
       self.resourcesFeature = ResourcesFeature.State(server: server)
@@ -121,14 +122,15 @@ struct ServerFeature {
         return .run { [server = state.server] send in
           do {
             _ = try await mcpClientManager.createUnconnectedClient(for: server)
-            
+
             // Register for token refresh failure notifications
             await mcpClientManager.setTokenRefreshFailureCallback(
               for: server.id
             ) { serverId, resourceMetadataURL in
-              await send(.tokenRefreshFailed(serverID: serverId, resourceMetadataURL: resourceMetadataURL))
+              await send(
+                .tokenRefreshFailed(serverID: serverId, resourceMetadataURL: resourceMetadataURL))
             }
-            
+
             await send(.startConnection)
           } catch {
             await send(.connectionError(error))
@@ -239,7 +241,7 @@ struct ServerFeature {
             // Check if we have an expired token with a refresh token
             let keychainManager = KeychainManager()
             let storedToken: StoredOAuthToken?
-            
+
             do {
               storedToken = try await keychainManager.retrieveStoredToken(for: serverID)
             } catch {
@@ -294,11 +296,22 @@ struct ServerFeature {
       case .connectionSucceeded:
         state.hasConnectedSuccessfully = true
         state.hasAttemptedReconnection = false
+
+        // Load the currently selected tab's data
+        let loadAction: Action? =
+          switch state.selectedTab {
+          case .tools:
+            .toolsFeature(.loadIfNeeded)
+          case .prompts:
+            .promptsFeature(.loadIfNeeded)
+          case .resources:
+            .resourcesFeature(.loadIfNeeded)
+          case .logs:
+            .logsFeature(.onConnected)
+          }
+
         return .merge(
-          .send(.toolsFeature(.onConnected)),
-          .send(.promptsFeature(.onConnected)),
-          .send(.resourcesFeature(.onConnected)),
-          .send(.logsFeature(.onConnected)),
+          loadAction.map { .send($0) } ?? .none,
           .run { send in
             while true {
               try await Task.sleep(for: .seconds(5))
@@ -371,7 +384,25 @@ struct ServerFeature {
 
       case let .tabSelected(tab):
         state.selectedTab = tab
-        return .none
+
+        // Trigger lazy loading for the selected tab if connected and not yet loaded
+        guard state.connectionState == .connected else {
+          return .none
+        }
+
+        let loadAction: Action? =
+          switch tab {
+          case .tools:
+            .toolsFeature(.loadIfNeeded)
+          case .prompts:
+            .promptsFeature(.loadIfNeeded)
+          case .resources:
+            .resourcesFeature(.loadIfNeeded)
+          case .logs:
+            .logsFeature(.onConnected)  // Logs might need special handling
+          }
+
+        return loadAction.map { .send($0) } ?? .none
 
       case .pingTimer:
         return .run { [server = state.server] send in
@@ -457,11 +488,11 @@ struct ServerFeature {
 
       case .authenticationFeature:
         return .none
-        
+
       case let .tokenRefreshFailed(serverID, resourceMetadataURL):
         // Only show authentication if we don't already have it open
         guard state.authenticationState == nil else { return .none }
-        
+
         let serverName = state.server.name
         guard let urlString = state.server.url,
           let serverURL = URL(string: urlString)
@@ -469,21 +500,22 @@ struct ServerFeature {
           logger.error("Invalid server URL for token refresh failure")
           return .none
         }
-        
+
         return .run { send in
           // Retrieve the expired token and clientID from keychain
           let keychainManager = KeychainManager()
           let storedToken: StoredOAuthToken?
-          
+
           do {
             storedToken = try await keychainManager.retrieveStoredToken(for: serverID)
           } catch {
             // Log keychain error but continue with authentication
             // The user can still authenticate even if we can't retrieve the old token
-            logger.error("Failed to retrieve stored credentials for refresh: \(error.localizedDescription)")
+            logger.error(
+              "Failed to retrieve stored credentials for refresh: \(error.localizedDescription)")
             storedToken = nil
           }
-          
+
           await send(
             .showAuthenticationSheet(
               serverID: serverID,
