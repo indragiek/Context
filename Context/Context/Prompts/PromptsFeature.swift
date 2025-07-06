@@ -29,9 +29,10 @@ struct PromptsFeature {
     var selectedPromptName: String?
     var lastSelectedPromptName: String?  // Preserved across reconnects
     var searchQuery = ""
-    var isLoading = true
+    var isLoading = false
     var error: NotConnectedError?
     var hasLoadedOnce = false
+    var hasRequestedInitialLoad = false
 
     // Pagination state
     var nextCursor: String?
@@ -88,6 +89,7 @@ struct PromptsFeature {
     case loadMorePrompts
     case morePromptsLoaded(prompts: [Prompt], nextCursor: String?)
     case loadMorePromptsFailed(any Error)
+    case loadIfNeeded
   }
 
   @Dependency(\.promptCache) var promptCache
@@ -141,6 +143,7 @@ struct PromptsFeature {
       case let .loadingFailed(error):
         state.isLoading = false
         state.error = NotConnectedError(underlyingError: error)
+        state.hasRequestedInitialLoad = false  // Reset to allow retry
         return .none
 
       case let .promptSelected(name):
@@ -171,6 +174,7 @@ struct PromptsFeature {
         state.searchQuery = ""
         state.error = nil
         state.hasLoadedOnce = false
+        state.hasRequestedInitialLoad = false
 
         // Reset pagination state
         state.nextCursor = nil
@@ -193,6 +197,7 @@ struct PromptsFeature {
       case .prepareForReconnection:
         state.isLoading = true
         state.error = nil
+        state.hasRequestedInitialLoad = false
         return .none
 
       case .loadMorePrompts:
@@ -228,7 +233,20 @@ struct PromptsFeature {
 
       case .loadMorePromptsFailed:
         state.isLoadingMore = false
+        // Consider showing an error to the user for pagination failures
         return .none
+
+      case .loadIfNeeded:
+        // Only load if we haven't loaded yet and haven't already requested a load
+        guard !state.hasLoadedOnce && !state.hasRequestedInitialLoad else {
+          return .none
+        }
+
+        state.hasRequestedInitialLoad = true
+        state.isLoading = true
+        state.error = nil
+
+        return .send(.onConnected)
       }
     }
   }

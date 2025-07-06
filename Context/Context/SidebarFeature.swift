@@ -99,6 +99,7 @@ struct SidebarFeature {
       case serverAdded(UUID)
       case openAddServerWithDXT(tempDir: URL, manifest: DXTManifest, manifestData: Data)
       case serverImportCompleted
+      case triggerTabSelection(serverID: UUID, tab: ServerTab)
     }
   }
 
@@ -165,7 +166,8 @@ struct SidebarFeature {
         }
 
       case let .proceedWithRename(serverId: serverId, newName: newName):
-        return renameServerEffect(serverId: serverId, newName: newName, fetchedServers: state.fetchedServers)
+        return renameServerEffect(
+          serverId: serverId, newName: newName, fetchedServers: state.fetchedServers)
 
       case let .showRenameError(reason):
         logger.warning("Rename failed: \(reason)")
@@ -293,8 +295,15 @@ struct SidebarFeature {
 
       case let .serverSelected(serverID):
         var serverExists = false
+        var previousTab: ServerTab?
+        var newTab: ServerTab?
+        var isConnected = false
+
         state.$servers.withLock { servers in
           if var server = servers[id: serverID] {
+            previousTab = server.selectedTab
+            newTab = state.currentServerTab
+            isConnected = server.connectionState == .connected
             server.selectedTab = state.currentServerTab
             servers[id: serverID] = server
             serverExists = true
@@ -308,6 +317,12 @@ struct SidebarFeature {
 
         state.selectedServerID = serverID
         state.selectedSidebarItem = .server(id: serverID)
+
+        // If the server is connected and the tab changed, trigger tab selection to load data
+        if isConnected, let prev = previousTab, let new = newTab, prev != new {
+          return .send(.delegate(.triggerTabSelection(serverID: serverID, tab: new)))
+        }
+
         return .none
 
       case let .delegate(.currentServerTabChanged(tab)):
@@ -333,7 +348,9 @@ struct SidebarFeature {
     }
   }
 
-  private func renameServerEffect(serverId: UUID, newName: String, fetchedServers: [MCPServer]) -> Effect<Action> {
+  private func renameServerEffect(serverId: UUID, newName: String, fetchedServers: [MCPServer])
+    -> Effect<Action>
+  {
     .run { [serverStore] send in
       do {
         guard var server = fetchedServers.first(where: { $0.id == serverId }) else {

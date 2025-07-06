@@ -153,7 +153,12 @@ struct AppFeature {
 
       case .sidebarFeature(.delegate(.serverImportCompleted)):
         return .send(.syncServersFromDatabase)
-        
+
+      case let .sidebarFeature(.delegate(.triggerTabSelection(serverID, tab))):
+        return .send(
+          .serverLifecycleFeature(.serverFeature(.element(id: serverID, action: .tabSelected(tab))))
+        )
+
       case .sidebarFeature:
         return .none
 
@@ -457,7 +462,8 @@ struct AppFeature {
     state.$servers.withLock { servers in
       // Add new servers
       for server in serversToAdd {
-        servers.append(ServerFeature.State(server: server))
+        servers.append(
+          ServerFeature.State(server: server, selectedTab: state.sidebarFeature.currentServerTab))
       }
 
       // Remove deleted servers
