@@ -366,21 +366,7 @@ public actor StreamableHTTPTransport: Transport {
       reconnectionTimeMs = Self.defaultReconnectionTimeMs
       
       // Check for Keep-Alive header configuration
-      if let connectionHeader = httpResponse.value(forHTTPHeaderField: "Connection"),
-         connectionHeader.lowercased().contains("keep-alive"),
-         let keepAliveHeader = httpResponse.value(forHTTPHeaderField: "Keep-Alive") {
-        logger.debug("Keep-Alive header found: \(keepAliveHeader)")
-        
-        // Parse the Keep-Alive header for timeout parameter
-        if let timeout = parseKeepAliveTimeout(from: keepAliveHeader) {
-          // Set ping interval to be shorter than the timeout to avoid hitting it
-          // Use 80% of the timeout value, with a minimum of 1 second
-          let newPingInterval = max(1.0, timeout * 0.8)
-          pingInterval = newPingInterval
-          logger.info("Adjusted ping interval to \(newPingInterval)s based on Keep-Alive timeout of \(timeout)s")
-          startPingTimer()
-        }
-      }
+      checkForKeepAliveHeaders(in: httpResponse)
       
       try await consumeSSEStream(bytes: bytes, waitUntilEndpointEvent: true)
     case 405:
@@ -483,6 +469,8 @@ public actor StreamableHTTPTransport: Transport {
             }
           })
       case "text/event-stream":
+        // Check for Keep-Alive headers on SSE responses
+        checkForKeepAliveHeaders(in: httpResponse)
         try await consumeSSEStream(bytes: bytes, waitUntilEndpointEvent: false)
       default:
         throw StreamableHTTPTransportError.invalidContentType(httpResponse, contentType)
@@ -899,6 +887,28 @@ public actor StreamableHTTPTransport: Transport {
       logger.debug("Sent ping request with ID: \(pingRequest.id)")
     } catch {
       logger.error("Failed to send ping request: \(error)")
+    }
+  }
+  
+  /// Checks for Keep-Alive headers in an HTTP response and configures ping timer if found.
+  private func checkForKeepAliveHeaders(in httpResponse: HTTPURLResponse) {
+    logger.debug("Checking for Keep-Alive headers. Status: \(httpResponse.statusCode), Headers: \(httpResponse.allHeaderFields)")
+    if let connectionHeader = httpResponse.value(forHTTPHeaderField: "Connection"),
+       connectionHeader.lowercased().contains("keep-alive"),
+       let keepAliveHeader = httpResponse.value(forHTTPHeaderField: "Keep-Alive") {
+      logger.debug("Keep-Alive header found: \(keepAliveHeader)")
+      
+      // Parse the Keep-Alive header for timeout parameter
+      if let timeout = parseKeepAliveTimeout(from: keepAliveHeader) {
+        // Set ping interval to be shorter than the timeout to avoid hitting it
+        // Use 80% of the timeout value, with a minimum of 1 second
+        let newPingInterval = max(1.0, timeout * 0.8)
+        pingInterval = newPingInterval
+        logger.info("Adjusted ping interval to \(newPingInterval)s based on Keep-Alive timeout of \(timeout)s")
+        startPingTimer()
+      }
+    } else {
+      logger.debug("No Keep-Alive headers found")
     }
   }
 }

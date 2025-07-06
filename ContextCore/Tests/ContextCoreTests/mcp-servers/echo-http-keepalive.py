@@ -31,6 +31,7 @@ class PingTrackingMiddleware(Middleware):
         This hook is called for every incoming MCP request. We inspect the method
         to see if it's a ping.
         """
+        print(f"Received MCP request: method={context.method}")
         if context.method == "ping":
             self.ping_count += 1
             print(f"Ping request received! Total pings: {self.ping_count}")
@@ -61,10 +62,12 @@ class CustomHeaderMiddleware(BaseHTTPMiddleware):
         accept_header = request.headers.get("accept", "")
         print(f"Request path: {request.url.path}, method: {request.method}, accept: {accept_header}")
         
-        if request.method == "GET" and "text/event-stream" in accept_header:
+        # Check content type of response to determine if it's an SSE stream
+        content_type = response.headers.get("content-type", "")
+        if "text/event-stream" in content_type:
             response.headers["Connection"] = "Keep-Alive"
             response.headers["Keep-Alive"] = f"timeout={self.keep_alive_timeout}, max=1000"
-            print(f"Injected Keep-Alive headers into SSE response for {request.url.path}")
+            print(f"Injected Keep-Alive headers into SSE response for {request.url.path} (content-type: {content_type})")
         
         return response
 
@@ -123,6 +126,9 @@ if __name__ == "__main__":
                        help="Port number to run the server on (default: 9000)")
     parser.add_argument("--keep-alive-timeout", "-t", type=int, default=5,
                        help="Keep-Alive timeout in seconds (default: 5)")
+    parser.add_argument("--transport", "-T", type=str, default="streamable-http",
+                       choices=["streamable-http", "sse"],
+                       help="Transport type to use (default: streamable-http)")
 
     args = parser.parse_args()
     
@@ -134,7 +140,10 @@ if __name__ == "__main__":
     ]
     
     # Create the ASGI app with the HTTP-level middleware
-    app = server.http_app(middleware=http_middlewares, transport="streamable-http", path="/mcp")
+    if args.transport == "streamable-http":
+        app = server.http_app(middleware=http_middlewares, transport="streamable-http", path="/mcp")
+    else:
+        app = server.http_app(middleware=http_middlewares, transport="sse")
     
     # Run the app
     import uvicorn

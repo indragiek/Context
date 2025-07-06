@@ -636,23 +636,19 @@ import os
   }
 
   @Test func testKeepAliveHeaderParsing() async throws {
-    // Start server with Keep-Alive timeout of 5 seconds (default)
+    // Start server with HTTP+SSE transport and Keep-Alive timeout of 5 seconds
     let server = try HTTPTestServer(
-      streamableHTTP: true, scriptName: "echo-http-keepalive", port: 9000)
+      streamableHTTP: false, 
+      scriptName: "echo-http-keepalive", 
+      port: 9000,
+      extraArgs: ["-T", "sse"]
+    )
     
-    // Create transport with custom logger
-    let logger = Logger(subsystem: "com.test", category: "StreamableHTTPTransport")
     let transport = StreamableHTTPTransport(
       serverURL: server.serverURL,
-      urlSessionConfiguration: {
-        let config = URLSessionConfiguration.ephemeral
-        config.timeoutIntervalForRequest = 3600
-        return config
-      }(),
+      urlSessionConfiguration: URLSessionConfiguration.ephemeral,
       clientInfo: TestFixtures.clientInfo,
-      clientCapabilities: TestFixtures.clientCapabilities,
-      encoder: TestFixtures.jsonEncoder,
-      logger: logger
+      clientCapabilities: TestFixtures.clientCapabilities
     )
 
     try await transport.start()
@@ -674,9 +670,13 @@ import os
   }
 
   @Test func testAutomaticPingOnKeepAlive() async throws {
-    // Start server with Keep-Alive timeout of 3 seconds
+    // Start server with HTTP+SSE transport and Keep-Alive timeout of 3 seconds
     let server = try HTTPTestServer(
-      streamableHTTP: true, scriptName: "echo-http-keepalive", port: 9001)
+      streamableHTTP: false, 
+      scriptName: "echo-http-keepalive", 
+      port: 9001,
+      extraArgs: ["-T", "sse", "-t", "3"]
+    )
     let transport = server.createTransport()
 
     try await transport.start()
@@ -725,9 +725,13 @@ import os
   }
 
   @Test func testPingTimerResetOnRequest() async throws {
-    // Start server with Keep-Alive timeout of 3 seconds
+    // Start server with HTTP+SSE transport and Keep-Alive timeout of 3 seconds
     let server = try HTTPTestServer(
-      streamableHTTP: true, scriptName: "echo-http-keepalive", port: 9002)
+      streamableHTTP: false, 
+      scriptName: "echo-http-keepalive", 
+      port: 9002,
+      extraArgs: ["-T", "sse", "-t", "3"]
+    )
     let transport = server.createTransport()
 
     try await transport.start()
@@ -785,9 +789,13 @@ import os
   }
 
   @Test func testPingContinuesAfterIdle() async throws {
-    // Start server with Keep-Alive timeout of 2 seconds
+    // Start server with HTTP+SSE transport and Keep-Alive timeout of 2 seconds  
     let server = try HTTPTestServer(
-      streamableHTTP: true, scriptName: "echo-http-keepalive", port: 9003)
+      streamableHTTP: false, 
+      scriptName: "echo-http-keepalive", 
+      port: 9003,
+      extraArgs: ["-T", "sse", "-t", "2"]
+    )
     let transport = server.createTransport()
 
     try await transport.start()

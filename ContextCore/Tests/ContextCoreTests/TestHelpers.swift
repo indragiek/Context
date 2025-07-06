@@ -61,7 +61,7 @@ public class HTTPTestServer {
   private let process: Process
   public let serverURL: URL
 
-  public init(streamableHTTP: Bool, scriptName: String, port: Int) throws {
+  public init(streamableHTTP: Bool, scriptName: String, port: Int, extraArgs: [String] = []) throws {
     if streamableHTTP {
       let serverBaseURL = URL(string: "http://127.0.0.1:\(port)")!
       serverURL = serverBaseURL.appending(component: "mcp")
@@ -83,7 +83,7 @@ public class HTTPTestServer {
       scriptURL.lastPathComponent,
       "-p",
       "\(port)",
-    ]
+    ] + extraArgs
     process.currentDirectoryURL = scriptURL.deletingLastPathComponent()
     process.terminationHandler = { process in
       if case .uncaughtSignal = process.terminationReason {
