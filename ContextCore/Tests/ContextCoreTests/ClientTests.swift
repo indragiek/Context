@@ -11,7 +11,7 @@ import AsyncAlgorithms
   @Test func testListPrompts() async throws {
     let server = try HTTPTestServer(
       streamableHTTP: true, scriptName: "echo-http-streamable", port: 9001)
-    let client = Client(transport: server.createTransport())
+    let client = Client(transport: try await server.createTransport())
 
     try await client.connect()
     let (prompts, nextCursor) = try await client.listPrompts()
@@ -28,7 +28,7 @@ import AsyncAlgorithms
   @Test func testGetPrompt() async throws {
     let server = try HTTPTestServer(
       streamableHTTP: true, scriptName: "echo-http-streamable", port: 9001)
-    let client = Client(transport: server.createTransport())
+    let client = Client(transport: try await server.createTransport())
 
     try await client.connect()
     let (description, messages) = try await client.getPrompt(
@@ -51,7 +51,7 @@ import AsyncAlgorithms
   @Test func testListResources() async throws {
     let server = try HTTPTestServer(
       streamableHTTP: true, scriptName: "echo-http-streamable", port: 9001)
-    let client = Client(transport: server.createTransport())
+    let client = Client(transport: try await server.createTransport())
 
     try await client.connect()
     let (resources, nextCursor) = try await client.listResources()
@@ -69,7 +69,7 @@ import AsyncAlgorithms
   @Test func testReadResource() async throws {
     let server = try HTTPTestServer(
       streamableHTTP: true, scriptName: "echo-http-streamable", port: 9001)
-    let client = Client(transport: server.createTransport())
+    let client = Client(transport: try await server.createTransport())
 
     try await client.connect()
     let contents = try await client.readResource(uri: "echo://TestMessage")
@@ -92,7 +92,7 @@ import AsyncAlgorithms
   @Test func testListResourceTemplates() async throws {
     let server = try HTTPTestServer(
       streamableHTTP: true, scriptName: "echo-http-streamable", port: 9001)
-    let client = Client(transport: server.createTransport())
+    let client = Client(transport: try await server.createTransport())
 
     try await client.connect()
     let (resourceTemplates, nextCursor) = try await client.listResourceTemplates()
@@ -110,7 +110,7 @@ import AsyncAlgorithms
   @Test func testListTools() async throws {
     let server = try HTTPTestServer(
       streamableHTTP: true, scriptName: "echo-http-streamable", port: 9001)
-    let client = Client(transport: server.createTransport())
+    let client = Client(transport: try await server.createTransport())
 
     try await client.connect()
     let (tools, nextCursor) = try await client.listTools()
@@ -127,7 +127,7 @@ import AsyncAlgorithms
   @Test func testCallTool() async throws {
     let server = try HTTPTestServer(
       streamableHTTP: true, scriptName: "echo-http-streamable", port: 9001)
-    let client = Client(transport: server.createTransport())
+    let client = Client(transport: try await server.createTransport())
 
     try await client.connect()
     let (content, isError) = try await client.callTool(
@@ -150,7 +150,7 @@ import AsyncAlgorithms
   func testCompletePrompt() async throws {
     let server = try HTTPTestServer(
       streamableHTTP: true, scriptName: "echo-http-streamable", port: 9001)
-    let client = Client(transport: server.createTransport())
+    let client = Client(transport: try await server.createTransport())
 
     try await client.connect()
     let (values, total, hasMore) = try await client.complete(
@@ -171,7 +171,7 @@ import AsyncAlgorithms
   func testCompleteResource() async throws {
     let server = try HTTPTestServer(
       streamableHTTP: true, scriptName: "echo-http-streamable", port: 9001)
-    let client = Client(transport: server.createTransport())
+    let client = Client(transport: try await server.createTransport())
 
     try await client.connect()
     let (values, total, hasMore) = try await client.complete(
@@ -191,7 +191,7 @@ import AsyncAlgorithms
   @Test func testPing() async throws {
     let server = try HTTPTestServer(
       streamableHTTP: true, scriptName: "echo-http-streamable", port: 9001)
-    let client = Client(transport: server.createTransport())
+    let client = Client(transport: try await server.createTransport())
 
     try await client.connect()
 

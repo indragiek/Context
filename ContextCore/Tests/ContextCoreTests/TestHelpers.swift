@@ -5,6 +5,11 @@ import Testing
 
 @testable import ContextCore
 
+/// Errors that can occur during testing
+public enum TestError: Error {
+  case transportNotReady(String)
+}
+
 /// Shared test fixtures and utilities
 public struct TestFixtures {
   public static let clientInfo = Implementation(name: "SwiftMCPTest", version: "1.0.0")
@@ -73,7 +78,7 @@ public class HTTPTestServer {
       forResource: scriptName,
       withExtension: "py", subdirectory: "mcp-servers")!
     let uvPath =
-      ProcessInfo.processInfo.environment["UV_PATH"] ?? "\(NSHomeDirectory())/.local/bin/uv"
+      ProcessInfo.processInfo.environment["UV_PATH"] ?? "/opt/homebrew/bin/uv"
 
     process = Process()
     process.executableURL = URL(filePath: uvPath)
@@ -115,7 +120,6 @@ public class HTTPTestServer {
       if let contents = String(data: data, encoding: .utf8),
         contents.contains(serverBaseURL)
       {
-        Thread.sleep(forTimeInterval: 0.01)
         return
       }
     }
@@ -125,7 +129,7 @@ public class HTTPTestServer {
     )
   }
 
-  public func createTransport(customConfiguration: URLSessionConfiguration? = nil)
+  public func createTransport(customConfiguration: URLSessionConfiguration? = nil) async throws
     -> StreamableHTTPTransport
   {
     let sessionConfiguration =
@@ -136,13 +140,32 @@ public class HTTPTestServer {
         return config
       }()
 
-    return StreamableHTTPTransport(
+    let transport = StreamableHTTPTransport(
       serverURL: serverURL,
       urlSessionConfiguration: sessionConfiguration,
       clientInfo: TestFixtures.clientInfo,
       clientCapabilities: TestFixtures.clientCapabilities,
       encoder: TestFixtures.jsonEncoder
     )
+    
+    var attempts = 3
+    while attempts > 0 {
+      do {
+        try await transport.start()
+        _ = try await transport.initialize(idGenerator: TestFixtures.idGenerator)
+        _ = try await transport.testOnly_sendAndWaitForResponse(request: PingRequest(id: .string(UUID().uuidString)))
+        return transport
+      } catch let error {
+        attempts -= 1
+        print("Failed to send ping: \(error). \(attempts) remaining")
+        if attempts > 0 {
+          try await Task.sleep(for: .seconds(1))
+        }
+      }
+    }
+    
+    Issue.record("Transport failed to respond to ping")
+    throw TestError.transportNotReady("Failed to start transport after 3 attempts")
   }
 
   public func terminate() {

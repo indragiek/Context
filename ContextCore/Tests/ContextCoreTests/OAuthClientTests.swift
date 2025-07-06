@@ -6,7 +6,7 @@ import Testing
 @testable import ContextCore
 
 // Test errors
-enum TestError: Error, LocalizedError {
+enum OAuthTestError: Error, LocalizedError {
   case noRequestHandler
   case unexpectedURL(String)
 
@@ -34,7 +34,7 @@ class MockURLProtocol: URLProtocol {
 
   override func startLoading() {
     guard let handler = MockURLProtocol.requestHandler else {
-      client?.urlProtocol(self, didFailWithError: TestError.noRequestHandler)
+      client?.urlProtocol(self, didFailWithError: OAuthTestError.noRequestHandler)
       return
     }
 
@@ -101,7 +101,7 @@ class MockURLProtocol: URLProtocol {
         return (response, nil)
 
       default:
-        throw TestError.unexpectedURL(request.url?.absoluteString ?? "nil")
+        throw OAuthTestError.unexpectedURL(request.url?.absoluteString ?? "nil")
       }
     }
 
@@ -178,7 +178,7 @@ class MockURLProtocol: URLProtocol {
         return (response, data)
 
       default:
-        throw TestError.unexpectedURL(request.url?.absoluteString ?? "nil")
+        throw OAuthTestError.unexpectedURL(request.url?.absoluteString ?? "nil")
       }
     }
 
@@ -242,7 +242,7 @@ class MockURLProtocol: URLProtocol {
         return (response, Data())
 
       default:
-        throw TestError.unexpectedURL(request.url?.absoluteString ?? "nil")
+        throw OAuthTestError.unexpectedURL(request.url?.absoluteString ?? "nil")
       }
     }
 
@@ -310,7 +310,7 @@ class MockURLProtocol: URLProtocol {
         return (response, data)
 
       default:
-        throw TestError.unexpectedURL(request.url?.absoluteString ?? "nil")
+        throw OAuthTestError.unexpectedURL(request.url?.absoluteString ?? "nil")
       }
     }
 
