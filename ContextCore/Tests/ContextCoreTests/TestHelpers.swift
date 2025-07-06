@@ -73,7 +73,7 @@ public class HTTPTestServer {
       forResource: scriptName,
       withExtension: "py", subdirectory: "mcp-servers")!
     let uvPath =
-      ProcessInfo.processInfo.environment["UV_PATH"] ?? "\(NSHomeDirectory())/.local/bin/uv"
+      ProcessInfo.processInfo.environment["UV_PATH"] ?? "/opt/homebrew/bin/uv"
 
     process = Process()
     process.executableURL = URL(filePath: uvPath)

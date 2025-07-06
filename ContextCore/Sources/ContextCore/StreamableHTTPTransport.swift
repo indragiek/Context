@@ -21,6 +21,7 @@ public actor StreamableHTTPTransport: Transport {
   private let decoder: JSONDecoder
   private let logger: Logger
   private let responseTimeout: TimeInterval
+  internal var pingInterval: TimeInterval?
 
   private var pendingRequests = [JSONRPCRequestID: any JSONRPCRequest]()
   private var internalResponseChannel: AsyncChannel<TransportResponse>?
@@ -38,6 +39,7 @@ public actor StreamableHTTPTransport: Transport {
   private var authorizationToken: String?
   private var negotiatedProtocolVersion: String?
   private var sseSupported: Bool = true
+  private var pingTask: Task<Void, Error>?
 
   /// Initializes the transport for communicating with the MCP server at the
   /// specified URL.
@@ -216,6 +218,8 @@ public actor StreamableHTTPTransport: Transport {
       task.cancel()
     }
     consumerTasks.removeAll()
+    
+    stopPingTimer()
 
     pendingRequests.removeAll()
     idGenerator = nil
@@ -360,6 +364,24 @@ public actor StreamableHTTPTransport: Transport {
       // Reset reconnect attempts as we successfully connected
       reconnectAttempts = 0
       reconnectionTimeMs = Self.defaultReconnectionTimeMs
+      
+      // Check for Keep-Alive header configuration
+      if let connectionHeader = httpResponse.value(forHTTPHeaderField: "Connection"),
+         connectionHeader.lowercased().contains("keep-alive"),
+         let keepAliveHeader = httpResponse.value(forHTTPHeaderField: "Keep-Alive") {
+        logger.debug("Keep-Alive header found: \(keepAliveHeader)")
+        
+        // Parse the Keep-Alive header for timeout parameter
+        if let timeout = parseKeepAliveTimeout(from: keepAliveHeader) {
+          // Set ping interval to be shorter than the timeout to avoid hitting it
+          // Use 80% of the timeout value, with a minimum of 1 second
+          let newPingInterval = max(1.0, timeout * 0.8)
+          pingInterval = newPingInterval
+          logger.info("Adjusted ping interval to \(newPingInterval)s based on Keep-Alive timeout of \(timeout)s")
+          startPingTimer()
+        }
+      }
+      
       try await consumeSSEStream(bytes: bytes, waitUntilEndpointEvent: true)
     case 405:
       // Server doesn't support SSE - this is a valid response, not an error to retry
@@ -431,6 +453,9 @@ public actor StreamableHTTPTransport: Transport {
   /// automatically re-attempts initialization to acquire a new session ID before retrying sending
   /// the message.
   private func sendHTTP(data: Data) async throws -> HTTPURLResponse {
+    // Reset ping timer since we're sending a request
+    resetPingTimer()
+    
     var request = URLRequest(url: sendEventEndpointURL ?? serverURL)
     request.httpMethod = "POST"
     request.setValue("application/json, text/event-stream", forHTTPHeaderField: "Accept")
@@ -758,6 +783,8 @@ public actor StreamableHTTPTransport: Transport {
     }
     activeSSEConnectionCount -= 1
     if activeSSEConnectionCount == 0 {
+      stopPingTimer()
+      pingInterval = nil
       Task {
         await connectionStateChannel.send(.disconnected)
       }
@@ -816,6 +843,63 @@ public actor StreamableHTTPTransport: Transport {
     }
     Task { await responseChannel.send(response) }
     Task { await internalResponseChannel.send(response) }
+  }
+  
+  /// Starts a timer that sends periodic ping requests to keep the connection alive.
+  private func startPingTimer() {
+    guard let interval = pingInterval else { 
+      logger.debug("No ping interval set, not starting timer")
+      return 
+    }
+    
+    stopPingTimer()
+    logger.info("Starting ping timer with interval: \(interval)s")
+    
+    pingTask = Task { [weak self] in
+      guard let self = self else { return }
+      
+      while !Task.isCancelled {
+        do {
+          try await Task.sleep(for: .seconds(interval))
+          
+          if !Task.isCancelled {
+            await self.sendPing()
+          }
+        } catch {
+          break
+        }
+      }
+    }
+  }
+  
+  /// Stops the ping timer.
+  private func stopPingTimer() {
+    pingTask?.cancel()
+    pingTask = nil
+  }
+  
+  /// Resets the ping timer by restarting it. This is called when a request is sent
+  /// to ensure we only send pings during idle periods.
+  private func resetPingTimer() {
+    if pingInterval != nil {
+      startPingTimer()
+    }
+  }
+  
+  /// Sends a ping request to the server.
+  private func sendPing() async {
+    guard let idGenerator = idGenerator else { 
+      logger.debug("No ID generator available for ping")
+      return 
+    }
+    
+    let pingRequest = PingRequest(id: idGenerator())
+    do {
+      try await send(request: pingRequest)
+      logger.debug("Sent ping request with ID: \(pingRequest.id)")
+    } catch {
+      logger.error("Failed to send ping request: \(error)")
+    }
   }
 }
 
@@ -1049,4 +1133,22 @@ public enum StreamableHTTPTransportError: Error, LocalizedError {
       return "Authenticate with the server using OAuth 2.0 to obtain an access token"
     }
   }
+}
+
+/// Parses the Keep-Alive header to extract the timeout parameter value.
+/// The Keep-Alive header format is: `Keep-Alive: timeout=<seconds>, max=<requests>`
+/// This function extracts the timeout value in seconds.
+private func parseKeepAliveTimeout(from keepAliveHeader: String) -> TimeInterval? {
+  let parameters = keepAliveHeader.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+  
+  for parameter in parameters {
+    if parameter.lowercased().hasPrefix("timeout=") {
+      let value = parameter.dropFirst("timeout=".count)
+      if let timeoutSeconds = Int(value) {
+        return TimeInterval(timeoutSeconds)
+      }
+    }
+  }
+  
+  return nil
 }

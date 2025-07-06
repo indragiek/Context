@@ -2,6 +2,7 @@
 
 import Foundation
 import Testing
+import os
 
 @testable import ContextCore
 
@@ -631,6 +632,245 @@ import Testing
     #expect(connectedCount == 2, "Expected exactly 2 connections, got \(connectedCount)")
     #expect(disconnectedCount == 2, "Expected exactly 2 disconnections, got \(disconnectedCount)")
 
+    server.terminate()
+  }
+
+  @Test func testKeepAliveHeaderParsing() async throws {
+    // Start server with Keep-Alive timeout of 5 seconds (default)
+    let server = try HTTPTestServer(
+      streamableHTTP: true, scriptName: "echo-http-keepalive", port: 9000)
+    
+    // Create transport with custom logger
+    let logger = Logger(subsystem: "com.test", category: "StreamableHTTPTransport")
+    let transport = StreamableHTTPTransport(
+      serverURL: server.serverURL,
+      urlSessionConfiguration: {
+        let config = URLSessionConfiguration.ephemeral
+        config.timeoutIntervalForRequest = 3600
+        return config
+      }(),
+      clientInfo: TestFixtures.clientInfo,
+      clientCapabilities: TestFixtures.clientCapabilities,
+      encoder: TestFixtures.jsonEncoder,
+      logger: logger
+    )
+
+    try await transport.start()
+    _ = try await transport.initialize(idGenerator: TestFixtures.idGenerator)
+
+    // Wait for SSE connection to be established and Keep-Alive headers to be processed
+    try await Task.sleep(for: .seconds(2))
+
+    // The transport should have detected the Keep-Alive header and set up ping interval
+    // The ping interval should be 80% of the timeout value (4 seconds for 5 second timeout)
+    let interval = await transport.pingInterval
+    #expect(interval != nil, "Ping interval should be set after receiving Keep-Alive header")
+    if let pingInterval = interval {
+      #expect(pingInterval == 4.0, "Ping interval should be 80% of Keep-Alive timeout (4s for 5s timeout)")
+    }
+
+    try await transport.close()
+    server.terminate()
+  }
+
+  @Test func testAutomaticPingOnKeepAlive() async throws {
+    // Start server with Keep-Alive timeout of 3 seconds
+    let server = try HTTPTestServer(
+      streamableHTTP: true, scriptName: "echo-http-keepalive", port: 9001)
+    let transport = server.createTransport()
+
+    try await transport.start()
+    _ = try await transport.initialize(idGenerator: TestFixtures.idGenerator)
+
+    // Reset ping count on the server
+    let resetRequest = CallToolRequest(
+      id: "reset-ping-count",
+      name: "reset_ping_count",
+      arguments: [:]
+    )
+    _ = try await transport.testOnly_sendAndWaitForResponse(request: resetRequest)
+
+    // Wait for automatic pings to be sent (should be sent every 2.4 seconds)
+    try await Task.sleep(for: .seconds(5.5))
+
+    // Check how many pings were sent
+    let getPingCountRequest = CallToolRequest(
+      id: "get-ping-count",
+      name: "get_ping_count",
+      arguments: [:]
+    )
+    let response = try await transport.testOnly_sendAndWaitForResponse(request: getPingCountRequest)
+
+    switch response {
+    case let .successfulRequest(request: _, response: receivedResponse):
+      guard let toolResponse = receivedResponse as? CallToolResponse else {
+        Issue.record("Expected CallToolResponse, but got \(type(of: receivedResponse))")
+        return
+      }
+      // Should have sent at least 2 pings in 5.5 seconds (at 2.4s intervals)
+      if let firstContent = toolResponse.result.content.first,
+         case let .text(text, annotations: _) = firstContent,
+         let pingCount = Int(text) {
+        #expect(pingCount >= 2, "Should have sent at least 2 pings in 5.5 seconds, but got \(pingCount)")
+        #expect(pingCount <= 3, "Should have sent at most 3 pings in 5.5 seconds, but got \(pingCount)")
+      } else {
+        Issue.record("Expected integer ping count in response content")
+      }
+    default:
+      recordErrorsForNonSuccessfulResponse(response)
+    }
+
+    try await transport.close()
+    server.terminate()
+  }
+
+  @Test func testPingTimerResetOnRequest() async throws {
+    // Start server with Keep-Alive timeout of 3 seconds
+    let server = try HTTPTestServer(
+      streamableHTTP: true, scriptName: "echo-http-keepalive", port: 9002)
+    let transport = server.createTransport()
+
+    try await transport.start()
+    _ = try await transport.initialize(idGenerator: TestFixtures.idGenerator)
+
+    // Reset ping count on the server
+    let resetRequest = CallToolRequest(
+      id: "reset-ping-count",
+      name: "reset_ping_count",
+      arguments: [:]
+    )
+    _ = try await transport.testOnly_sendAndWaitForResponse(request: resetRequest)
+
+    // Send requests continuously for 5 seconds (should prevent pings)
+    let startTime = Date()
+    var requestCount = 0
+    while Date().timeIntervalSince(startTime) < 5.0 {
+      let echoRequest = CallToolRequest(
+        id: .string("echo-\(requestCount)"),
+        name: "echo_tool",
+        arguments: ["message": "Keeping connection active"]
+      )
+      _ = try await transport.testOnly_sendAndWaitForResponse(request: echoRequest)
+      requestCount += 1
+      try await Task.sleep(for: .milliseconds(500))
+    }
+
+    // Check ping count - should be 0 or very low since we kept sending requests
+    let getPingCountRequest = CallToolRequest(
+      id: "get-ping-count",
+      name: "get_ping_count",
+      arguments: [:]
+    )
+    let response = try await transport.testOnly_sendAndWaitForResponse(request: getPingCountRequest)
+
+    switch response {
+    case let .successfulRequest(request: _, response: receivedResponse):
+      guard let toolResponse = receivedResponse as? CallToolResponse else {
+        Issue.record("Expected CallToolResponse, but got \(type(of: receivedResponse))")
+        return
+      }
+      if let firstContent = toolResponse.result.content.first,
+         case let .text(text, annotations: _) = firstContent,
+         let pingCount = Int(text) {
+        #expect(pingCount <= 1, "Should have sent at most 1 ping during active communication, but got \(pingCount)")
+      } else {
+        Issue.record("Expected integer ping count in response content")
+      }
+    default:
+      recordErrorsForNonSuccessfulResponse(response)
+    }
+
+    try await transport.close()
+    server.terminate()
+  }
+
+  @Test func testPingContinuesAfterIdle() async throws {
+    // Start server with Keep-Alive timeout of 2 seconds
+    let server = try HTTPTestServer(
+      streamableHTTP: true, scriptName: "echo-http-keepalive", port: 9003)
+    let transport = server.createTransport()
+
+    try await transport.start()
+    _ = try await transport.initialize(idGenerator: TestFixtures.idGenerator)
+
+    // Reset ping count on the server
+    let resetRequest = CallToolRequest(
+      id: "reset-ping-count",
+      name: "reset_ping_count",
+      arguments: [:]
+    )
+    _ = try await transport.testOnly_sendAndWaitForResponse(request: resetRequest)
+
+    // Send a request to reset the ping timer
+    let echoRequest = CallToolRequest(
+      id: "echo-test",
+      name: "echo_tool",
+      arguments: ["message": "Test message"]
+    )
+    _ = try await transport.testOnly_sendAndWaitForResponse(request: echoRequest)
+
+    // Reset ping count again after the request
+    _ = try await transport.testOnly_sendAndWaitForResponse(request: resetRequest)
+
+    // Wait for pings to resume after idle period
+    try await Task.sleep(for: .seconds(3.5))
+
+    // Check ping count
+    let getPingCountRequest = CallToolRequest(
+      id: "get-ping-count",
+      name: "get_ping_count",
+      arguments: [:]
+    )
+    let response = try await transport.testOnly_sendAndWaitForResponse(request: getPingCountRequest)
+
+    switch response {
+    case let .successfulRequest(request: _, response: receivedResponse):
+      guard let toolResponse = receivedResponse as? CallToolResponse else {
+        Issue.record("Expected CallToolResponse, but got \(type(of: receivedResponse))")
+        return
+      }
+      if let firstContent = toolResponse.result.content.first,
+         case let .text(text, annotations: _) = firstContent,
+         let pingCount = Int(text) {
+        #expect(pingCount >= 2, "Should have sent at least 2 pings after idle period, but got \(pingCount)")
+      } else {
+        Issue.record("Expected integer ping count in response content")
+      }
+    default:
+      recordErrorsForNonSuccessfulResponse(response)
+    }
+
+    try await transport.close()
+    server.terminate()
+  }
+
+  @Test func testNoKeepAliveNoPing() async throws {
+    // Use regular echo server without Keep-Alive headers
+    let server = try HTTPTestServer(
+      streamableHTTP: true, scriptName: "echo-http-streamable", port: 9004)
+    let transport = server.createTransport()
+
+    try await transport.start()
+    _ = try await transport.initialize(idGenerator: TestFixtures.idGenerator)
+
+    // Ping interval should not be set for servers without Keep-Alive headers
+    let interval = await transport.pingInterval
+    #expect(interval == nil, "Ping interval should not be set without Keep-Alive header")
+
+    // Wait a bit to ensure no pings would be sent
+    try await Task.sleep(for: .seconds(2))
+
+    // Transport should still work normally
+    let request = ListToolsRequest(id: "no-keepalive-test", cursor: nil)
+    let response = try await transport.testOnly_sendAndWaitForResponse(request: request)
+
+    if case .successfulRequest = response {
+      // Success - transport works without Keep-Alive
+    } else {
+      recordErrorsForNonSuccessfulResponse(response)
+    }
+
+    try await transport.close()
     server.terminate()
   }
 
