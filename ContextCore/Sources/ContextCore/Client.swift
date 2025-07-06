@@ -763,6 +763,16 @@ public actor Client {
       group.addTask {
         await self.handleRootsListRequest(rootsRequest)
       }
+    case "ping":
+      guard let pingRequest = request as? PingRequest else {
+        let error = ClientError.unexpectedRequestType(
+          method: request.method, expectedType: "PingRequest")
+        logAndStreamError("Unexpected request type", error: error)
+        return
+      }
+      group.addTask {
+        await self.handlePingRequest(pingRequest)
+      }
     default:
       logger.warning("Received unsupported server request: \(request.method)")
     }
@@ -834,6 +844,17 @@ public actor Client {
       } catch {
         self.logAndStreamError("Failed to send error response for roots/list request", error: error)
       }
+    }
+  }
+
+  private func handlePingRequest(_ request: PingRequest) async {
+    logger.info("Handling ping request from server")
+    do {
+      let response = PingResponse(id: request.id)
+      try await transport.send(response: response)
+      logger.info("Successfully responded to ping request")
+    } catch {
+      self.logAndStreamError("Failed to respond to ping request", error: error)
     }
   }
 
