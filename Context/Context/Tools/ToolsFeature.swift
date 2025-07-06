@@ -128,6 +128,7 @@ struct ToolsFeature {
       case let .loadingFailed(error):
         state.isLoading = false
         state.error = NotConnectedError(underlyingError: error)
+        state.hasRequestedInitialLoad = false  // Reset to allow retry
         return .none
 
       case let .toolSelected(name):
@@ -217,6 +218,7 @@ struct ToolsFeature {
 
       case .loadMoreToolsFailed:
         state.isLoadingMore = false
+        // Consider showing an error to the user for pagination failures
         return .none
 
       case .loadIfNeeded:

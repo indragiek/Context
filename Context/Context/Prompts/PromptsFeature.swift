@@ -143,6 +143,7 @@ struct PromptsFeature {
       case let .loadingFailed(error):
         state.isLoading = false
         state.error = NotConnectedError(underlyingError: error)
+        state.hasRequestedInitialLoad = false  // Reset to allow retry
         return .none
 
       case let .promptSelected(name):
@@ -232,6 +233,7 @@ struct PromptsFeature {
 
       case .loadMorePromptsFailed:
         state.isLoadingMore = false
+        // Consider showing an error to the user for pagination failures
         return .none
 
       case .loadIfNeeded:

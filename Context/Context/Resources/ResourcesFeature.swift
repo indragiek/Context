@@ -154,6 +154,7 @@ struct ResourcesFeature {
       case let .loadingFailed(error):
         state.isLoading = false
         state.error = NotConnectedError(underlyingError: error)
+        state.hasRequestedInitialLoad = false  // Reset to allow retry
         return .none
 
       case let .resourceSelected(id):
@@ -295,6 +296,7 @@ struct ResourcesFeature {
 
       case .loadMoreResourcesFailed:
         state.isLoadingMoreResources = false
+        // Consider showing an error to the user for pagination failures
         return .none
 
       case .loadMoreTemplates:
@@ -330,6 +332,7 @@ struct ResourcesFeature {
 
       case .loadMoreTemplatesFailed:
         state.isLoadingMoreTemplates = false
+        // Consider showing an error to the user for pagination failures
         return .none
 
       case .loadIfNeeded:
