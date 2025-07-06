@@ -10,7 +10,7 @@ import os
   @Test func testInitialization() async throws {
     let server = try HTTPTestServer(
       streamableHTTP: true, scriptName: "echo-http-streamable", port: 9000)
-    let transport = server.createTransport()
+    let transport = try await server.createTransport()
 
     try await transport.start()
     let initializeResult = try await transport.initialize(idGenerator: TestFixtures.idGenerator)
@@ -29,7 +29,7 @@ import os
   @Test func testSendAndReceiveRequest() async throws {
     let server = try HTTPTestServer(
       streamableHTTP: true, scriptName: "echo-http-streamable", port: 9000)
-    let transport = server.createTransport()
+    let transport = try await server.createTransport()
 
     try await transport.start()
     _ = try await transport.initialize(idGenerator: TestFixtures.idGenerator)
@@ -57,7 +57,7 @@ import os
   @Test func testSendNotification() async throws {
     let server = try HTTPTestServer(
       streamableHTTP: true, scriptName: "echo-http-streamable", port: 9000)
-    let transport = server.createTransport()
+    let transport = try await server.createTransport()
 
     try await transport.start()
     _ = try await transport.initialize(idGenerator: TestFixtures.idGenerator)
@@ -73,7 +73,7 @@ import os
   @Test func testMultipleRequests() async throws {
     let server = try HTTPTestServer(
       streamableHTTP: true, scriptName: "echo-http-streamable", port: 9000)
-    let transport = server.createTransport()
+    let transport = try await server.createTransport()
 
     try await transport.start()
     _ = try await transport.initialize(idGenerator: TestFixtures.idGenerator)
@@ -105,10 +105,13 @@ import os
   @Test func testConcurrentOperations() async throws {
     let server = try HTTPTestServer(
       streamableHTTP: true, scriptName: "echo-http-streamable", port: 9000)
-    let transport = server.createTransport()
+    let transport = try await server.createTransport()
 
     try await transport.start()
     _ = try await transport.initialize(idGenerator: TestFixtures.idGenerator)
+
+    // Give the server a moment to stabilize after initialization
+    try await Task.sleep(for: .milliseconds(100))
 
     // Create multiple concurrent tasks that send requests and notifications
     try await withThrowingTaskGroup(of: Void.self) { group in
@@ -116,7 +119,12 @@ import os
       for i in 1...3 {
         group.addTask {
           let request = ListToolsRequest(id: .number(i), cursor: nil)
-          try await transport.send(request: request)
+          do {
+            try await transport.send(request: request)
+          } catch {
+            Issue.record("Failed to send request \(i): \(error)")
+            throw error
+          }
         }
       }
 
@@ -124,7 +132,12 @@ import os
       for _ in 1...3 {
         group.addTask {
           let notification = RootsListChangedNotification()
-          try await transport.send(notification: notification)
+          do {
+            try await transport.send(notification: notification)
+          } catch {
+            Issue.record("Failed to send notification: \(error)")
+            throw error
+          }
         }
       }
 
@@ -154,7 +167,7 @@ import os
   @Test func testCloseAndRestart() async throws {
     let server = try HTTPTestServer(
       streamableHTTP: true, scriptName: "echo-http-streamable", port: 9000)
-    let transport = server.createTransport()
+    let transport = try await server.createTransport()
 
     try await transport.start()
     _ = try await transport.initialize(idGenerator: TestFixtures.idGenerator)
@@ -181,7 +194,7 @@ import os
   @Test func testSequentialRequests() async throws {
     let server = try HTTPTestServer(
       streamableHTTP: true, scriptName: "echo-http-streamable", port: 9000)
-    let transport = server.createTransport()
+    let transport = try await server.createTransport()
 
     try await transport.start()
     _ = try await transport.initialize(idGenerator: TestFixtures.idGenerator)
@@ -209,7 +222,7 @@ import os
   @Test func testDifferentIDTypes() async throws {
     let server = try HTTPTestServer(
       streamableHTTP: true, scriptName: "echo-http-streamable", port: 9000)
-    let transport = server.createTransport()
+    let transport = try await server.createTransport()
 
     try await transport.start()
     _ = try await transport.initialize(idGenerator: TestFixtures.idGenerator)
@@ -241,7 +254,7 @@ import os
   func testSendBatchRequests() async throws {
     let server = try HTTPTestServer(
       streamableHTTP: true, scriptName: "echo-http-streamable", port: 9000)
-    let transport = server.createTransport()
+    let transport = try await server.createTransport()
 
     try await transport.start()
     _ = try await transport.initialize(idGenerator: TestFixtures.idGenerator)
@@ -298,7 +311,7 @@ import os
   func testReceiveBatchResponses() async throws {
     let server = try HTTPTestServer(
       streamableHTTP: true, scriptName: "echo-http-streamable", port: 9000)
-    let transport = server.createTransport()
+    let transport = try await server.createTransport()
 
     try await transport.start()
     _ = try await transport.initialize(idGenerator: TestFixtures.idGenerator)
@@ -354,7 +367,7 @@ import os
   func testMixedBatch() async throws {
     let server = try HTTPTestServer(
       streamableHTTP: true, scriptName: "echo-http-streamable", port: 9000)
-    let transport = server.createTransport()
+    let transport = try await server.createTransport()
 
     try await transport.start()
     _ = try await transport.initialize(idGenerator: TestFixtures.idGenerator)
@@ -413,7 +426,7 @@ import os
   @Test func testStartMultipleTimes() async throws {
     let server = try HTTPTestServer(
       streamableHTTP: true, scriptName: "echo-http-streamable", port: 9000)
-    let transport = server.createTransport()
+    let transport = try await server.createTransport()
 
     // Start multiple times should not cause issues
     try await transport.start()
@@ -431,7 +444,7 @@ import os
   @Test func testCloseBeforeStart() async throws {
     let server = try HTTPTestServer(
       streamableHTTP: true, scriptName: "echo-http-streamable", port: 9000)
-    let transport = server.createTransport()
+    let transport = try await server.createTransport()
 
     // Close before start should not cause issues
     try await transport.close()
@@ -450,7 +463,7 @@ import os
   @Test func testReceiveLogMessages() async throws {
     let server = try HTTPTestServer(
       streamableHTTP: true, scriptName: "echo-http-logging", port: 9000)
-    let transport = server.createTransport()
+    let transport = try await server.createTransport()
 
     try await transport.start()
     _ = try await transport.initialize(idGenerator: TestFixtures.idGenerator)
@@ -503,7 +516,7 @@ import os
   @Test func testSSEConnectionStateTracking() async throws {
     let server = try HTTPTestServer(
       streamableHTTP: true, scriptName: "echo-http-streamable", port: 9000)
-    let transport = server.createTransport()
+    let transport = try await server.createTransport()
 
     try await transport.start()
 
@@ -543,7 +556,7 @@ import os
   @Test func testSSEConnectionCountAccuracy() async throws {
     let server = try HTTPTestServer(
       streamableHTTP: true, scriptName: "echo-http-streamable", port: 9000)
-    let transport = server.createTransport()
+    let transport = try await server.createTransport()
 
     try await transport.start()
 
@@ -592,7 +605,7 @@ import os
   @Test func testSSEConnectionCountWithRestart() async throws {
     let server = try HTTPTestServer(
       streamableHTTP: true, scriptName: "echo-http-streamable", port: 9000)
-    let transport = server.createTransport()
+    let transport = try await server.createTransport()
 
     let connectionStateTask = Task {
       try await withTimeout(

@@ -3,6 +3,7 @@
 import Foundation
 import Testing
 import os
+import AsyncAlgorithms
 
 @testable import ContextCore
 
@@ -10,7 +11,7 @@ import os
   @Test func testListPrompts() async throws {
     let server = try HTTPTestServer(
       streamableHTTP: true, scriptName: "echo-http-streamable", port: 9001)
-    let client = Client(transport: server.createTransport())
+    let client = Client(transport: try await server.createTransport())
 
     try await client.connect()
     let (prompts, nextCursor) = try await client.listPrompts()
@@ -27,7 +28,7 @@ import os
   @Test func testGetPrompt() async throws {
     let server = try HTTPTestServer(
       streamableHTTP: true, scriptName: "echo-http-streamable", port: 9001)
-    let client = Client(transport: server.createTransport())
+    let client = Client(transport: try await server.createTransport())
 
     try await client.connect()
     let (description, messages) = try await client.getPrompt(
@@ -50,7 +51,7 @@ import os
   @Test func testListResources() async throws {
     let server = try HTTPTestServer(
       streamableHTTP: true, scriptName: "echo-http-streamable", port: 9001)
-    let client = Client(transport: server.createTransport())
+    let client = Client(transport: try await server.createTransport())
 
     try await client.connect()
     let (resources, nextCursor) = try await client.listResources()
@@ -68,7 +69,7 @@ import os
   @Test func testReadResource() async throws {
     let server = try HTTPTestServer(
       streamableHTTP: true, scriptName: "echo-http-streamable", port: 9001)
-    let client = Client(transport: server.createTransport())
+    let client = Client(transport: try await server.createTransport())
 
     try await client.connect()
     let contents = try await client.readResource(uri: "echo://TestMessage")
@@ -91,7 +92,7 @@ import os
   @Test func testListResourceTemplates() async throws {
     let server = try HTTPTestServer(
       streamableHTTP: true, scriptName: "echo-http-streamable", port: 9001)
-    let client = Client(transport: server.createTransport())
+    let client = Client(transport: try await server.createTransport())
 
     try await client.connect()
     let (resourceTemplates, nextCursor) = try await client.listResourceTemplates()
@@ -109,7 +110,7 @@ import os
   @Test func testListTools() async throws {
     let server = try HTTPTestServer(
       streamableHTTP: true, scriptName: "echo-http-streamable", port: 9001)
-    let client = Client(transport: server.createTransport())
+    let client = Client(transport: try await server.createTransport())
 
     try await client.connect()
     let (tools, nextCursor) = try await client.listTools()
@@ -126,7 +127,7 @@ import os
   @Test func testCallTool() async throws {
     let server = try HTTPTestServer(
       streamableHTTP: true, scriptName: "echo-http-streamable", port: 9001)
-    let client = Client(transport: server.createTransport())
+    let client = Client(transport: try await server.createTransport())
 
     try await client.connect()
     let (content, isError) = try await client.callTool(
@@ -149,7 +150,7 @@ import os
   func testCompletePrompt() async throws {
     let server = try HTTPTestServer(
       streamableHTTP: true, scriptName: "echo-http-streamable", port: 9001)
-    let client = Client(transport: server.createTransport())
+    let client = Client(transport: try await server.createTransport())
 
     try await client.connect()
     let (values, total, hasMore) = try await client.complete(
@@ -170,7 +171,7 @@ import os
   func testCompleteResource() async throws {
     let server = try HTTPTestServer(
       streamableHTTP: true, scriptName: "echo-http-streamable", port: 9001)
-    let client = Client(transport: server.createTransport())
+    let client = Client(transport: try await server.createTransport())
 
     try await client.connect()
     let (values, total, hasMore) = try await client.complete(
@@ -190,7 +191,7 @@ import os
   @Test func testPing() async throws {
     let server = try HTTPTestServer(
       streamableHTTP: true, scriptName: "echo-http-streamable", port: 9001)
-    let client = Client(transport: server.createTransport())
+    let client = Client(transport: try await server.createTransport())
 
     try await client.connect()
 
@@ -199,6 +200,53 @@ import os
 
     try await client.disconnect()
     server.terminate()
+  }
+
+  @Test func testServerToClientPing() async throws {
+    let mockTransport = MockPingTransport()
+    let client = Client(transport: mockTransport)
+
+    // Connect will trigger the ping request from the mock transport
+    try await client.connect()
+    
+    // Wait for ping response to be sent
+    let pingResponseSent = await mockTransport.awaitPingResponse()
+    #expect(pingResponseSent)
+
+    try await client.disconnect()
+  }
+
+  @Test func testServerToClientPingWithFailure() async throws {
+    let mockTransport = MockPingTransport(failOnSend: true)
+    let client = Client(transport: mockTransport)
+    
+    // Use AsyncChannel to coordinate error detection
+    let errorDetected = AsyncChannel<Bool>()
+    
+    // Set up error monitoring before connecting
+    let errorTask = Task {
+      for await error in await client.streamErrors {
+        if error is FailingTransport.FailureError {
+          await errorDetected.send(true)
+          return
+        }
+      }
+      await errorDetected.send(false)
+    }
+    
+    // Connect will trigger the ping request and subsequent failure
+    try await client.connect()
+    
+    // Wait for the error to be sent through the transport
+    let transportError = await mockTransport.awaitSendError()
+    #expect(transportError is FailingTransport.FailureError)
+    
+    // Wait for the error to be detected in streamErrors
+    let errorStreamed = await errorDetected.first { _ in true } ?? false
+    #expect(errorStreamed)
+    
+    errorTask.cancel()
+    try await client.disconnect()
   }
 
   @Test func testSampling() async throws {
@@ -507,4 +555,110 @@ private actor MockSamplingHandler: SamplingHandler {
     )
   }
 
+}
+
+// Mock transport that simulates server-to-client ping requests
+actor MockPingTransport: Transport {
+  typealias ResponseSequence = AsyncThrowingStream<TransportResponse, Error>
+  typealias LogSequence = AsyncThrowingStream<String, Error>
+  typealias ConnectionStateSequence = AsyncThrowingStream<TransportConnectionState, Error>
+  
+  private let failOnSend: Bool
+  private var responseContinuation: AsyncThrowingStream<TransportResponse, Error>.Continuation?
+  
+  // Use AsyncChannel for cleaner async communication
+  private let pingResponseChannel = AsyncChannel<Bool>()
+  private let sendErrorChannel = AsyncChannel<Error>()
+  
+  init(failOnSend: Bool = false) {
+    self.failOnSend = failOnSend
+  }
+  
+  func start() async throws {
+    // No-op
+  }
+  
+  func initialize(idGenerator: @escaping Transport.IDGenerator) async throws -> InitializeResponse.Result {
+    return InitializeResponse.Result(
+      protocolVersion: "2025-03-26",
+      capabilities: ServerCapabilities(),
+      serverInfo: Implementation(name: "MockPingServer", version: "1.0.0")
+    )
+  }
+  
+  func send(request: any JSONRPCRequest) async throws {
+    if failOnSend {
+      throw FailingTransport.FailureError.sendFailed
+    }
+  }
+  
+  func send(notification: any JSONRPCNotification) async throws {
+    if failOnSend {
+      throw FailingTransport.FailureError.sendFailed
+    }
+  }
+  
+  func send(response: any JSONRPCResponse) async throws {
+    if failOnSend {
+      let error = FailingTransport.FailureError.sendFailed
+      await sendErrorChannel.send(error)
+      throw error
+    }
+    
+    // Check if this is a ping response
+    if response is PingResponse {
+      await pingResponseChannel.send(true)
+    }
+  }
+  
+  func send(error: JSONRPCError) async throws {
+    if failOnSend {
+      let error = FailingTransport.FailureError.sendFailed
+      await sendErrorChannel.send(error)
+      throw error
+    }
+  }
+  
+  func receive() async throws -> ResponseSequence {
+    return AsyncThrowingStream { continuation in
+      self.responseContinuation = continuation
+      
+      // Send a ping request after connection is established
+      Task {
+        let pingRequest = PingRequest(id: .string("test-ping-123"))
+        continuation.yield(.serverRequest(pingRequest))
+      }
+    }
+  }
+  
+  func receiveLogs() async throws -> LogSequence {
+    return AsyncThrowingStream { _ in }
+  }
+  
+  func receiveConnectionState() async throws -> ConnectionStateSequence {
+    return AsyncThrowingStream { continuation in
+      continuation.yield(.connected)
+    }
+  }
+  
+  func close() async throws {
+    responseContinuation?.finish()
+    pingResponseChannel.finish()
+    sendErrorChannel.finish()
+  }
+  
+  // Simplified API for tests
+  func awaitPingResponse() async -> Bool {
+    for await response in pingResponseChannel {
+      return response
+    }
+    return false
+  }
+  
+  func awaitSendError() async -> Error? {
+    for await error in sendErrorChannel {
+      return error
+    }
+    return nil
+  }
 }
