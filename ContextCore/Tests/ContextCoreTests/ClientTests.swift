@@ -220,14 +220,18 @@ import AsyncAlgorithms
     let mockTransport = MockPingTransport(failOnSend: true)
     let client = Client(transport: mockTransport)
     
+    // Use AsyncChannel to coordinate error detection
+    let errorDetected = AsyncChannel<Bool>()
+    
     // Set up error monitoring before connecting
     let errorTask = Task {
       for await error in await client.streamErrors {
         if error is FailingTransport.FailureError {
-          return true
+          await errorDetected.send(true)
+          return
         }
       }
-      return false
+      await errorDetected.send(false)
     }
     
     // Connect will trigger the ping request and subsequent failure
@@ -237,11 +241,11 @@ import AsyncAlgorithms
     let transportError = await mockTransport.awaitSendError()
     #expect(transportError is FailingTransport.FailureError)
     
-    // Cancel the error monitoring task and check if error was received
-    errorTask.cancel()
-    let errorStreamed = await errorTask.value
+    // Wait for the error to be detected in streamErrors
+    let errorStreamed = await errorDetected.first { _ in true } ?? false
     #expect(errorStreamed)
     
+    errorTask.cancel()
     try await client.disconnect()
   }
 
