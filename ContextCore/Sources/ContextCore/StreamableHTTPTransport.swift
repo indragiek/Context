@@ -21,6 +21,22 @@ public actor StreamableHTTPTransport: Transport {
   private let decoder: JSONDecoder
   private let logger: Logger
   private let responseTimeout: TimeInterval
+  internal var pingInterval: TimeInterval? {
+    didSet {
+      guard pingInterval != oldValue else { return }
+      
+      if let interval = pingInterval {
+        if oldValue == nil {
+          logger.info("Set ping interval to \(interval)s")
+        } else {
+          logger.info("Updated ping interval to \(interval)s")
+        }
+        startPingTimer()
+      } else {
+        stopPingTimer()
+      }
+    }
+  }
 
   private var pendingRequests = [JSONRPCRequestID: any JSONRPCRequest]()
   private var internalResponseChannel: AsyncChannel<TransportResponse>?
@@ -38,6 +54,7 @@ public actor StreamableHTTPTransport: Transport {
   private var authorizationToken: String?
   private var negotiatedProtocolVersion: String?
   private var sseSupported: Bool = true
+  private var pingTask: Task<Void, Error>?
 
   /// Initializes the transport for communicating with the MCP server at the
   /// specified URL.
@@ -216,6 +233,9 @@ public actor StreamableHTTPTransport: Transport {
       task.cancel()
     }
     consumerTasks.removeAll()
+    
+    stopPingTimer()
+    pingInterval = nil
 
     pendingRequests.removeAll()
     idGenerator = nil
@@ -310,6 +330,8 @@ public actor StreamableHTTPTransport: Transport {
       if let newSessionID = httpResponse.value(forHTTPHeaderField: "Mcp-Session-Id") {
         sessionID = try validateSessionID(newSessionID)
       }
+      // Check for Keep-Alive headers on initialize response
+      checkForKeepAliveHeaders(in: httpResponse)
       // Store the negotiated protocol version for subsequent requests
       negotiatedProtocolVersion = initializeResponse.result.protocolVersion
       let initialized = InitializedNotification()
@@ -360,6 +382,11 @@ public actor StreamableHTTPTransport: Transport {
       // Reset reconnect attempts as we successfully connected
       reconnectAttempts = 0
       reconnectionTimeMs = Self.defaultReconnectionTimeMs
+      
+      // Check for Keep-Alive header configuration
+      // Check during SSE stream setup to get Keep-Alive timeout settings
+      checkForKeepAliveHeaders(in: httpResponse)
+      
       try await consumeSSEStream(bytes: bytes, waitUntilEndpointEvent: true)
     case 405:
       // Server doesn't support SSE - this is a valid response, not an error to retry
@@ -374,6 +401,11 @@ public actor StreamableHTTPTransport: Transport {
 
   /// Sends a request to the server and keeps state to track the pending request.
   private func sendHTTP(request: any JSONRPCRequest) async throws -> HTTPURLResponse {
+    // Reset ping timer when sending non-ping requests
+    if !(request is PingRequest) {
+      resetPingTimer()
+    }
+    
     pendingRequests[request.id] = request
     do {
       return try await sendHTTP(data: try encoder.encode(request))
@@ -385,11 +417,17 @@ public actor StreamableHTTPTransport: Transport {
 
   /// Sends a notification to the server.
   private func sendHTTP(notification: any JSONRPCNotification) async throws -> HTTPURLResponse {
+    // Reset ping timer when sending notifications
+    resetPingTimer()
     return try await sendHTTP(data: try encoder.encode(notification))
   }
 
   /// Sends a response to the server.
   private func sendHTTP(response: any JSONRPCResponse) async throws -> HTTPURLResponse {
+    // Reset ping timer when sending non-ping responses
+    if !(response is PingResponse) {
+      resetPingTimer()
+    }
     return try await sendHTTP(data: try encoder.encode(response))
   }
 
@@ -449,6 +487,8 @@ public actor StreamableHTTPTransport: Transport {
       let contentType = try getContentType(response: httpResponse)
       switch contentType {
       case "application/json":
+        // Check for Keep-Alive headers on JSON responses
+        checkForKeepAliveHeaders(in: httpResponse)
         consumerTasks.append(
           Task {
             do {
@@ -758,6 +798,8 @@ public actor StreamableHTTPTransport: Transport {
     }
     activeSSEConnectionCount -= 1
     if activeSSEConnectionCount == 0 {
+      // Don't stop the ping timer here - it should continue running
+      // to keep the HTTP connection alive even when SSE is not active
       Task {
         await connectionStateChannel.send(.disconnected)
       }
@@ -816,6 +858,74 @@ public actor StreamableHTTPTransport: Transport {
     }
     Task { await responseChannel.send(response) }
     Task { await internalResponseChannel.send(response) }
+  }
+  
+  /// Starts a timer that sends periodic ping requests to keep the connection alive.
+  private func startPingTimer() {
+    guard let interval = pingInterval else { 
+      return 
+    }
+    
+    stopPingTimer()
+    
+    pingTask = Task {
+      while !Task.isCancelled {
+        do {
+          try await Task.sleep(for: .seconds(interval))
+          
+          if !Task.isCancelled {
+            await self.sendPing()
+          }
+        } catch {
+          break
+        }
+      }
+    }
+  }
+  
+  /// Stops the ping timer.
+  private func stopPingTimer() {
+    pingTask?.cancel()
+    pingTask = nil
+  }
+  
+  /// Resets the ping timer by restarting it. This is called when a request is sent
+  /// to ensure we only send pings during idle periods.
+  private func resetPingTimer() {
+    if pingInterval != nil {
+      startPingTimer()
+    }
+  }
+  
+  /// Sends a ping request to the server.
+  private func sendPing() async {
+    guard let idGenerator = idGenerator else { 
+      return 
+    }
+    
+    let pingRequest = PingRequest(id: idGenerator())
+    do {
+      try await send(request: pingRequest)
+    } catch {
+      logger.error("Failed to send ping request: \(error)")
+    }
+  }
+  
+  /// Checks for Keep-Alive headers in an HTTP response and configures ping timer if found.
+  private func checkForKeepAliveHeaders(in httpResponse: HTTPURLResponse) {
+    // Note: HTTPURLResponse.value(forHTTPHeaderField:) is case-insensitive for header names per RFC 7230
+    if let connectionHeader = httpResponse.value(forHTTPHeaderField: "Connection"),
+       connectionHeader.lowercased().contains("keep-alive"),
+       let keepAliveHeader = httpResponse.value(forHTTPHeaderField: "Keep-Alive") {
+      
+      // Parse the Keep-Alive header for timeout parameter
+      if let timeout = parseKeepAliveTimeout(from: keepAliveHeader) {
+        // Set ping interval to be shorter than the timeout to avoid hitting it
+        // Use 80% of the timeout value, with a minimum of 1 second
+        let newPingInterval = max(1.0, timeout * 0.8)
+        pingInterval = newPingInterval
+      }
+    }
   }
 }
 
@@ -1049,4 +1159,22 @@ public enum StreamableHTTPTransportError: Error, LocalizedError {
       return "Authenticate with the server using OAuth 2.0 to obtain an access token"
     }
   }
+}
+
+/// Parses the Keep-Alive header to extract the timeout parameter value.
+/// The Keep-Alive header format is: `Keep-Alive: timeout=<seconds>, max=<requests>`
+/// This function extracts the timeout value in seconds.
+private func parseKeepAliveTimeout(from keepAliveHeader: String) -> TimeInterval? {
+  let parameters = keepAliveHeader.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+  
+  for parameter in parameters {
+    if parameter.lowercased().hasPrefix("timeout=") {
+      let value = parameter.dropFirst("timeout=".count)
+      if let timeoutSeconds = Int(value) {
+        return TimeInterval(timeoutSeconds)
+      }
+    }
+  }
+  
+  return nil
 }

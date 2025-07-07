@@ -2,6 +2,7 @@
 
 import Foundation
 import Testing
+import os
 
 @testable import ContextCore
 
@@ -647,6 +648,253 @@ import Testing
     server.terminate()
   }
 
+  @Test func testKeepAliveHeaderParsing() async throws {
+    // Start server with streamable HTTP transport and Keep-Alive timeout of 5 seconds
+    let server = try HTTPTestServer(
+      streamableHTTP: true, 
+      scriptName: "echo-http-streamable", 
+      port: 9000,
+      extraArgs: ["-t", "5"]
+    )
+    
+    let transport = StreamableHTTPTransport(
+      serverURL: server.serverURL,
+      urlSessionConfiguration: URLSessionConfiguration.ephemeral,
+      clientInfo: TestFixtures.clientInfo,
+      clientCapabilities: TestFixtures.clientCapabilities
+    )
+
+    try await transport.start()
+    _ = try await transport.initialize(idGenerator: TestFixtures.idGenerator)
+
+    // Wait for SSE connection to be established and Keep-Alive headers to be processed
+    try await Task.sleep(for: .seconds(2))
+
+    // The transport should have detected the Keep-Alive header and set up ping interval
+    // The ping interval should be 80% of the timeout value (4 seconds for 5 second timeout)
+    let interval = await transport.pingInterval
+    #expect(interval != nil, "Ping interval should be set after receiving Keep-Alive header")
+    if let pingInterval = interval {
+      #expect(pingInterval == 4.0, "Ping interval should be 80% of Keep-Alive timeout (4s for 5s timeout)")
+    }
+
+    try await transport.close()
+    server.terminate()
+  }
+
+  @Test func testAutomaticPingOnKeepAlive() async throws {
+    // Start server with streamable HTTP transport and Keep-Alive timeout of 3 seconds
+    let server = try HTTPTestServer(
+      streamableHTTP: true, 
+      scriptName: "echo-http-streamable", 
+      port: 9001,
+      extraArgs: ["-t", "3"]
+    )
+    let transport = try await server.createTransport()
+
+    try await transport.start()
+    _ = try await transport.initialize(idGenerator: TestFixtures.idGenerator)
+
+    // Verify that ping interval was set based on Keep-Alive headers
+    let interval = await transport.pingInterval
+    #expect(interval != nil, "Ping interval should be set after receiving Keep-Alive header")
+    if let pingInterval = interval {
+      #expect(abs(pingInterval - 2.4) < 0.01, "Ping interval should be 80% of Keep-Alive timeout (2.4s for 3s timeout)")
+    }
+
+    // Count ping responses received during idle period
+    var pingResponseCount = 0
+    
+    // Start monitoring for ping responses
+    let monitoringTask = Task {
+      let channel = try await transport.receive()
+      for try await response in channel {
+        switch response {
+        case let .successfulRequest(request: _, response: response):
+          // Check if this is a ping response
+          if response is PingResponse {
+            pingResponseCount += 1
+          }
+        default:
+          break
+        }
+        
+        // Stop after getting enough ping responses
+        if pingResponseCount >= 2 {
+          break
+        }
+      }
+    }
+    
+    // Wait for automatic pings to be sent (should be sent every 2.4 seconds)
+    try await Task.sleep(for: .seconds(5.5))
+    
+    // Cancel monitoring task
+    monitoringTask.cancel()
+    
+    // Should have received at least 2 ping responses in 5.5 seconds (at 2.4s intervals)
+    #expect(pingResponseCount >= 2, "Should have received at least 2 ping responses in 5.5 seconds, but got \(pingResponseCount)")
+
+    try await transport.close()
+    server.terminate()
+  }
+
+  @Test func testPingTimerResetOnRequest() async throws {
+    // Start server with streamable HTTP transport and Keep-Alive timeout of 3 seconds
+    let server = try HTTPTestServer(
+      streamableHTTP: true, 
+      scriptName: "echo-http-streamable", 
+      port: 9002,
+      extraArgs: ["-t", "3"]
+    )
+    let transport = try await server.createTransport()
+
+    try await transport.start()
+    _ = try await transport.initialize(idGenerator: TestFixtures.idGenerator)
+
+    // Verify that ping interval was set (should be 2.4 seconds for 3 second timeout)
+    let interval = await transport.pingInterval
+    #expect(interval != nil, "Ping interval should be set after receiving Keep-Alive header")
+    if let pingInterval = interval {
+      #expect(abs(pingInterval - 2.4) < 0.01, "Ping interval should be 80% of Keep-Alive timeout")
+    }
+
+    // First, wait for a ping to be sent during idle time
+    try await Task.sleep(for: .seconds(3.0))
+    
+    // Now send requests continuously for 4 seconds (should suppress pings)
+    let startTime = Date()
+    var requestsSent = 0
+    
+    while Date().timeIntervalSince(startTime) < 4.0 {
+      let echoRequest = CallToolRequest(
+        id: .string("echo-\(requestsSent)"),
+        name: "echo_tool",
+        arguments: ["message": "Keeping connection active"]
+      )
+      
+      // Use testOnly_sendAndWaitForResponse to ensure we get responses
+      let response = try await transport.testOnly_sendAndWaitForResponse(request: echoRequest)
+      
+      switch response {
+      case .successfulRequest:
+        requestsSent += 1
+      default:
+        recordErrorsForNonSuccessfulResponse(response)
+      }
+      
+      // Small delay between requests but frequent enough to suppress pings
+      try await Task.sleep(for: .milliseconds(300))
+    }
+    
+    // We should have sent multiple requests
+    #expect(requestsSent >= 10, "Should have sent at least 10 requests in 4 seconds, but sent \(requestsSent)")
+    
+    // Now wait again to see if pings resume after we stop sending requests
+    try await Task.sleep(for: .seconds(3.0))
+    
+    // Send one more request to verify connection is still alive
+    let finalRequest = CallToolRequest(
+      id: "final-test",
+      name: "echo_tool", 
+      arguments: ["message": "Final test"]
+    )
+    let finalResponse = try await transport.testOnly_sendAndWaitForResponse(request: finalRequest)
+    
+    switch finalResponse {
+    case .successfulRequest:
+      // Success - connection stayed alive
+      break
+    default:
+      Issue.record("Final request failed, suggesting connection died")
+    }
+
+    try await transport.close()
+    server.terminate()
+  }
+
+  @Test func testPingContinuesAfterIdle() async throws {
+    // Start server with streamable HTTP transport and Keep-Alive timeout of 2 seconds  
+    let server = try HTTPTestServer(
+      streamableHTTP: true, 
+      scriptName: "echo-http-streamable", 
+      port: 9003,
+      extraArgs: ["-t", "2"]
+    )
+    let transport = try await server.createTransport()
+
+    try await transport.start()
+    _ = try await transport.initialize(idGenerator: TestFixtures.idGenerator)
+
+    // Verify that ping interval was set
+    let interval = await transport.pingInterval
+    #expect(interval != nil, "Ping interval should be set after receiving Keep-Alive header")
+    if let pingInterval = interval {
+      #expect(abs(pingInterval - 1.6) < 0.01, "Ping interval should be 80% of Keep-Alive timeout (1.6s for 2s timeout)")
+    }
+
+    // Send a request to ensure connection is active
+    let echoRequest = CallToolRequest(
+      id: "echo-test",
+      name: "echo_tool",
+      arguments: ["message": "Test message"]
+    )
+    _ = try await transport.testOnly_sendAndWaitForResponse(request: echoRequest)
+
+    // Wait for longer than the Keep-Alive timeout without sending any requests
+    // The connection should stay alive due to automatic pings
+    try await Task.sleep(for: .seconds(5.0))
+
+    // Try to send another request - it should succeed if pings kept the connection alive
+    let testRequest = CallToolRequest(
+      id: "test-after-idle",
+      name: "echo_tool",
+      arguments: ["message": "Message after idle period"]
+    )
+    let response = try await transport.testOnly_sendAndWaitForResponse(request: testRequest)
+
+    switch response {
+    case .successfulRequest:
+      // Success - the connection stayed alive during the idle period
+      break
+    default:
+      Issue.record("Request failed after idle period, suggesting pings didn't keep connection alive")
+    }
+
+    try await transport.close()
+    server.terminate()
+  }
+
+  @Test func testNoKeepAliveNoPing() async throws {
+    // Use regular echo server without Keep-Alive headers
+    let server = try HTTPTestServer(
+      streamableHTTP: true, scriptName: "echo-http-streamable", port: 9004)
+    let transport = try await server.createTransport()
+
+    try await transport.start()
+    _ = try await transport.initialize(idGenerator: TestFixtures.idGenerator)
+
+    // Ping interval should not be set for servers without Keep-Alive headers
+    let interval = await transport.pingInterval
+    #expect(interval == nil, "Ping interval should not be set without Keep-Alive header")
+
+    // Wait a bit to ensure no pings would be sent
+    try await Task.sleep(for: .seconds(2))
+
+    // Transport should still work normally
+    let request = ListToolsRequest(id: "no-keepalive-test", cursor: nil)
+    let response = try await transport.testOnly_sendAndWaitForResponse(request: request)
+
+    if case .successfulRequest = response {
+      // Success - transport works without Keep-Alive
+    } else {
+      recordErrorsForNonSuccessfulResponse(response)
+    }
+
+    try await transport.close()
+    server.terminate()
+  }
+
 }
 
 @JSONRPCNotification(method: "notifications/roots/list_changed")
@@ -657,13 +905,12 @@ private struct RootsListChangedNotification {
 private struct StreamableHTTPTransportTestFixtures {
   static let echoServerCapabilities: ServerCapabilities = {
     var serverCapabilities = ServerCapabilities()
-    serverCapabilities.tools = .init(listChanged: false)
-    serverCapabilities.resources = .init(subscribe: false, listChanged: false)
-    serverCapabilities.resources = .init(subscribe: false, listChanged: false)
-    serverCapabilities.prompts = .init(listChanged: false)
+    serverCapabilities.tools = .init(listChanged: true)
+    serverCapabilities.resources = .init(subscribe: false, listChanged: true)
+    serverCapabilities.prompts = .init(listChanged: true)
     return serverCapabilities
   }()
 
-  static let echoServerInfo = Implementation(name: "Echo", version: "1.8.1")
-  static let echoServerProtocolVersion = "2024-11-05"
+  static let echoServerInfo = Implementation(name: "Echo", version: "1.10.1")
+  static let echoServerProtocolVersion = "2025-03-26"
 }
