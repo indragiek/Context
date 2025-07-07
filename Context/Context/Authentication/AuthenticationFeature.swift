@@ -179,6 +179,8 @@ struct AuthenticationFeature {
     state.loadingStep = .idle
     state.isRefreshing = false
     state.isSilentRefresh = false
+    // Clear sensitive data on any error
+    clearSensitiveData(&state)
   }
 
   private func clearSensitiveData(_ state: inout State) {
@@ -424,6 +426,9 @@ struct AuthenticationFeature {
       return .none
     }
 
+    // Clear PKCE parameters immediately after capturing for use
+    state.pkceParameters = nil
+
     return .run {
       [
         clientID = state.clientID,
@@ -458,8 +463,6 @@ struct AuthenticationFeature {
   private func handleTokenExchangeCompleted(
     _ state: inout State, result: Result<OAuthToken, any Error>
   ) -> EffectOf<Self> {
-    state.pkceParameters = nil
-
     switch result {
     case let .success(token):
       return storeTokenAndComplete(&state, token: token)
@@ -618,6 +621,9 @@ struct AuthenticationFeature {
           setError(&state, "Missing authentication metadata after registration")
           return .none
         }
+
+        // Clear PKCE parameters immediately after capturing for retry
+        state.pkceParameters = nil
 
         return .run {
           [
