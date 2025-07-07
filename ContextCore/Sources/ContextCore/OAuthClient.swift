@@ -30,6 +30,7 @@ public struct OAuthToken: Codable, Sendable, Equatable {
     case expiresIn = "expires_in"
     case refreshToken = "refresh_token"
     case scope
+    case expiresAt = "expires_at"
   }
 
   public init(from decoder: Decoder) throws {
@@ -40,8 +41,11 @@ public struct OAuthToken: Codable, Sendable, Equatable {
     self.refreshToken = try container.decodeIfPresent(String.self, forKey: .refreshToken)
     self.scope = try container.decodeIfPresent(String.self, forKey: .scope)
 
-    // Calculate expiration date
-    if let expiresIn = expiresIn {
+    // Use persisted expiration date if available, otherwise calculate from expiresIn
+    if let persistedExpiresAt = try container.decodeIfPresent(Date.self, forKey: .expiresAt) {
+      self.expiresAt = persistedExpiresAt
+    } else if let expiresIn = expiresIn {
+      // Calculate expiration date only for new tokens from server responses
       self.expiresAt = Date().addingTimeInterval(TimeInterval(expiresIn))
     } else {
       self.expiresAt = nil
@@ -55,6 +59,7 @@ public struct OAuthToken: Codable, Sendable, Equatable {
     try container.encodeIfPresent(expiresIn, forKey: .expiresIn)
     try container.encodeIfPresent(refreshToken, forKey: .refreshToken)
     try container.encodeIfPresent(scope, forKey: .scope)
+    try container.encodeIfPresent(expiresAt, forKey: .expiresAt)
   }
 
   /// Whether the token has expired.
