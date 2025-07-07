@@ -141,6 +141,10 @@ struct AuthenticationFeature {
       case .dismissError:
         state.error = nil
         state.loadingStep = .idle
+        state.isLoading = false
+        state.isRefreshing = false
+        state.isSilentRefresh = false
+        state.showRefreshError = false
         return .none
 
       case let .attemptClientRegistration(code):
@@ -159,6 +163,9 @@ struct AuthenticationFeature {
         state.error = nil
         state.showRefreshError = false
         state.loadingStep = .idle
+        state.isLoading = false
+        state.isRefreshing = false
+        state.isSilentRefresh = false
         return .send(.startAuthentication)
       }
     }
@@ -170,6 +177,8 @@ struct AuthenticationFeature {
     state.error = message
     state.isLoading = false
     state.loadingStep = .idle
+    state.isRefreshing = false
+    state.isSilentRefresh = false
   }
 
   private func clearSensitiveData(_ state: inout State) {
@@ -456,16 +465,14 @@ struct AuthenticationFeature {
       return storeTokenAndComplete(&state, token: token)
 
     case let .failure(error):
-      state.isLoading = false
-      state.loadingStep = .idle
       logger.error("Token exchange failed")
 
       if let oauthError = error as? OAuthClientError {
-        state.error = oauthError.errorDescription
+        setError(&state, oauthError.errorDescription ?? "Authentication failed")
       } else if let oauthError = error as? OAuthErrorResponse {
-        state.error = oauthError.errorDescription ?? "Authentication failed"
+        setError(&state, oauthError.errorDescription ?? "Authentication failed")
       } else {
-        state.error = "Failed to complete authentication"
+        setError(&state, "Failed to complete authentication")
       }
       return .none
     }
@@ -643,11 +650,10 @@ struct AuthenticationFeature {
         return prepareAuthorizationURL(&state)
       } else {
         // Post-failure registration failed - show error
-        state.isLoading = false
         if let oauthError = error as? OAuthClientError {
-          state.error = "Registration failed: \(oauthError.errorDescription ?? "Unknown error")"
+          setError(&state, "Registration failed: \(oauthError.errorDescription ?? "Unknown error")")
         } else {
-          state.error = "Failed to register client with authorization server"
+          setError(&state, "Failed to register client with authorization server")
         }
         return .none
       }
