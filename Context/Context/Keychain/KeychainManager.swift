@@ -21,6 +21,7 @@ actor KeychainManager {
     case tokenDataTooLarge
     case tokenExpired
     case invalidTokenData
+    case legacyTokenUnsupported
 
     var errorDescription: String? {
       switch self {
@@ -39,6 +40,8 @@ actor KeychainManager {
         return "Token has expired"
       case .invalidTokenData:
         return "Token data is invalid or corrupted"
+      case .legacyTokenUnsupported:
+        return "Legacy token format is no longer supported for security reasons. Please re-authenticate."
       }
     }
   }
@@ -51,8 +54,8 @@ actor KeychainManager {
     self.logger = logger
   }
 
-  /// Validates token data before storage
-  private func validateToken(_ token: OAuthToken) throws {
+  /// Validates token data and client ID before storage
+  private func validateToken(_ token: OAuthToken, clientID: String) throws {
     if let expiresAt = token.expiresAt, expiresAt < Date() {
       throw KeychainError.tokenExpired
     }
@@ -64,6 +67,18 @@ actor KeychainManager {
     guard !token.tokenType.isEmpty else {
       throw KeychainError.invalidTokenData
     }
+
+    // Validate client ID is not empty and meets basic format requirements
+    guard !clientID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+      throw KeychainError.invalidTokenData
+    }
+
+    // Ensure client ID doesn't contain dangerous characters
+    let allowedCharacters = CharacterSet.alphanumerics
+      .union(CharacterSet(charactersIn: ".-_"))
+    guard clientID.rangeOfCharacter(from: allowedCharacters.inverted) == nil else {
+      throw KeychainError.invalidTokenData
+    }
   }
 
   /// Stores an OAuth token in the keychain for a specific server.
@@ -73,7 +88,7 @@ actor KeychainManager {
   ///   - serverID: The unique identifier of the server.
   ///   - clientID: The OAuth client ID used to obtain this token.
   func storeToken(for serverID: UUID, token: OAuthToken, clientID: String) async throws {
-    try validateToken(token)
+    try validateToken(token, clientID: clientID)
 
     let account = serverID.uuidString
 
@@ -168,20 +183,20 @@ actor KeychainManager {
           return storedToken
         }
 
-        // Fallback to legacy format (just OAuthToken)
-        let token = try decoder.decode(OAuthToken.self, from: data)
-
-        if let expiresAt = token.expiresAt, expiresAt < Date() {
-          logger.warning("Retrieved expired token for server \(serverID)")
+        // Legacy tokens (just OAuthToken) are no longer supported for security reasons
+        // as we cannot verify the correct client ID that was used to obtain them
+        if let _ = try? decoder.decode(OAuthToken.self, from: data) {
+          logger.warning(
+            "Found legacy token without client ID for server \(serverID). Deleting for security."
+          )
           try? await deleteToken(for: serverID)
-          throw KeychainError.tokenExpired
+          throw KeychainError.legacyTokenUnsupported
         }
 
-        logger.info(
-          "Successfully retrieved legacy token from keychain for server \(serverID), using default client ID"
-        )
-        // Return with default client ID for legacy tokens
-        return StoredOAuthToken(token: token, clientID: "com.indragie.Context")
+        // If we reach here, the data couldn't be decoded as either format
+        logger.error("Token data is in an unrecognized format for server \(serverID)")
+        throw KeychainError.unexpectedData
+        
       } catch let decodingError as DecodingError {
         logger.error(
           "Failed to decode token from keychain for server \(serverID): \(decodingError)")
