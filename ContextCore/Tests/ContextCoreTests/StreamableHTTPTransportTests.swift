@@ -648,20 +648,60 @@ import os
     server.terminate()
   }
 
-  @Test func testKeepAliveHeaderParsing() async throws {
-    // Start server with streamable HTTP transport and Keep-Alive timeout of 5 seconds
+  @Test func testHTTP400ErrorHandling() async throws {
     let server = try HTTPTestServer(
-      streamableHTTP: true, 
-      scriptName: "echo-http-streamable", 
-      port: 9000,
-      extraArgs: ["-t", "5"]
-    )
-    
+      streamableHTTP: true, scriptName: "error-400", port: 9001)
+
+    // Create transport manually without the helper method that tries to initialize
     let transport = StreamableHTTPTransport(
       serverURL: server.serverURL,
       urlSessionConfiguration: URLSessionConfiguration.ephemeral,
       clientInfo: TestFixtures.clientInfo,
-      clientCapabilities: TestFixtures.clientCapabilities
+      clientCapabilities: TestFixtures.clientCapabilities,
+      encoder: TestFixtures.jsonEncoder
+    )
+
+    try await transport.start()
+
+    do {
+      _ = try await transport.initialize(idGenerator: TestFixtures.idGenerator)
+      Issue.record("Expected initialization to fail with HTTP 400 error")
+    } catch let error as StreamableHTTPTransportError {
+      switch error {
+      case .serverHTTPError(let response, _, let rpcError):
+        #expect(response.statusCode == 400)
+        #expect(rpcError != nil)
+        if let rpcError = rpcError {
+          #expect(rpcError.error.code == -32600)
+          #expect(rpcError.error.message == "The data couldn't be read because it isn't in the correct format.")
+        }
+      default:
+        Issue.record("Expected serverHTTPError but got: \(error)")
+      }
+    } catch {
+      Issue.record("Expected StreamableHTTPTransportError but got: \(error)")
+    }
+
+    try await transport.close()
+    server.terminate()
+  }
+
+
+  @Test func testKeepAliveHeaderParsing() async throws {
+    // Start server with streamable HTTP transport and Keep-Alive timeout of 5 seconds
+    let server = try HTTPTestServer(
+      streamableHTTP: true,
+      scriptName: "echo-http-streamable",
+      port: 9000,
+      extraArgs: ["-t", "5"]
+    )
+
+    let transport = StreamableHTTPTransport(
+      serverURL: server.serverURL,
+      urlSessionConfiguration: URLSessionConfiguration.ephemeral,
+      clientInfo: TestFixtures.clientInfo,
+      clientCapabilities: TestFixtures.clientCapabilities,
+      encoder: TestFixtures.jsonEncoder
     )
 
     try await transport.start()
@@ -685,8 +725,8 @@ import os
   @Test func testAutomaticPingOnKeepAlive() async throws {
     // Start server with streamable HTTP transport and Keep-Alive timeout of 3 seconds
     let server = try HTTPTestServer(
-      streamableHTTP: true, 
-      scriptName: "echo-http-streamable", 
+      streamableHTTP: true,
+      scriptName: "echo-http-streamable",
       port: 9001,
       extraArgs: ["-t", "3"]
     )
@@ -704,7 +744,7 @@ import os
 
     // Count ping responses received during idle period
     var pingResponseCount = 0
-    
+
     // Start monitoring for ping responses
     let monitoringTask = Task {
       let channel = try await transport.receive()
@@ -718,20 +758,20 @@ import os
         default:
           break
         }
-        
+
         // Stop after getting enough ping responses
         if pingResponseCount >= 2 {
           break
         }
       }
     }
-    
+
     // Wait for automatic pings to be sent (should be sent every 2.4 seconds)
     try await Task.sleep(for: .seconds(5.5))
-    
+
     // Cancel monitoring task
     monitoringTask.cancel()
-    
+
     // Should have received at least 2 ping responses in 5.5 seconds (at 2.4s intervals)
     #expect(pingResponseCount >= 2, "Should have received at least 2 ping responses in 5.5 seconds, but got \(pingResponseCount)")
 
@@ -742,8 +782,8 @@ import os
   @Test func testPingTimerResetOnRequest() async throws {
     // Start server with streamable HTTP transport and Keep-Alive timeout of 3 seconds
     let server = try HTTPTestServer(
-      streamableHTTP: true, 
-      scriptName: "echo-http-streamable", 
+      streamableHTTP: true,
+      scriptName: "echo-http-streamable",
       port: 9002,
       extraArgs: ["-t", "3"]
     )
@@ -761,46 +801,46 @@ import os
 
     // First, wait for a ping to be sent during idle time
     try await Task.sleep(for: .seconds(3.0))
-    
+
     // Now send requests continuously for 4 seconds (should suppress pings)
     let startTime = Date()
     var requestsSent = 0
-    
+
     while Date().timeIntervalSince(startTime) < 4.0 {
       let echoRequest = CallToolRequest(
         id: .string("echo-\(requestsSent)"),
         name: "echo_tool",
         arguments: ["message": "Keeping connection active"]
       )
-      
+
       // Use testOnly_sendAndWaitForResponse to ensure we get responses
       let response = try await transport.testOnly_sendAndWaitForResponse(request: echoRequest)
-      
+
       switch response {
       case .successfulRequest:
         requestsSent += 1
       default:
         recordErrorsForNonSuccessfulResponse(response)
       }
-      
+
       // Small delay between requests but frequent enough to suppress pings
       try await Task.sleep(for: .milliseconds(300))
     }
-    
+
     // We should have sent multiple requests
     #expect(requestsSent >= 10, "Should have sent at least 10 requests in 4 seconds, but sent \(requestsSent)")
-    
+
     // Now wait again to see if pings resume after we stop sending requests
     try await Task.sleep(for: .seconds(3.0))
-    
+
     // Send one more request to verify connection is still alive
     let finalRequest = CallToolRequest(
       id: "final-test",
-      name: "echo_tool", 
+      name: "echo_tool",
       arguments: ["message": "Final test"]
     )
     let finalResponse = try await transport.testOnly_sendAndWaitForResponse(request: finalRequest)
-    
+
     switch finalResponse {
     case .successfulRequest:
       // Success - connection stayed alive
@@ -814,10 +854,10 @@ import os
   }
 
   @Test func testPingContinuesAfterIdle() async throws {
-    // Start server with streamable HTTP transport and Keep-Alive timeout of 2 seconds  
+    // Start server with streamable HTTP transport and Keep-Alive timeout of 2 seconds
     let server = try HTTPTestServer(
-      streamableHTTP: true, 
-      scriptName: "echo-http-streamable", 
+      streamableHTTP: true,
+      scriptName: "echo-http-streamable",
       port: 9003,
       extraArgs: ["-t", "2"]
     )
@@ -897,10 +937,6 @@ import os
 
 }
 
-@JSONRPCNotification(method: "notifications/roots/list_changed")
-private struct RootsListChangedNotification {
-  struct Params: Codable, Sendable {}
-}
 
 private struct StreamableHTTPTransportTestFixtures {
   static let echoServerCapabilities: ServerCapabilities = {
