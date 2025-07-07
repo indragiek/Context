@@ -73,6 +73,11 @@ actor MCPClientManager {
 
     try await client.disconnect()
     clients[server.id] = nil
+    
+    // Clean up associated resources
+    tokenRefreshFailureCallbacks[server.id] = nil
+    activeRefreshTasks[server.id]?.cancel()
+    activeRefreshTasks[server.id] = nil
   }
 
   /// Disconnects all clients
@@ -81,6 +86,13 @@ actor MCPClientManager {
       try await client.disconnect()
     }
     clients.removeAll()
+    
+    // Clean up all associated resources
+    tokenRefreshFailureCallbacks.removeAll()
+    for (_, task) in activeRefreshTasks {
+      task.cancel()
+    }
+    activeRefreshTasks.removeAll()
   }
 
   /// Gets the current connection state for a server
@@ -407,9 +419,7 @@ actor MCPClientManager {
     // Create a new refresh task
     let refreshTask = Task<OAuthToken, any Error> {
       defer {
-        Task {
-          self.removeActiveRefreshTask(for: server.id)
-        }
+        removeActiveRefreshTask(for: server.id)
       }
 
       guard let refreshToken = storedToken.token.refreshToken,
@@ -454,6 +464,10 @@ actor MCPClientManager {
 
   deinit {
     refreshTask?.cancel()
+    // Cancel all active refresh tasks to prevent memory leaks
+    for (_, task) in activeRefreshTasks {
+      task.cancel()
+    }
   }
 }
 
