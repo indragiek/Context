@@ -56,12 +56,7 @@ final class OAuthCallbackHandler {
 
       switch item.name {
       case "code":
-        // Basic validation of authorization code
-        if value.count < 2048 {  // Reasonable limit for auth code
-          code = value
-        } else {
-          logger.error("Authorization code exceeds maximum length")
-        }
+        code = value
       case "state":
         // State should be base64url encoded
         state = value
