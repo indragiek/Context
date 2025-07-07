@@ -905,13 +905,12 @@ private struct RootsListChangedNotification {
 private struct StreamableHTTPTransportTestFixtures {
   static let echoServerCapabilities: ServerCapabilities = {
     var serverCapabilities = ServerCapabilities()
-    serverCapabilities.tools = .init(listChanged: false)
-    serverCapabilities.resources = .init(subscribe: false, listChanged: false)
-    serverCapabilities.resources = .init(subscribe: false, listChanged: false)
-    serverCapabilities.prompts = .init(listChanged: false)
+    serverCapabilities.tools = .init(listChanged: true)
+    serverCapabilities.resources = .init(subscribe: false, listChanged: true)
+    serverCapabilities.prompts = .init(listChanged: true)
     return serverCapabilities
   }()
 
-  static let echoServerInfo = Implementation(name: "Echo", version: "1.8.1")
-  static let echoServerProtocolVersion = "2024-11-05"
+  static let echoServerInfo = Implementation(name: "Echo", version: "1.10.1")
+  static let echoServerProtocolVersion = "2025-03-26"
 }

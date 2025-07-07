@@ -913,6 +913,7 @@ public actor StreamableHTTPTransport: Transport {
   
   /// Checks for Keep-Alive headers in an HTTP response and configures ping timer if found.
   private func checkForKeepAliveHeaders(in httpResponse: HTTPURLResponse) {
+    // Note: HTTPURLResponse.value(forHTTPHeaderField:) is case-insensitive for header names per RFC 7230
     if let connectionHeader = httpResponse.value(forHTTPHeaderField: "Connection"),
        connectionHeader.lowercased().contains("keep-alive"),
        let keepAliveHeader = httpResponse.value(forHTTPHeaderField: "Keep-Alive") {
