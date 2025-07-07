@@ -647,6 +647,44 @@ import Testing
     server.terminate()
   }
 
+  @Test func testHTTP400ErrorHandling() async throws {
+    let server = try HTTPTestServer(
+      streamableHTTP: true, scriptName: "error-400", port: 9001)
+    
+    // Create transport manually without the helper method that tries to initialize
+    let transport = StreamableHTTPTransport(
+      serverURL: server.serverURL,
+      urlSessionConfiguration: URLSessionConfiguration.ephemeral,
+      clientInfo: TestFixtures.clientInfo,
+      clientCapabilities: TestFixtures.clientCapabilities,
+      encoder: TestFixtures.jsonEncoder
+    )
+
+    try await transport.start()
+    
+    do {
+      _ = try await transport.initialize(idGenerator: TestFixtures.idGenerator)
+      Issue.record("Expected initialization to fail with HTTP 400 error")
+    } catch let error as StreamableHTTPTransportError {
+      switch error {
+      case .serverHTTPError(let response, _, let rpcError):
+        #expect(response.statusCode == 400)
+        #expect(rpcError != nil)
+        if let rpcError = rpcError {
+          #expect(rpcError.error.code == -32600)
+          #expect(rpcError.error.message == "The data couldn't be read because it isn't in the correct format.")
+        }
+      default:
+        Issue.record("Expected serverHTTPError but got: \(error)")
+      }
+    } catch {
+      Issue.record("Expected StreamableHTTPTransportError but got: \(error)")
+    }
+
+    try await transport.close()
+    server.terminate()
+  }
+
 }
 
 @JSONRPCNotification(method: "notifications/roots/list_changed")

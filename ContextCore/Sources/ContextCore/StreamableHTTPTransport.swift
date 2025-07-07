@@ -526,19 +526,45 @@ public actor StreamableHTTPTransport: Transport {
       // Fall through to standard error handling if we can't determine resource URL
       fallthrough
     case 400...599:
-      // Server may return a JSON-RPC error in the body
-      var rpcError: JSONRPCError?
-      do {
-        rpcError = try decoder.decode(JSONRPCError.self, from: data)
-      } catch let error {
-        logger.debug(
-          "Failed to decode JSONRPCError: \(error). Body: \(String(data: data, encoding: .utf8) ?? "<unknown>")"
-        )
-      }
+      let rpcError = await extractJSONRPCError(from: data)
       throw StreamableHTTPTransportError.serverHTTPError(response, data, rpcError)
     default:
       // Behavior is undefined
       throw StreamableHTTPTransportError.invalidResponse(response)
+    }
+  }
+
+  /// Extracts a JSON-RPC error from response data by trying multiple decoding strategies.
+  private func extractJSONRPCError(from data: Data) async -> JSONRPCError? {
+    guard !data.isEmpty else { return nil }
+
+    // First try to decode as a complete JSON-RPC message
+    do {
+      let responses = try decodeAllResponses(
+        data: data,
+        requestLookupCache: &pendingRequests,
+        logger: logger,
+        decoder: decoder
+      )
+
+      return responses.compactMap { response in
+        switch response {
+        case .failedRequest(_, let error), .serverError(let error):
+          return error
+        default:
+          return nil
+        }
+      }.first
+    } catch {
+      // Fall back to decoding as a standalone JSONRPCError
+      do {
+        return try decoder.decode(JSONRPCError.self, from: data)
+      } catch {
+        logger.debug(
+          "Failed to decode error response: \(error). Body: \(String(data: data, encoding: .utf8) ?? "<unknown>")"
+        )
+        return nil
+      }
     }
   }
 
