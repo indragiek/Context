@@ -51,17 +51,48 @@ final class OAuthCallbackHandler {
 
     // Parse query parameters
     for item in queryItems {
-      // Validate parameter names and values
-      guard let value = item.value, !value.isEmpty else { continue }
+      guard let value = item.value, !value.isEmpty else {
+        logger.warning("OAuth callback parameter '\(item.name)' has empty or missing value")
+        continue
+      }
 
       switch item.name {
       case "code":
-        code = value
+        // Authorization code validation per RFC 6749
+        if isValidAuthorizationCode(value) {
+          code = value
+        } else {
+          logger.error("Invalid authorization code format")
+          pendingCallback = OAuthCallback(
+            code: "",
+            state: state ?? "",
+            error: "invalid_request",
+            errorDescription: "Authorization code contains invalid characters"
+          )
+          return true
+        }
       case "state":
-        // State should be base64url encoded
-        state = value
+        // State parameter validation per RFC 6749
+        if isValidStateParameter(value) {
+          state = value
+        } else {
+          logger.error("Invalid state parameter format")
+          pendingCallback = OAuthCallback(
+            code: "",
+            state: "",
+            error: "invalid_request", 
+            errorDescription: "State parameter contains invalid characters"
+          )
+          return true
+        }
       case "error":
-        error = value
+        // Error code validation per RFC 6749
+        if isValidErrorCode(value) {
+          error = value
+        } else {
+          logger.warning("Non-standard OAuth error code: \(value)")
+          error = value  // Accept but log warning
+        }
       case "error_description":
         errorDescription = value
       default:
@@ -70,7 +101,7 @@ final class OAuthCallbackHandler {
       }
     }
 
-    // Must have either (code + state) or (error + state)
+    // Validate callback completion
     if let code = code, let state = state {
       pendingCallback = OAuthCallback(
         code: code,
@@ -90,8 +121,57 @@ final class OAuthCallbackHandler {
       logger.info("Parsed OAuth callback with error: \(error)")
       return true
     } else {
-      logger.error("OAuth callback missing required parameters")
-      return false
+      // Provide specific error information
+      let missingParams = [
+        code == nil ? "code" : nil,
+        state == nil ? "state" : nil,
+        error == nil && code == nil ? "error" : nil
+      ].compactMap { $0 }
+      
+      let errorMsg = "OAuth callback missing required parameters: \(missingParams.joined(separator: ", "))"
+      logger.error("\(errorMsg, privacy: .public)")
+      
+      pendingCallback = OAuthCallback(
+        code: "",
+        state: state ?? "",
+        error: "invalid_request",
+        errorDescription: errorMsg
+      )
+      return true
     }
+  }
+  
+  // MARK: - Parameter Validation
+  
+  /// Validates authorization code format per RFC 6749
+  private func isValidAuthorizationCode(_ code: String) -> Bool {
+    // RFC 6749: authorization codes are typically URL-safe strings
+    // Allow alphanumeric, hyphens, periods, underscores, tildes, and URL-encoded chars
+    let allowedCharacters = CharacterSet.alphanumerics
+      .union(CharacterSet(charactersIn: "-._~%"))
+    return code.rangeOfCharacter(from: allowedCharacters.inverted) == nil
+  }
+  
+  /// Validates state parameter format per RFC 6749
+  private func isValidStateParameter(_ state: String) -> Bool {
+    // RFC 6749: state should be an unguessable random string
+    // Allow alphanumeric, hyphens, periods, underscores, tildes, and URL-encoded chars
+    let allowedCharacters = CharacterSet.alphanumerics
+      .union(CharacterSet(charactersIn: "-._~%+/="))
+    return state.rangeOfCharacter(from: allowedCharacters.inverted) == nil
+  }
+  
+  /// Validates error code against RFC 6749 standard error codes
+  private func isValidErrorCode(_ error: String) -> Bool {
+    let standardErrorCodes = [
+      "invalid_request",
+      "unauthorized_client", 
+      "access_denied",
+      "unsupported_response_type",
+      "invalid_scope",
+      "server_error",
+      "temporarily_unavailable"
+    ]
+    return standardErrorCodes.contains(error)
   }
 }
