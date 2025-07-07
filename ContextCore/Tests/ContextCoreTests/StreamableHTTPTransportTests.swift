@@ -686,7 +686,7 @@ import os
     server.terminate()
   }
 
-    // Create transport manually without the helper method that tries to initialize
+
   @Test func testKeepAliveHeaderParsing() async throws {
     // Start server with streamable HTTP transport and Keep-Alive timeout of 5 seconds
     let server = try HTTPTestServer(
@@ -702,28 +702,6 @@ import os
       clientInfo: TestFixtures.clientInfo,
       clientCapabilities: TestFixtures.clientCapabilities,
       encoder: TestFixtures.jsonEncoder
-    )
-
-    try await transport.start()
-
-    do {
-      _ = try await transport.initialize(idGenerator: TestFixtures.idGenerator)
-      Issue.record("Expected initialization to fail with HTTP 400 error")
-    } catch let error as StreamableHTTPTransportError {
-      switch error {
-      case .serverHTTPError(let response, _, let rpcError):
-        #expect(response.statusCode == 400)
-        #expect(rpcError != nil)
-        if let rpcError = rpcError {
-          #expect(rpcError.error.code == -32600)
-          #expect(rpcError.error.message == "The data couldn't be read because it isn't in the correct format.")
-        }
-      default:
-        Issue.record("Expected serverHTTPError but got: \(error)")
-      }
-    } catch {
-      Issue.record("Expected StreamableHTTPTransportError but got: \(error)")
-      clientCapabilities: TestFixtures.clientCapabilities
     )
 
     try await transport.start()
@@ -959,10 +937,6 @@ import os
 
 }
 
-@JSONRPCNotification(method: "notifications/roots/list_changed")
-private struct RootsListChangedNotification {
-  struct Params: Codable, Sendable {}
-}
 
 private struct StreamableHTTPTransportTestFixtures {
   static let echoServerCapabilities: ServerCapabilities = {
