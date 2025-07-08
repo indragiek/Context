@@ -1,5 +1,13 @@
 ## Unreleased
 
+* Update OAuth callback URL scheme to app.contextmcp (#9)
+* Support MCP Pagination (#10))
+* Support MCP Roots (#11)
+* Handle pings sent by server to client (#12)
+* Handle "Connection: keep-alive" HTTP header (#17)
+* Fix numerous bugs in the OAuth authentication flow (#7, #24)
+* Handle requests where `params` is not specified (#25)
+
 ## Version 1.0.6 (106)
 
 * Implement support for Anthropic dxt (Desktop Extension) format (#4)
