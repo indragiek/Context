@@ -243,7 +243,8 @@ private enum NotificationRegistry {
 // Registry of request types that can be decoded (for server-initiated requests)
 private enum RequestRegistry {
   private static let types: [String: any JSONRPCRequest.Type] = [
-    "sampling/createMessage": CreateMessageRequest.self
+    "sampling/createMessage": CreateMessageRequest.self,
+    "ping": PingRequest.self
   ]
 
   static func requestType(for method: String) -> (any JSONRPCRequest.Type)? {

@@ -47,7 +47,7 @@ public enum JSONRPCRequestMacro: MemberMacro, ExtensionMacro {
     let properties: [DeclSyntax] = [
       "public let jsonrpc: String",
       "public let method: String",
-      "public let params: Params",
+      "public let params: Params?",
       "public let id: JSONRPCRequestID",
       """
       public let responseDecoder: ResponseDecoder = { decoder, data in
@@ -65,7 +65,7 @@ public enum JSONRPCRequestMacro: MemberMacro, ExtensionMacro {
         public init(id: JSONRPCRequestID) {
             self.jsonrpc = "2.0"
             self.method = \(raw: methodStringExpr.description)
-            self.params = \(raw: generatedParamsInit.initCode)
+            self.params = nil
             self.id = id
         }
         """
@@ -94,13 +94,54 @@ public enum JSONRPCRequestMacro: MemberMacro, ExtensionMacro {
       """
 
     let typeName = declaration.as(StructDeclSyntax.self)?.name.text ?? "Type"
-    let debugDescriptionSyntax = generateDebugDescription(
-      declaration: declaration,
-      typeName: typeName,
-      dataStructName: "Params",
-      dataFieldName: "params",
-      fields: ["method=\"\\(method)\"", "id=\\(String(reflecting: id))"],
-    )
+    
+    // Generate debug description that handles optional params
+    let paramsMembers = extractStructMembers(declaration: declaration, structName: "Params")
+    let debugDescriptionSyntax: DeclSyntax
+    
+    if paramsMembers.isEmpty {
+      // Empty params struct - params will always be nil when initialized without args
+      debugDescriptionSyntax = """
+        public var debugDescription: String {
+            \"\"\"
+            \(raw: typeName) {
+                method=\"\\(method)\",
+                id=\\(String(reflecting: id)),
+                params=nil
+            }
+            \"\"\"
+        }
+        """
+    } else {
+      // Non-empty params struct - show the fields
+      let fieldLinesCode = paramsMembers.map {
+        "\($0.name)=\\(String(reflecting: self.params!.\($0.name)))"
+      }.joined(separator: ",\n                ")
+      
+      debugDescriptionSyntax = """
+        public var debugDescription: String {
+            if let params = self.params {
+                return \"\"\"
+                \(raw: typeName) {
+                    method=\"\\(method)\",
+                    id=\\(String(reflecting: id)),
+                    params={
+                        \(raw: fieldLinesCode.replacingOccurrences(of: "self.params!", with: "params"))
+                    }
+                }
+                \"\"\"
+            } else {
+                return \"\"\"
+                \(raw: typeName) {
+                    method=\"\\(method)\",
+                    id=\\(String(reflecting: id)),
+                    params=nil
+                }
+                \"\"\"
+            }
+        }
+        """
+    }
 
     let descriptionSyntax = generateDescription(
       typeName: typeName,
@@ -154,18 +195,30 @@ public enum JSONRPCNotificationMacro: MemberMacro, ExtensionMacro {
     let properties: [DeclSyntax] = [
       "public let jsonrpc: String",
       "public let method: String",
-      "public let params: Params",
+      "public let params: Params?",
     ]
 
     let generatedParamsInit = generateParamsInitCode(
       declaration: declaration, paramStructName: "Params")
-    let initializerSyntax: DeclSyntax = """
-      public init(\(raw: generatedParamsInit.initDecl)) {
-          self.jsonrpc = "2.0"
-          self.method = \(raw: methodStringExpr.description)
-          self.params = \(raw: generatedParamsInit.initCode)
-      }
-      """
+    let initializerSyntax: DeclSyntax
+    
+    if generatedParamsInit.initDecl.isEmpty {
+      initializerSyntax = """
+        public init() {
+            self.jsonrpc = "2.0"
+            self.method = \(raw: methodStringExpr.description)
+            self.params = nil
+        }
+        """
+    } else {
+      initializerSyntax = """
+        public init(\(raw: generatedParamsInit.initDecl)) {
+            self.jsonrpc = "2.0"
+            self.method = \(raw: methodStringExpr.description)
+            self.params = \(raw: generatedParamsInit.initCode)
+        }
+        """
+    }
 
     let codingKeysSyntax: DeclSyntax = """
       enum CodingKeys: String, CodingKey {
@@ -176,13 +229,51 @@ public enum JSONRPCNotificationMacro: MemberMacro, ExtensionMacro {
       """
 
     let typeName = declaration.as(StructDeclSyntax.self)?.name.text ?? "Type"
-    let debugDescriptionSyntax = generateDebugDescription(
-      declaration: declaration,
-      typeName: typeName,
-      dataStructName: "Params",
-      dataFieldName: "params",
-      fields: ["method=\"\\(method)\""]
-    )
+    
+    // Generate debug description that handles optional params
+    let paramsMembers = extractStructMembers(declaration: declaration, structName: "Params")
+    let debugDescriptionSyntax: DeclSyntax
+    
+    if paramsMembers.isEmpty {
+      // Empty params struct - params will always be nil when initialized without args
+      debugDescriptionSyntax = """
+        public var debugDescription: String {
+            \"\"\"
+            \(raw: typeName) {
+                method=\"\\(method)\",
+                params=nil
+            }
+            \"\"\"
+        }
+        """
+    } else {
+      // Non-empty params struct - show the fields
+      let fieldLinesCode = paramsMembers.map {
+        "\($0.name)=\\(String(reflecting: self.params!.\($0.name)))"
+      }.joined(separator: ",\n                ")
+      
+      debugDescriptionSyntax = """
+        public var debugDescription: String {
+            if let params = self.params {
+                return \"\"\"
+                \(raw: typeName) {
+                    method=\"\\(method)\",
+                    params={
+                        \(raw: fieldLinesCode.replacingOccurrences(of: "self.params!", with: "params"))
+                    }
+                }
+                \"\"\"
+            } else {
+                return \"\"\"
+                \(raw: typeName) {
+                    method=\"\\(method)\",
+                    params=nil
+                }
+                \"\"\"
+            }
+        }
+        """
+    }
 
     let descriptionSyntax = generateDescription(
       typeName: typeName,
