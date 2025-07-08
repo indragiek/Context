@@ -540,7 +540,8 @@ private actor MockSamplingHandler: SamplingHandler {
   private(set) var wasCalledWithExpectedMessage = false
 
   func sample(_ request: CreateMessageRequest) async throws -> CreateMessageResponse.Result {
-    if let firstMessage = request.params.messages.first,
+    if let params = request.params,
+      let firstMessage = params.messages.first,
       case .text(let text, _) = firstMessage.content,
       text.contains("Please provide a creative response to this message: Hello World")
     {

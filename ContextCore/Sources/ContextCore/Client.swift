@@ -671,7 +671,9 @@ public actor Client {
     case let logMessage as LoggingMessageNotification:
       handleLogMessage(logMessage, group: &group)
     case let stderrLogMessage as StderrNotification:
-      handleStderrLog(stderrLogMessage.params.content, group: &group)
+      if let content = stderrLogMessage.params?.content {
+        handleStderrLog(content, group: &group)
+      }
     case is PromptListChangedNotification:
       logger.info("Prompt list changed")
       promptListChanged = true
@@ -697,12 +699,14 @@ public actor Client {
     _ logMessage: LoggingMessageNotification, group: inout ThrowingTaskGroup<Void, Error>
   ) {
     group.addTask {
-      await self.logs.send(
-        ServerLog(
-          level: logMessage.params.level,
-          logger: logMessage.params.logger,
-          data: logMessage.params.data
-        ))
+      if let params = logMessage.params {
+        await self.logs.send(
+          ServerLog(
+            level: params.level,
+            logger: params.logger,
+            data: params.data
+          ))
+      }
     }
   }
 
@@ -713,11 +717,14 @@ public actor Client {
   }
 
   private func handleCancelledNotification(_ cancelled: CancelledNotification) {
-    let id = cancelled.params.requestId
+    guard let id = cancelled.params?.requestId else {
+      logger.warning("Received cancelled notification without requestId")
+      return
+    }
     if let channel = requestChannels[id] {
       channel.fail(ClientError.requestCancelled(id: id))
       requestChannels.removeValue(forKey: id)
-      logger.info("Request \(id) cancelled with reason: \(cancelled.params.reason ?? "<none>")")
+      logger.info("Request \(id) cancelled with reason: \(cancelled.params?.reason ?? "<none>")")
     } else {
       let error = ClientError.noPendingRequest(id: id)
       logAndStreamError("No pending request", error: error)
@@ -727,7 +734,10 @@ public actor Client {
   private func handleResourceUpdatedNotification(
     _ resourceUpdated: ResourceUpdatedNotification, group: inout ThrowingTaskGroup<Void, Error>
   ) {
-    let uri = resourceUpdated.params.uri
+    guard let uri = resourceUpdated.params?.uri else {
+      logger.warning("Received resource updated notification without URI")
+      return
+    }
     if let channel = resourceSubscriptions[uri] {
       group.addTask {
         await channel.send(resourceUpdated)

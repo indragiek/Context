@@ -40,7 +40,7 @@ final class JSONRPCMacrosTests: XCTestCase {
 
               public let method: String
 
-              public let params: Params
+              public let params: Params?
 
               public let id: JSONRPCRequestID
 
@@ -65,15 +65,25 @@ final class JSONRPCMacrosTests: XCTestCase {
               public typealias Response = TestResponse
 
               public var debugDescription: String {
-                  \"\"\"
-                  TestRequest {
-                      method="\\(method)",
-                      id=\\(String(reflecting: id)),
-                      params={
-                          name=\\(String(reflecting: self.params.name))
+                  if let params = self.params {
+                      return \"\"\"
+                      TestRequest {
+                          method="\\(method)",
+                          id=\\(String(reflecting: id)),
+                          params={
+                              name=\\(String(reflecting: params.name))
+                          }
                       }
+                      \"\"\"
+                  } else {
+                      return \"\"\"
+                      TestRequest {
+                          method="\\(method)",
+                          id=\\(String(reflecting: id)),
+                          params=nil
+                      }
+                      \"\"\"
                   }
-                  \"\"\"
               }
 
               public var description: String {
@@ -118,7 +128,7 @@ final class JSONRPCMacrosTests: XCTestCase {
 
               public let method: String
 
-              public let params: Params
+              public let params: Params?
 
               public init(name: String) {
                   self.jsonrpc = "2.0"
@@ -133,14 +143,23 @@ final class JSONRPCMacrosTests: XCTestCase {
               }
 
               public var debugDescription: String {
-                  \"\"\"
-                  TestNotification {
-                      method=\"\\(method)\",
-                      params={
-                          name=\\(String(reflecting: self.params.name))
+                  if let params = self.params {
+                      return \"\"\"
+                      TestNotification {
+                          method=\"\\(method)\",
+                          params={
+                              name=\\(String(reflecting: params.name))
+                          }
                       }
+                      \"\"\"
+                  } else {
+                      return \"\"\"
+                      TestNotification {
+                          method=\"\\(method)\",
+                          params=nil
+                      }
+                      \"\"\"
                   }
-                  \"\"\"
               }
 
               public var description: String {

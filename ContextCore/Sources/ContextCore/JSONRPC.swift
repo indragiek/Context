@@ -148,7 +148,7 @@ public protocol JSONRPCRequest: Codable, Sendable {
 
   var jsonrpc: String { get }
   var method: String { get }
-  var params: Params { get }
+  var params: Params? { get }
   var id: JSONRPCRequestID { get }
   var responseDecoder: ResponseDecoder { get }
 }
@@ -158,7 +158,7 @@ public protocol JSONRPCNotification: Codable, Sendable {
 
   var jsonrpc: String { get }
   var method: String { get }
-  var params: Params { get }
+  var params: Params? { get }
 }
 
 public protocol JSONRPCResponse: Codable, Sendable {

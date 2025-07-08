@@ -216,9 +216,9 @@ extension Encodable {
 
     #expect(decoded.jsonrpc == "2.0")
     #expect(decoded.method == "initialize")
-    #expect(decoded.params.protocolVersion == "2025-03-26")
-    #expect(decoded.params.clientInfo.name == "Test Client")
-    #expect(decoded.params.clientInfo.version == "1.0.0")
+    #expect(decoded.params?.protocolVersion == "2025-03-26")
+    #expect(decoded.params?.clientInfo.name == "Test Client")
+    #expect(decoded.params?.clientInfo.version == "1.0.0")
 
     if case let .string(idValue) = decoded.id {
       #expect(idValue == "req-1")
@@ -258,7 +258,7 @@ extension Encodable {
       ListResourcesRequest.self, from: listRequestData)
 
     #expect(decodedListRequest.method == "resources/list")
-    #expect(decodedListRequest.params.cursor == nil)
+    #expect(decodedListRequest.params?.cursor == nil)
 
     // ReadResourceRequest
     let readRequest = ReadResourceRequest(id: .number(2), uri: "file:///example.txt")
@@ -267,7 +267,7 @@ extension Encodable {
       ReadResourceRequest.self, from: readRequestData)
 
     #expect(decodedReadRequest.method == "resources/read")
-    #expect(decodedReadRequest.params.uri == "file:///example.txt")
+    #expect(decodedReadRequest.params?.uri == "file:///example.txt")
 
     // ReadResourceResponse
     let contents: [EmbeddedResource] = [
@@ -301,7 +301,7 @@ extension Encodable {
     let decodedCancelled = try JSONDecoder().decode(CancelledNotification.self, from: cancelledData)
 
     #expect(decodedCancelled.method == "notifications/cancelled")
-    #expect(decodedCancelled.params.requestId == .number(123))
+    #expect(decodedCancelled.params?.requestId == .number(123))
 
     // ProgressNotification
     let progressNotification = ProgressNotification(
@@ -314,9 +314,9 @@ extension Encodable {
     let decodedProgress = try JSONDecoder().decode(ProgressNotification.self, from: progressData)
 
     #expect(decodedProgress.method == "notifications/progress")
-    #expect(decodedProgress.params.id == .string("req-456"))
-    #expect(decodedProgress.params.progress == 0.75)
-    #expect(decodedProgress.params.message == "Loading resources...")
+    #expect(decodedProgress.params?.id == .string("req-456"))
+    #expect(decodedProgress.params?.progress == 0.75)
+    #expect(decodedProgress.params?.message == "Loading resources...")
   }
 
   @Test func testLoggingEncodingDecoding() async throws {
@@ -326,7 +326,7 @@ extension Encodable {
     let decodedSetLevel = try JSONDecoder().decode(SetLevelRequest.self, from: setLevelData)
 
     #expect(decodedSetLevel.method == "logging/setLevel")
-    #expect(decodedSetLevel.params.level == .debug)
+    #expect(decodedSetLevel.params?.level == .debug)
 
     // LoggingMessageNotification
     let loggingNotification = LoggingMessageNotification(
@@ -340,10 +340,10 @@ extension Encodable {
       LoggingMessageNotification.self, from: loggingData)
 
     #expect(decodedLogging.method == "notifications/message")
-    #expect(decodedLogging.params.level == .info)
-    #expect(decodedLogging.params.logger == "AppLogger")
+    #expect(decodedLogging.params?.level == .info)
+    #expect(decodedLogging.params?.logger == "AppLogger")
 
-    if case let .string(message) = decodedLogging.params.data {
+    if case let .string(message) = decodedLogging.params?.data {
       #expect(message == "This is a log message")
     } else {
       Issue.record("Log data is not a string")
@@ -363,9 +363,9 @@ extension Encodable {
     let decodedCallRequest = try JSONDecoder().decode(CallToolRequest.self, from: callRequestData)
 
     #expect(decodedCallRequest.method == "tools/call")
-    #expect(decodedCallRequest.params.name == "search")
-    #expect(decodedCallRequest.params.arguments?["query"] == .string("How to make pasta"))
-    #expect(decodedCallRequest.params.arguments?["limit"] == .integer(5))
+    #expect(decodedCallRequest.params?.name == "search")
+    #expect(decodedCallRequest.params?.arguments?["query"] == .string("How to make pasta"))
+    #expect(decodedCallRequest.params?.arguments?["limit"] == .integer(5))
 
     // CallToolResponse
     let content: [Content] = [
@@ -467,15 +467,15 @@ extension Encodable {
       CreateMessageRequest.self, from: createRequestData)
 
     #expect(decodedCreateRequest.method == "sampling/createMessage")
-    #expect(decodedCreateRequest.params.messages.count == 1)
-    #expect(decodedCreateRequest.params.messages[0].role == .user)
-    #expect(decodedCreateRequest.params.temperature == 0.7)
-    #expect(decodedCreateRequest.params.maxTokens == 1000)
-    #expect(decodedCreateRequest.params.systemPrompt == "You are a helpful assistant.")
-    #expect(decodedCreateRequest.params.includeContext == .thisServer)
-    #expect(decodedCreateRequest.params.stopSequences?.count == 1)
-    #expect(decodedCreateRequest.params.stopSequences?[0] == "END")
-    #expect(decodedCreateRequest.params.modelPreferences?.costPriority == 0.3)
+    #expect(decodedCreateRequest.params?.messages.count == 1)
+    #expect(decodedCreateRequest.params?.messages[0].role == .user)
+    #expect(decodedCreateRequest.params?.temperature == 0.7)
+    #expect(decodedCreateRequest.params?.maxTokens == 1000)
+    #expect(decodedCreateRequest.params?.systemPrompt == "You are a helpful assistant.")
+    #expect(decodedCreateRequest.params?.includeContext == .thisServer)
+    #expect(decodedCreateRequest.params?.stopSequences?.count == 1)
+    #expect(decodedCreateRequest.params?.stopSequences?[0] == "END")
+    #expect(decodedCreateRequest.params?.modelPreferences?.costPriority == 0.3)
 
     // Test CreateMessageResponse
     let createResponse = CreateMessageResponse(

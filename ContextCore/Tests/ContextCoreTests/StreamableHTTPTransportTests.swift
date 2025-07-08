@@ -479,9 +479,10 @@ import os
             case .successfulRequest:
               break
             case .serverNotification(let notification):
-              if let log = notification as? LoggingMessageNotification {
-                #expect(log.params.level == LoggingLevel.info)
-                if case let .string(message) = log.params.data {
+              if let log = notification as? LoggingMessageNotification,
+                 let params = log.params {
+                #expect(params.level == LoggingLevel.info)
+                if case let .string(message) = params.data {
                   #expect(message.contains("Running the echo tool"))
                   receivedLog()
                   return true
