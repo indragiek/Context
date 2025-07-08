@@ -1,5 +1,7 @@
 ## Unreleased
 
+## Version 1.0.7 (107)
+
 * Update OAuth callback URL scheme to app.contextmcp (#9)
 * Support MCP Pagination (#10))
 * Support MCP Roots (#11)

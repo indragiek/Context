@@ -5,17 +5,36 @@
     <description>Most recent changes with links to updates.</description>
     <language>en</language>
     <item>
+      <title>Version 1.0.7 (107)</title>
+      <link>https://www.contextmcp.app/</link>
+      <sparkle:version>107</sparkle:version>
+      <sparkle:shortVersionString>1.0.7</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[<ul>
+<li>Update OAuth callback URL scheme to app.contextmcp (#9)</li>
+<li>Support MCP Pagination (#10))</li>
+<li>Support MCP Roots (#11)</li>
+<li>Handle pings sent by server to client (#12)</li>
+<li>Handle "Connection: keep-alive" HTTP header (#17)</li>
+<li>Fix numerous bugs in the OAuth authentication flow (#7, #24)</li>
+<li>Handle requests where <code>params</code> is not specified (#25)</li>
+</ul>
+]]></description>
+      <pubDate>Tue, 08 Jul 2025 18:12:08 +0000</pubDate>
+      <enclosure url="https://github.com/indragiek/Context/releases/download/v1.0.7/Context_v1.0.7.dmg" sparkle:edSignature="7/T2TEN6QHwfIOHxo+MUsMToJ8jCVFKnrJQys2oSNmaFGXm2+5+JLIYXTKv4cYLHtdBXUAgWUkrxDHEKzdY7Bg==" length="13138759" type="application/octet-stream"/>
+    </item>
+    <item>
       <title>Version 1.0.6 (106)</title>
       <link>https://www.contextmcp.app/</link>
       <sparkle:version>106</sparkle:version>
       <sparkle:shortVersionString>1.0.6</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
-      <description><![CDATA[<ul>
-<li>Implement support for Anthropic dxt (Desktop Extension) format (#4)</li>
-<li>Fix servers not appearing in sidebar after importing servers (#8)</li>
-<li>Fix broken OAuth token refresh and remove HTTPS requirement for OAuth (#7)</li>
-</ul>
-]]></description>
+      <description>&lt;ul&gt;
+&lt;li&gt;Implement support for Anthropic dxt (Desktop Extension) format (#4)&lt;/li&gt;
+&lt;li&gt;Fix servers not appearing in sidebar after importing servers (#8)&lt;/li&gt;
+&lt;li&gt;Fix broken OAuth token refresh and remove HTTPS requirement for OAuth (#7)&lt;/li&gt;
+&lt;/ul&gt;
+</description>
       <pubDate>Thu, 03 Jul 2025 18:25:52 +0000</pubDate>
       <enclosure url="https://github.com/indragiek/Context/releases/download/v1.0.6/Context_v1.0.6.dmg" sparkle:edSignature="0l0/3xVdlNO2qxL5XjZYSaOucFHZ3r0Zo4XbYNfM7FDSbS45b1PF7qjxsz/+sxLYKO0yr0e+EXCI1vfOaeK3Dw==" length="12967803" type="application/octet-stream"/>
     </item>
