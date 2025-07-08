@@ -447,8 +447,12 @@ public actor OAuthClient {
     let (data, response) = try await urlSession.data(for: resourceRequest)
 
     if let httpResponse = response as? HTTPURLResponse {
-      if httpResponse.statusCode == 404 {
-        logger.info("Resource metadata endpoint returned 404, using default authorization base URL")
+      if httpResponse.statusCode == 404 || httpResponse.statusCode == 401 {
+        if httpResponse.statusCode == 401 {
+          logger.warning("Resource metadata endpoint returned 401 - server is not spec-compliant. Treating as 404.")
+        } else {
+          logger.info("Resource metadata endpoint returned 404, using default authorization base URL")
+        }
         resourceMetadata = nil
 
         // Determine authorization base URL by removing path component from resource metadata URL

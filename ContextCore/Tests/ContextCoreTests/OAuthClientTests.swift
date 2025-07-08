@@ -340,6 +340,64 @@ class MockURLProtocol: URLProtocol {
     MockURLProtocol.requestHandler = nil
   }
 
+  @Test func testDiscoverMetadataWith401ResourceMetadata() async throws {
+    let mockSession = createMockSession()
+    let client = OAuthClient(urlSession: mockSession)
+
+    let resourceMetadataURL = URL(string: "https://api.example.com/v1/.well-known/mcp-resource")!
+
+    // Set up mock responses
+    MockURLProtocol.requestHandler = { request in
+      switch request.url?.absoluteString {
+      case "https://api.example.com/v1/.well-known/mcp-resource":
+        // Return 401 for resource metadata (non-compliant server behavior)
+        let response = HTTPURLResponse(
+          url: request.url!,
+          statusCode: 401,
+          httpVersion: nil,
+          headerFields: nil
+        )!
+        return (response, Data())
+
+      case "https://api.example.com/.well-known/oauth-authorization-server":
+        // Also return 401 for auth server metadata to test double fallback
+        let response = HTTPURLResponse(
+          url: request.url!,
+          statusCode: 401,
+          httpVersion: nil,
+          headerFields: nil
+        )!
+        return (response, Data())
+
+      default:
+        throw OAuthTestError.unexpectedURL(request.url?.absoluteString ?? "nil")
+      }
+    }
+
+    // Call discoverMetadata
+    let (resourceMetadata, authServerMetadata) = try await client.discoverMetadata(
+      resourceMetadataURL: resourceMetadataURL
+    )
+
+    // Verify resource metadata is nil
+    #expect(resourceMetadata == nil)
+
+    // Verify authorization server metadata uses default endpoints based on base URL
+    #expect(authServerMetadata.issuer == "https://api.example.com")
+    #expect(
+      authServerMetadata.authorizationEndpoint?.absoluteString
+        == "https://api.example.com/authorize")
+    #expect(authServerMetadata.tokenEndpoint?.absoluteString == "https://api.example.com/token")
+    #expect(
+      authServerMetadata.registrationEndpoint?.absoluteString == "https://api.example.com/register")
+    #expect(authServerMetadata.responseTypesSupported == ["code"])
+    #expect(authServerMetadata.grantTypesSupported == ["authorization_code", "refresh_token"])
+    #expect(authServerMetadata.codeChallengeMethodsSupported == ["S256"])
+
+    // Clean up
+    MockURLProtocol.requestHandler = nil
+  }
+
   @Test func testTokenExchangeWithErrorResponse() async throws {
     let mockSession = createMockSession()
     let client = OAuthClient(urlSession: mockSession)
