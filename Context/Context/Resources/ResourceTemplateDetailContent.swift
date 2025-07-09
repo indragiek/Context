@@ -23,7 +23,7 @@ struct ResourceTemplateDetailContent: View {
   @State private var showingFullDescription = false
   @State private var viewMode: ResourceViewMode = .preview
   @State private var rawResponseJSON: String? = nil
-  @State private var rawResponseError: String? = nil
+  @State private var requestError: (any Error)? = nil
 
   // Cached regex for template parameters
   private static let templateParameterRegex = /\{[^}]+\}/
@@ -267,8 +267,19 @@ struct ResourceTemplateDetailContent: View {
           }
         }
         .padding(.horizontal, 20)
-        .padding(.vertical, 8)
+        .frame(height: 50)
         .background(Color(NSColor.controlBackgroundColor))
+        .overlay(
+          // Show toggle ONLY when there's an error
+          Group {
+            if requestError != nil {
+              ToggleButton(
+                items: [("Preview", ResourceViewMode.preview), ("Raw", ResourceViewMode.raw)],
+                selection: $viewMode
+              )
+            }
+          }
+        )
 
         Divider()
 
@@ -297,8 +308,30 @@ struct ResourceTemplateDetailContent: View {
               .frame(minWidth: 200, idealWidth: 400)
               .frame(maxWidth: .infinity, maxHeight: .infinity)
           }
+        } else if requestError != nil {
+          // Error content based on view mode - handle this BEFORE checking loadingFailed
+          if viewMode == .raw {
+            // Show raw error data in raw mode
+            if let rawJSON = rawResponseJSON,
+               let jsonData = rawJSON.data(using: .utf8),
+               let jsonValue = try? JSONDecoder().decode(JSONValue.self, from: jsonData) {
+              JSONRawView(jsonValue: jsonValue, searchText: "", isSearchActive: false)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+              ContentUnavailableView(
+                "No Raw Data",
+                systemImage: "doc.text",
+                description: Text("No raw JSON data available")
+              )
+              .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+          } else {
+            if let error = requestError {
+              JSONRPCErrorView(error: error)
+            }
+          }
         } else if loadingFailed {
-          // Show error state
+          // Show generic loading failure (fallback)
           ContentUnavailableView(
             "Failed to Load Resources",
             systemImage: "exclamationmark.triangle",
@@ -316,26 +349,12 @@ struct ResourceTemplateDetailContent: View {
           .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
           // Show the actual content - EmbeddedResourceView now handles view mode switching
-          if rawResponseError != nil {
-            ContentUnavailableView {
-              Label("Error Loading Resource", systemImage: "exclamationmark.triangle")
-            } description: {
-              if let errorMessage = rawResponseError {
-                Text(errorMessage)
-                  .font(.callout)
-                  .foregroundColor(.secondary)
-                  .multilineTextAlignment(.center)
-              }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-          } else {
-            EmbeddedResourceView(
-              resources: embeddedResources,
-              viewMode: $viewMode,
-              rawJSON: rawResponseJSON
-            )
-            .id(template.uriTemplate)  // Force view to recreate when template changes
-          }
+          EmbeddedResourceView(
+            resources: embeddedResources,
+            viewMode: $viewMode,
+            rawJSON: rawResponseJSON
+          )
+          .id(template.uriTemplate)  // Force view to recreate when template changes
         }
       }
       .frame(minHeight: 300)
@@ -397,7 +416,7 @@ struct ResourceTemplateDetailContent: View {
         lastFetchedURI = state.lastFetchedURI
         // viewMode is now global, don't restore from cache
         rawResponseJSON = state.rawResponseJSON
-        rawResponseError = state.rawResponseError
+        requestError = nil  // Don't restore error objects from cache
         
       }
     }
@@ -411,7 +430,7 @@ struct ResourceTemplateDetailContent: View {
       lastFetchedURI: lastFetchedURI,
       viewMode: .preview,  // Don't persist viewMode
       rawResponseJSON: rawResponseJSON,
-      rawResponseError: rawResponseError
+      rawResponseError: requestError?.localizedDescription
     )
     await resourceCache.set(state, for: templateURI)
   }
@@ -469,7 +488,7 @@ struct ResourceTemplateDetailContent: View {
           loadingFailed = false
           lastFetchedURI = uri
           rawResponseJSON = jsonString
-          rawResponseError = nil
+          requestError = nil
 
           // Save the fetched resources to cache
           Task {
@@ -505,7 +524,7 @@ struct ResourceTemplateDetailContent: View {
           isLoadingResources = false
           loadingFailed = true
           lastFetchedURI = uri
-          rawResponseError = error.localizedDescription
+          requestError = error
           rawResponseJSON = jsonString
 
           // Still save to cache to avoid repeated failed attempts

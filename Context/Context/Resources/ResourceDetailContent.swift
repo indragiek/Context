@@ -18,7 +18,7 @@ struct ResourceDetailContent: View {
   @State private var showingFullDescription = false
   @State private var viewMode: ResourceViewMode = .preview
   @State private var rawResponseJSON: String? = nil
-  @State private var rawResponseError: String? = nil
+  @State private var requestError: (any Error)? = nil
 
   var body: some View {
     VStack(spacing: 0) {
@@ -116,7 +116,7 @@ struct ResourceDetailContent: View {
         }
       }
       .padding(.horizontal, 20)
-      .padding(.vertical, 8)
+      .frame(height: 50)
       .background(Color(NSColor.controlBackgroundColor))
 
       Divider()
@@ -150,18 +150,56 @@ struct ResourceDetailContent: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
       } else {
         // Show the actual content - EmbeddedResourceView now handles view mode switching
-        if rawResponseError != nil {
-          ContentUnavailableView {
-            Label("Error Loading Resource", systemImage: "exclamationmark.triangle")
-          } description: {
-            if let errorMessage = rawResponseError {
-              Text(errorMessage)
-                .font(.callout)
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
+        if requestError != nil {
+          // Error state - show with toggle like PromptMessagesView
+          VStack(spacing: 0) {
+            // Error toolbar with toggle
+            HStack {
+              Text("Embedded Resources")
+                .font(.headline)
+              
+              Spacer()
+              
+              ToggleButton(
+                items: [("Preview", ResourceViewMode.preview), ("Raw", ResourceViewMode.raw)],
+                selection: $viewMode
+              )
+              
+              Spacer()
+              
+              if isLoadingResources {
+                ProgressView()
+                  .controlSize(.small)
+              }
+            }
+            .padding(.horizontal, 20)
+            .frame(height: 50)
+            .background(Color(NSColor.controlBackgroundColor))
+            
+            Divider()
+            
+            // Error content based on view mode
+            if viewMode == .raw {
+              // Show raw error data in raw mode
+              if let rawJSON = rawResponseJSON,
+                 let jsonData = rawJSON.data(using: .utf8),
+                 let jsonValue = try? JSONDecoder().decode(JSONValue.self, from: jsonData) {
+                JSONRawView(jsonValue: jsonValue, searchText: "", isSearchActive: false)
+                  .frame(maxWidth: .infinity, maxHeight: .infinity)
+              } else {
+                ContentUnavailableView(
+                  "No Raw Data",
+                  systemImage: "doc.text",
+                  description: Text("No raw JSON data available")
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+              }
+            } else {
+              if let error = requestError {
+                JSONRPCErrorView(error: error)
+              }
             }
           }
-          .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
           EmbeddedResourceView(
             resources: embeddedResources,
@@ -193,7 +231,7 @@ struct ResourceDetailContent: View {
           hasLoadedOnce = true
           // viewMode is now global, don't restore from cache
           rawResponseJSON = cachedState.rawResponseJSON
-          rawResponseError = cachedState.rawResponseError
+          requestError = nil  // Don't restore error objects from cache
           
         }
         return
@@ -226,7 +264,7 @@ struct ResourceDetailContent: View {
           isLoadingResources = false
           loadingFailed = false
           rawResponseJSON = jsonString
-          rawResponseError = nil
+          requestError = nil
         }
         
         // Save successful state to cache
@@ -268,7 +306,7 @@ struct ResourceDetailContent: View {
           embeddedResources = []
           isLoadingResources = false
           loadingFailed = true
-          rawResponseError = error.localizedDescription
+          requestError = error
           rawResponseJSON = jsonString
         }
         
