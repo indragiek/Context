@@ -110,18 +110,13 @@ struct ResourceDetailContent: View {
 
         Spacer()
 
-        ToggleButton(
-          items: [("Preview", ResourceViewMode.preview), ("Raw", ResourceViewMode.raw)],
-          selection: $viewMode
-        )
-
         if isLoadingResources {
           ProgressView()
             .controlSize(.small)
         }
       }
       .padding(.horizontal, 20)
-      .padding(.vertical, 12)
+      .padding(.vertical, 8)
       .background(Color(NSColor.controlBackgroundColor))
 
       Divider()
@@ -154,28 +149,26 @@ struct ResourceDetailContent: View {
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
       } else {
-        // Show the actual content based on view mode
-        if viewMode == .preview {
-          if rawResponseError != nil {
-            ContentUnavailableView {
-              Label("Error Loading Resource", systemImage: "exclamationmark.triangle")
-            } description: {
-              if let errorMessage = rawResponseError {
-                Text(errorMessage)
-                  .font(.callout)
-                  .foregroundColor(.secondary)
-                  .multilineTextAlignment(.center)
-              }
+        // Show the actual content - EmbeddedResourceView now handles view mode switching
+        if rawResponseError != nil {
+          ContentUnavailableView {
+            Label("Error Loading Resource", systemImage: "exclamationmark.triangle")
+          } description: {
+            if let errorMessage = rawResponseError {
+              Text(errorMessage)
+                .font(.callout)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-          } else {
-            EmbeddedResourceView(resources: embeddedResources)
-              .id(resource.uri)  // Force view to recreate when resource changes
           }
+          .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
-          // Raw view
-          RawResourceView(rawJSON: rawResponseJSON ?? "null", error: rawResponseError)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+          EmbeddedResourceView(
+            resources: embeddedResources,
+            viewMode: $viewMode,
+            rawJSON: rawResponseJSON
+          )
+          .id(resource.uri)  // Force view to recreate when resource changes
         }
       }
     }
@@ -210,6 +203,7 @@ struct ResourceDetailContent: View {
           viewMode = cachedState.viewMode
           rawResponseJSON = cachedState.rawResponseJSON
           rawResponseError = cachedState.rawResponseError
+          
         }
         return
       }
@@ -301,6 +295,7 @@ struct ResourceDetailContent: View {
       }
     }
   }
+
 
   @ViewBuilder
   private var fullDescriptionSheet: some View {

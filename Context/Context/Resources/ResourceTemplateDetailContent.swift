@@ -240,34 +240,34 @@ struct ResourceTemplateDetailContent: View {
 
           Spacer()
 
-          ToggleButton(
-            items: [("Preview", ResourceViewMode.preview), ("Raw", ResourceViewMode.raw)],
-            selection: $viewMode
-          )
-
-          if isLoadingResources {
-            ProgressView()
-              .controlSize(.small)
-          }
-
-          // Only show button if there are template variables
-          let variables = extractTemplateVariables(from: template.uriTemplate)
-          if !variables.isEmpty {
-            Button(action: {
-              fetchEmbeddedResources()
-            }) {
-              Image(systemName: "square.and.arrow.down")
-                .font(.system(size: 14))
-                .foregroundColor(.accentColor)
+          HStack(spacing: 8) {
+            ZStack {
+              ProgressView()
+                .controlSize(.small)
+                .opacity(isLoadingResources ? 1 : 0)
             }
-            .buttonStyle(.plain)
-            .disabled(isLoadingResources || !allVariablesFilled)
-            .help(
-              allVariablesFilled ? "Fetch embedded resources" : "Fill in all variables to continue")
+            .frame(width: 20)
+
+
+            // Only show button if there are template variables
+            let variables = extractTemplateVariables(from: template.uriTemplate)
+            if !variables.isEmpty {
+              Button(action: {
+                fetchEmbeddedResources()
+              }) {
+                Image(systemName: "square.and.arrow.down")
+                  .font(.system(size: 14))
+                  .foregroundColor(.accentColor)
+              }
+              .buttonStyle(.plain)
+              .disabled(isLoadingResources || !allVariablesFilled)
+              .help(
+                allVariablesFilled ? "Fetch embedded resources" : "Fill in all variables to continue")
+            }
           }
         }
         .padding(.horizontal, 20)
-        .padding(.vertical, 12)
+        .padding(.vertical, 8)
         .background(Color(NSColor.controlBackgroundColor))
 
         Divider()
@@ -315,28 +315,26 @@ struct ResourceTemplateDetailContent: View {
           )
           .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
-          // Show the actual content based on view mode
-          if viewMode == .preview {
-            if rawResponseError != nil {
-              ContentUnavailableView {
-                Label("Error Loading Resource", systemImage: "exclamationmark.triangle")
-              } description: {
-                if let errorMessage = rawResponseError {
-                  Text(errorMessage)
-                    .font(.callout)
-                    .foregroundColor(.secondary)
-                    .multilineTextAlignment(.center)
-                }
+          // Show the actual content - EmbeddedResourceView now handles view mode switching
+          if rawResponseError != nil {
+            ContentUnavailableView {
+              Label("Error Loading Resource", systemImage: "exclamationmark.triangle")
+            } description: {
+              if let errorMessage = rawResponseError {
+                Text(errorMessage)
+                  .font(.callout)
+                  .foregroundColor(.secondary)
+                  .multilineTextAlignment(.center)
               }
-              .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-              EmbeddedResourceView(resources: embeddedResources)
-                .id(template.uriTemplate)  // Force view to recreate when template changes
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
           } else {
-            // Raw view
-            RawResourceView(rawJSON: rawResponseJSON ?? "null", error: rawResponseError)
-              .frame(maxWidth: .infinity, maxHeight: .infinity)
+            EmbeddedResourceView(
+              resources: embeddedResources,
+              viewMode: $viewMode,
+              rawJSON: rawResponseJSON
+            )
+            .id(template.uriTemplate)  // Force view to recreate when template changes
           }
         }
       }
@@ -409,6 +407,7 @@ struct ResourceTemplateDetailContent: View {
         viewMode = state.viewMode
         rawResponseJSON = state.rawResponseJSON
         rawResponseError = state.rawResponseError
+        
       }
     }
   }
@@ -472,7 +471,7 @@ struct ResourceTemplateDetailContent: View {
         // Encode the raw response
         let jsonData = try encoder.encode(responseToEncode)
         let jsonString = String(data: jsonData, encoding: .utf8) ?? "null"
-
+        
         await MainActor.run {
           embeddedResources = contents
           isLoadingResources = false
@@ -534,6 +533,7 @@ struct ResourceTemplateDetailContent: View {
     }
     return uri
   }
+
 
   private func extractTemplateVariables(from template: String) -> [String] {
     let pattern = #"\{([^}]+)\}"#

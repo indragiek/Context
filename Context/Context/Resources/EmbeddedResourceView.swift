@@ -7,6 +7,8 @@ import UniformTypeIdentifiers
 
 struct EmbeddedResourceView: View {
   let resources: [EmbeddedResource]
+  @Binding var viewMode: ResourceViewMode
+  let rawJSON: String?
   @State private var selectedResource: EmbeddedResource?
   @State private var showCopiedIndicator = false
   @State private var copiedIndicatorTask: Task<Void, Never>?
@@ -59,31 +61,13 @@ struct EmbeddedResourceView: View {
 
             Spacer()
 
-            // Copy button for text and image content
-            Group {
-              switch resource {
-              case .text(let textContent):
-                Button(action: {
-                  copyTextToClipboard(textContent.text)
-                }) {
-                  HStack(spacing: 4) {
-                    Image(systemName: "doc.on.doc")
-                      .font(.system(size: 14))
-                    if showCopiedIndicator {
-                      Text("Copied!")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .transition(.opacity.combined(with: .scale))
-                    }
-                  }
-                }
-                .buttonStyle(.plain)
-                .help("Copy to clipboard")
-
-              case .blob(let blobContent):
-                if let mimeType = blobContent.mimeType, mimeType.starts(with: "image/") {
+            if viewMode == .preview {
+              // Copy button for text and image content (only in preview mode)
+              Group {
+                switch resource {
+                case .text(let textContent):
                   Button(action: {
-                    copyImageToClipboard(blobContent.blob)
+                    copyTextToClipboard(textContent.text)
                   }) {
                     HStack(spacing: 4) {
                       Image(systemName: "doc.on.doc")
@@ -98,73 +82,135 @@ struct EmbeddedResourceView: View {
                   }
                   .buttonStyle(.plain)
                   .help("Copy to clipboard")
+
+                case .blob(let blobContent):
+                  if let mimeType = blobContent.mimeType, mimeType.starts(with: "image/") {
+                    Button(action: {
+                      copyImageToClipboard(blobContent.blob)
+                    }) {
+                      HStack(spacing: 4) {
+                        Image(systemName: "doc.on.doc")
+                          .font(.system(size: 14))
+                        if showCopiedIndicator {
+                          Text("Copied!")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .transition(.opacity.combined(with: .scale))
+                        }
+                      }
+                    }
+                    .buttonStyle(.plain)
+                    .help("Copy to clipboard")
+                  }
                 }
               }
-            }
 
-            // Save button
-            Button(action: {
-              saveResource(resource)
-            }) {
-              Image(systemName: "square.and.arrow.down")
-                .font(.system(size: 14))
-            }
-            .buttonStyle(.plain)
-            .help("Save to disk")
+              // Save button
+              Button(action: {
+                saveResource(resource)
+              }) {
+                Image(systemName: "square.and.arrow.down")
+                  .font(.system(size: 14))
+              }
+              .buttonStyle(.plain)
+              .help("Save to disk")
 
-            // Share button for all content types
-            Group {
-              switch resource {
-              case .text(let textContent):
-                ShareLink(item: textContent.text) {
-                  Image(systemName: "square.and.arrow.up")
-                    .font(.system(size: 14))
-                }
-                .buttonStyle(.plain)
-                .help("Share")
-
-              case .blob:
-                if let shareURL = shareURL {
-                  ShareLink(item: shareURL) {
+              // Share button for all content types
+              Group {
+                switch resource {
+                case .text(let textContent):
+                  ShareLink(item: textContent.text) {
                     Image(systemName: "square.and.arrow.up")
                       .font(.system(size: 14))
                   }
                   .buttonStyle(.plain)
                   .help("Share")
-                } else {
-                  Button(action: {}) {
-                    Image(systemName: "square.and.arrow.up")
-                      .font(.system(size: 14))
+
+                case .blob:
+                  if let shareURL = shareURL {
+                    ShareLink(item: shareURL) {
+                      Image(systemName: "square.and.arrow.up")
+                        .font(.system(size: 14))
+                    }
+                    .buttonStyle(.plain)
+                    .help("Share")
+                  } else {
+                    Button(action: {}) {
+                      Image(systemName: "square.and.arrow.up")
+                        .font(.system(size: 14))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(true)
+                    .help("Preparing for share...")
                   }
-                  .buttonStyle(.plain)
-                  .disabled(true)
-                  .help("Preparing for share...")
                 }
               }
-            }
 
-            // Expand button (QuickLook)
-            if shareURL != nil {
+              // Expand button (QuickLook)
+              if shareURL != nil {
+                Button(action: {
+                  quickLookURL = shareURL
+                }) {
+                  Image(systemName: "arrow.up.left.and.arrow.down.right")
+                    .font(.system(size: 14))
+                }
+                .buttonStyle(.plain)
+                .help("Expand preview")
+                .quickLookPreview($quickLookURL)
+              }
+            } else {
+              // Raw mode - show copy button for raw JSON
               Button(action: {
-                quickLookURL = shareURL
+                copyRawJSONToClipboard()
               }) {
-                Image(systemName: "arrow.up.left.and.arrow.down.right")
-                  .font(.system(size: 14))
+                HStack(spacing: 4) {
+                  Image(systemName: "doc.on.doc")
+                    .font(.system(size: 14))
+                  if showCopiedIndicator {
+                    Text("Copied!")
+                      .font(.caption)
+                      .foregroundColor(.secondary)
+                      .transition(.opacity.combined(with: .scale))
+                  }
+                }
               }
               .buttonStyle(.plain)
-              .help("Expand preview")
-              .quickLookPreview($quickLookURL)
+              .help("Copy raw JSON to clipboard")
             }
           }
           .padding(.horizontal, 16)
           .padding(.vertical, 8)
           .background(Color(NSColor.controlBackgroundColor))
+          .overlay(
+            // Centered toggle buttons
+            ToggleButton(
+              items: [("Preview", ResourceViewMode.preview), ("Raw", ResourceViewMode.raw)],
+              selection: $viewMode
+            )
+          )
 
           Divider()
 
-          // Preview content
-          PreviewView(resource: resource)
-            .transition(.opacity)
+          // Content based on view mode
+          if viewMode == .preview {
+            PreviewView(resource: resource)
+              .transition(.opacity)
+          } else {
+            // Raw view
+            if let rawJSON = rawJSON,
+               let jsonData = rawJSON.data(using: .utf8),
+               let jsonValue = try? JSONDecoder().decode(JSONValue.self, from: jsonData) {
+              JSONRawView(jsonValue: jsonValue, searchText: "", isSearchActive: false)
+                .transition(.opacity)
+            } else {
+              ContentUnavailableView(
+                "No Raw Data",
+                systemImage: "doc.text",
+                description: Text("No raw JSON data available")
+              )
+              .transition(.opacity)
+            }
+          }
         } else {
           ContentUnavailableView(
             "Select a Resource",
@@ -436,6 +482,32 @@ struct EmbeddedResourceView: View {
           }
         } catch {
           print("Failed to save resource: \(error)")
+        }
+      }
+    }
+  }
+
+  private func copyRawJSONToClipboard() {
+    let jsonString = rawJSON ?? "null"
+    NSPasteboard.general.clearContents()
+    NSPasteboard.general.setString(jsonString, forType: .string)
+    
+    // Show copied indicator
+    withAnimation(.easeInOut(duration: 0.2)) {
+      showCopiedIndicator = true
+    }
+    
+    // Cancel any existing task
+    copiedIndicatorTask?.cancel()
+    
+    // Hide after delay
+    copiedIndicatorTask = Task {
+      try? await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds
+      if !Task.isCancelled {
+        await MainActor.run {
+          withAnimation(.easeInOut(duration: 0.2)) {
+            showCopiedIndicator = false
+          }
         }
       }
     }
