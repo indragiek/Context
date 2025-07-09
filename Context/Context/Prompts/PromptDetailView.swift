@@ -40,6 +40,7 @@ struct PromptDetailView: View {
   @State private var rawResponse: GetPromptResponse.Result?
   @State private var rawResponseJSON: JSONValue?
   @State private var rawResponseError: String?
+  @State private var fetchError: (any Error)?
 
   init(
     prompt: Prompt, server: MCPServer, promptState: PromptState,
@@ -220,12 +221,16 @@ struct PromptDetailView: View {
             .controlSize(.regular)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if loadingFailed {
-          ContentUnavailableView(
-            "Failed to Load Messages",
-            systemImage: "exclamationmark.triangle",
-            description: Text("Unable to fetch prompt messages")
-          )
-          .frame(maxWidth: .infinity, maxHeight: .infinity)
+          if let error = fetchError {
+            errorView(for: error)
+          } else {
+            ContentUnavailableView(
+              "Failed to Load Messages",
+              systemImage: "exclamationmark.triangle",
+              description: Text("Unable to fetch prompt messages")
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+          }
         } else if messages.isEmpty {
           ContentUnavailableView(
             "No Messages Available",
@@ -240,29 +245,7 @@ struct PromptDetailView: View {
             case .preview:
               PromptMessagesList(messages: messages, argumentValues: argumentValues)
             case .raw:
-              if let jsonValue = rawResponseJSON {
-                JSONRawView(jsonValue: jsonValue, searchText: "", isSearchActive: false)
-              } else if let error = rawResponseError {
-                VStack(spacing: 16) {
-                  Image(systemName: "exclamationmark.triangle")
-                    .font(.largeTitle)
-                    .foregroundColor(.red)
-
-                  Text("JSON Error")
-                    .font(.headline)
-
-                  Text(error)
-                    .font(.callout)
-                    .foregroundColor(.secondary)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-              } else {
-                Text("No raw data available")
-                  .foregroundColor(.secondary)
-                  .frame(maxWidth: .infinity, maxHeight: .infinity)
-              }
+              rawView()
             }
           }
           .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -370,6 +353,7 @@ struct PromptDetailView: View {
           isLoadingMessages = false
           loadingFailed = false
           hasLoadedOnce = true
+          fetchError = nil
 
           updatePromptState()
         }
@@ -381,6 +365,7 @@ struct PromptDetailView: View {
           rawResponse = nil
           rawResponseJSON = nil
           rawResponseError = error.localizedDescription
+          fetchError = error
           isLoadingMessages = false
           loadingFailed = true
           hasLoadedOnce = true
@@ -487,6 +472,194 @@ struct PromptDetailView: View {
     default:
       return content
     }
+  }
+  
+  @ViewBuilder
+  private func errorView(for error: any Error) -> some View {
+    if let clientError = error as? ClientError {
+      switch clientError {
+      case .requestFailed(_, let jsonRPCError):
+        ContentUnavailableView {
+          Label("Request Failed", systemImage: "exclamationmark.triangle")
+        } description: {
+          VStack(alignment: .leading, spacing: 8) {
+            Text("Error \(jsonRPCError.error.code): \(jsonRPCError.error.message)")
+              .font(.callout)
+              .foregroundColor(.secondary)
+            
+            if let data = jsonRPCError.error.data {
+              Text("Details:")
+                .font(.caption)
+                .fontWeight(.medium)
+                .foregroundColor(.secondary)
+                .padding(.top, 4)
+              
+              Text(formatJSONValuePreview(data))
+                .font(.system(.caption, design: .monospaced))
+                .foregroundColor(.secondary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .textSelection(.enabled)
+            }
+          }
+          .multilineTextAlignment(.leading)
+          .frame(maxWidth: 400)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        
+      case .requestInvalidResponse(_, let underlyingError, let data):
+        ContentUnavailableView {
+          Label("Invalid Response", systemImage: "exclamationmark.triangle")
+        } description: {
+          VStack(alignment: .leading, spacing: 8) {
+            Text(underlyingError.localizedDescription)
+              .font(.callout)
+              .foregroundColor(.secondary)
+            
+            if let stringData = String(data: data, encoding: .utf8) {
+              Text("Response data:")
+                .font(.caption)
+                .fontWeight(.medium)
+                .foregroundColor(.secondary)
+                .padding(.top, 4)
+              
+              Text(stringData)
+                .font(.system(.caption, design: .monospaced))
+                .foregroundColor(.secondary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .textSelection(.enabled)
+            }
+          }
+          .multilineTextAlignment(.leading)
+          .frame(maxWidth: 400)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        
+      default:
+        ContentUnavailableView(
+          "Error",
+          systemImage: "exclamationmark.triangle",
+          description: Text(error.localizedDescription)
+        )
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+      }
+    } else {
+      ContentUnavailableView(
+        "Error",
+        systemImage: "exclamationmark.triangle",
+        description: Text(error.localizedDescription)
+      )
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+  }
+  
+  @ViewBuilder
+  private func rawView() -> some View {
+    if let error = fetchError as? ClientError {
+      switch error {
+      case .requestFailed(_, let jsonRPCError):
+        // For requestFailed, show the JSONRPCError in JSONRawView
+        if let jsonData = try? JSONEncoder().encode(jsonRPCError),
+           let jsonValue = try? JSONDecoder().decode(JSONValue.self, from: jsonData) {
+          JSONRawView(jsonValue: jsonValue, searchText: "", isSearchActive: false)
+        } else {
+          errorPlaceholder()
+        }
+        
+      case .requestInvalidResponse(_, _, let data):
+        // For invalid response, check if the data is valid JSON
+        if let stringData = String(data: data, encoding: .utf8) {
+          if isLikelyJSON(stringData) {
+            // Try to parse as JSON
+            if let jsonData = stringData.data(using: .utf8),
+               let jsonValue = try? JSONDecoder().decode(JSONValue.self, from: jsonData) {
+              JSONRawView(jsonValue: jsonValue, searchText: "", isSearchActive: false)
+            } else {
+              // Show as plain text if JSON parsing fails
+              ScrollView {
+                Text(stringData)
+                  .font(.system(.body, design: .monospaced))
+                  .textSelection(.enabled)
+                  .padding()
+                  .frame(maxWidth: .infinity, alignment: .leading)
+              }
+            }
+          } else {
+            // Show as plain text if not JSON-like
+            ScrollView {
+              Text(stringData)
+                .font(.system(.body, design: .monospaced))
+                .textSelection(.enabled)
+                .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+          }
+        } else {
+          errorPlaceholder()
+        }
+        
+      default:
+        errorPlaceholder()
+      }
+    } else if let jsonValue = rawResponseJSON {
+      JSONRawView(jsonValue: jsonValue, searchText: "", isSearchActive: false)
+    } else if let error = rawResponseError {
+      VStack(spacing: 16) {
+        Image(systemName: "exclamationmark.triangle")
+          .font(.largeTitle)
+          .foregroundColor(.red)
+
+        Text("JSON Error")
+          .font(.headline)
+
+        Text(error)
+          .font(.callout)
+          .foregroundColor(.secondary)
+          .multilineTextAlignment(.center)
+          .padding(.horizontal)
+      }
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
+    } else {
+      Text("No raw data available")
+        .foregroundColor(.secondary)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+  }
+  
+  @ViewBuilder
+  private func errorPlaceholder() -> some View {
+    ContentUnavailableView(
+      "No Error Object",
+      systemImage: "xmark.circle",
+      description: Text("An error object was not returned by the server")
+    )
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
+  }
+  
+  private func formatJSONValuePreview(_ value: JSONValue) -> String {
+    switch value {
+    case .string(let str):
+      return str
+    case .number(let num):
+      return String(num)
+    case .integer(let int):
+      return String(int)
+    case .boolean(let bool):
+      return String(bool)
+    case .null:
+      return "null"
+    case .array(let arr):
+      return "[\(arr.count) items]"
+    case .object(let obj):
+      return "{\(obj.count) properties}"
+    }
+  }
+  
+  private func isLikelyJSON(_ string: String) -> Bool {
+    let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
+    return (trimmed.hasPrefix("{") && trimmed.hasSuffix("}")) ||
+           (trimmed.hasPrefix("[") && trimmed.hasSuffix("]"))
   }
 }
 
