@@ -1,12 +1,9 @@
 // Copyright © 2025 Indragie Karunaratne. All rights reserved.
 
-import Combine
 import ComposableArchitecture
 import ContextCore
 import Dependencies
-import GRDB
 import MarkdownUI
-import SharingGRDB
 import SwiftUI
 
 struct ResourceTemplateDetailContent: View {
@@ -14,7 +11,6 @@ struct ResourceTemplateDetailContent: View {
   let server: MCPServer
   @Dependency(\.resourceCache) private var resourceCache
   @Dependency(\.mcpClientManager) private var mcpClientManager
-  @Dependency(\.defaultDatabase) private var database
   @State private var isLoadingResources = false
   @State private var loadingFailed = false
   @FocusState private var focusedVariable: String?
@@ -244,6 +240,11 @@ struct ResourceTemplateDetailContent: View {
 
           Spacer()
 
+          ToggleButton(
+            items: [("Preview", ResourceViewMode.preview), ("Raw", ResourceViewMode.raw)],
+            selection: $viewMode
+          )
+
           if isLoadingResources {
             ProgressView()
               .controlSize(.small)
@@ -314,9 +315,29 @@ struct ResourceTemplateDetailContent: View {
           )
           .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
-          // Show the actual content
-          EmbeddedResourceView(resources: embeddedResources)
-            .id(template.uriTemplate)  // Force view to recreate when template changes
+          // Show the actual content based on view mode
+          if viewMode == .preview {
+            if rawResponseError != nil {
+              ContentUnavailableView {
+                Label("Error Loading Resource", systemImage: "exclamationmark.triangle")
+              } description: {
+                if let errorMessage = rawResponseError {
+                  Text(errorMessage)
+                    .font(.callout)
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+                }
+              }
+              .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+              EmbeddedResourceView(resources: embeddedResources)
+                .id(template.uriTemplate)  // Force view to recreate when template changes
+            }
+          } else {
+            // Raw view
+            RawResourceView(rawJSON: rawResponseJSON ?? "null", error: rawResponseError)
+              .frame(maxWidth: .infinity, maxHeight: .infinity)
+          }
         }
       }
       .frame(minHeight: 300)
@@ -385,6 +406,9 @@ struct ResourceTemplateDetailContent: View {
         embeddedResources = state.embeddedResources
         hasLoadedOnce = state.hasLoadedOnce
         lastFetchedURI = state.lastFetchedURI
+        viewMode = state.viewMode
+        rawResponseJSON = state.rawResponseJSON
+        rawResponseError = state.rawResponseError
       }
     }
   }
@@ -394,7 +418,10 @@ struct ResourceTemplateDetailContent: View {
       variableValues: variableValues,
       embeddedResources: embeddedResources,
       hasLoadedOnce: hasLoadedOnce,
-      lastFetchedURI: lastFetchedURI
+      lastFetchedURI: lastFetchedURI,
+      viewMode: viewMode,
+      rawResponseJSON: rawResponseJSON,
+      rawResponseError: rawResponseError
     )
     await resourceCache.set(state, for: templateURI)
   }

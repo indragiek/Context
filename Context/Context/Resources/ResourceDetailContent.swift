@@ -1,12 +1,9 @@
 // Copyright © 2025 Indragie Karunaratne. All rights reserved.
 
-import Combine
 import ComposableArchitecture
 import ContextCore
 import Dependencies
-import GRDB
 import MarkdownUI
-import SharingGRDB
 import SwiftUI
 
 struct ResourceDetailContent: View {
@@ -14,7 +11,6 @@ struct ResourceDetailContent: View {
   let server: MCPServer
   @Dependency(\.resourceCache) private var resourceCache
   @Dependency(\.mcpClientManager) private var mcpClientManager
-  @Dependency(\.defaultDatabase) private var database
   @State private var embeddedResources: [EmbeddedResource] = []
   @State private var isLoadingResources = false
   @State private var loadingFailed = false
@@ -178,7 +174,7 @@ struct ResourceDetailContent: View {
           }
         } else {
           // Raw view
-          RawResourceView(rawJSON: rawResponseJSON ?? "null", error: nil)
+          RawResourceView(rawJSON: rawResponseJSON ?? "null", error: rawResponseError)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
       }
@@ -230,76 +226,76 @@ struct ResourceDetailContent: View {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         
-        do {
-          let contents = try await client.readResource(uri: resource.uri)
-          
-          // Create the response structure for raw view
-          // Encode contents directly as the Result would contain just this
-          let responseToEncode = ["contents": contents]
-          
-          // Encode the raw response
-          let jsonData = try encoder.encode(responseToEncode)
-          let jsonString = String(data: jsonData, encoding: .utf8) ?? "null"
-          
-          await MainActor.run {
-            embeddedResources = contents
-            isLoadingResources = false
-            loadingFailed = false
-            rawResponseJSON = jsonString
-            rawResponseError = nil
-          }
-        } catch {
-          // Create error response for raw view
-          struct ErrorResponse: Encodable {
-            struct ErrorInfo: Encodable {
-              let code: Int
-              let message: String
-            }
-            let error: ErrorInfo
-          }
-          
-          let errorResponse = ErrorResponse(
-            error: ErrorResponse.ErrorInfo(
-              code: -32603,
-              message: error.localizedDescription
-            )
-          )
-          
-          let jsonData = try? encoder.encode(errorResponse)
-          let jsonString = jsonData.flatMap { String(data: $0, encoding: .utf8) } ?? "null"
-          
-          await MainActor.run {
-            embeddedResources = []
-            isLoadingResources = false
-            loadingFailed = true
-            rawResponseError = error.localizedDescription
-            rawResponseJSON = jsonString
-          }
+        let contents = try await client.readResource(uri: resource.uri)
+        
+        // Create the response structure for raw view
+        // Encode contents directly as the Result would contain just this
+        let responseToEncode = ["contents": contents]
+        
+        // Encode the raw response
+        let jsonData = try encoder.encode(responseToEncode)
+        let jsonString = String(data: jsonData, encoding: .utf8) ?? "null"
+        
+        await MainActor.run {
+          embeddedResources = contents
+          isLoadingResources = false
+          loadingFailed = false
+          rawResponseJSON = jsonString
+          rawResponseError = nil
         }
-
-        // Save to cache
+        
+        // Save successful state to cache
         let state = ResourceCacheState(
           variableValues: [:],  // Not used for static resources
-          embeddedResources: embeddedResources,
+          embeddedResources: contents,
           hasLoadedOnce: true,
           lastFetchedURI: resource.uri,
           viewMode: viewMode,
-          rawResponseJSON: rawResponseJSON,
-          rawResponseError: rawResponseError
+          rawResponseJSON: jsonString,
+          rawResponseError: nil
         )
         await resourceCache.set(state, for: resource.uri)
+        
       } catch {
-        // Error handling already done in the do-catch above
-
-        // Still save to cache to avoid repeated failed attempts
+        // Create error response for raw view
+        struct ErrorResponse: Encodable {
+          struct ErrorInfo: Encodable {
+            let code: Int
+            let message: String
+          }
+          let error: ErrorInfo
+        }
+        
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        
+        let errorResponse = ErrorResponse(
+          error: ErrorResponse.ErrorInfo(
+            code: -32603,
+            message: error.localizedDescription
+          )
+        )
+        
+        let jsonData = try? encoder.encode(errorResponse)
+        let jsonString = jsonData.flatMap { String(data: $0, encoding: .utf8) } ?? "null"
+        
+        await MainActor.run {
+          embeddedResources = []
+          isLoadingResources = false
+          loadingFailed = true
+          rawResponseError = error.localizedDescription
+          rawResponseJSON = jsonString
+        }
+        
+        // Save error state to cache to avoid repeated failed attempts
         let state = ResourceCacheState(
           variableValues: [:],
           embeddedResources: [],
           hasLoadedOnce: true,
           lastFetchedURI: resource.uri,
           viewMode: viewMode,
-          rawResponseJSON: rawResponseJSON,
-          rawResponseError: rawResponseError
+          rawResponseJSON: jsonString,
+          rawResponseError: error.localizedDescription
         )
         await resourceCache.set(state, for: resource.uri)
       }
