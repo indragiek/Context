@@ -142,7 +142,8 @@ public actor DXTTransport: Transport {
     dxtDirectory: URL,
     clientInfo: Implementation,
     clientCapabilities: ClientCapabilities,
-    userConfig: DXTUserConfigurationValues? = nil
+    userConfig: DXTUserConfigurationValues? = nil,
+    environment: [String: String]? = nil
   ) async throws {
     // Verify the directory exists
     var isDirectory: ObjCBool = false
@@ -231,8 +232,15 @@ public actor DXTTransport: Transport {
     let processInfo = try Self.buildProcessInfo(
       manifest: parsedManifest,
       dxtDirectory: dxtDirectory,
-      userConfig: userConfig
+      userConfig: userConfig,
+      environment: environment
     )
+    
+    logger.debug("Starting DXT transport for package: \(parsedManifest.name)")
+    logger.debug("Command: \(processInfo.executableURL.path)")
+    logger.debug("Arguments: \(processInfo.arguments ?? [])")
+    logger.debug("Environment: \(processInfo.environment ?? [:])")
+    logger.debug("Working directory: \(processInfo.currentDirectoryURL?.path ?? "default")")
     
     // Initialize stdio transport
     self.stdioTransport = StdioTransport(
@@ -530,7 +538,8 @@ public actor DXTTransport: Transport {
   static func buildProcessInfo(
     manifest: DXTManifest,
     dxtDirectory: URL,
-    userConfig: DXTUserConfigurationValues?
+    userConfig: DXTUserConfigurationValues?,
+    environment: [String: String]?
   ) throws -> StdioTransport.ServerProcessInfo {
     
     // Start with base MCP config
@@ -559,6 +568,16 @@ public actor DXTTransport: Transport {
     // Apply compatibility environment variables
     if let compatEnv = manifest.compatibility?.env {
       env.merge(compatEnv) { _, new in new }
+    }
+    
+    // Merge provided global environment (it has the lowest precedence)
+    if let globalEnvironment = environment {
+      // Start with global environment and let manifest/compat override
+      var mergedEnv = globalEnvironment
+      for (key, value) in env {
+        mergedEnv[key] = value
+      }
+      env = mergedEnv
     }
     
     // Build substitution context

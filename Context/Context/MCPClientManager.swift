@@ -213,6 +213,9 @@ actor MCPClientManager {
     var clientCapabilities = ClientCapabilities()
     clientCapabilities.roots = ClientCapabilities.Roots(listChanged: true)
 
+    // Load global environment variables
+    let globalEnvironment = try await GlobalEnvironmentHelper.loadEnvironment()
+
     switch server.transport {
     case .stdio:
       guard let command = server.command else {
@@ -231,11 +234,24 @@ actor MCPClientManager {
       }
       shellArgs.append(commandString)
 
+      // Merge global and server environment, with server environment taking precedence
+      var environment = globalEnvironment
+      if let serverEnvironment = server.environment {
+        for (key, value) in serverEnvironment {
+          environment[key] = value
+        }
+      }
+
       let processInfo = StdioTransport.ServerProcessInfo(
         executableURL: URL(fileURLWithPath: shellPath),
         arguments: shellArgs,
-        environment: server.environment
+        environment: environment.isEmpty ? nil : environment
       )
+
+      logger.debug("Starting stdio transport for server: \(server.name)")
+      logger.debug("Command: \(shellPath)")
+      logger.debug("Arguments: \(shellArgs)")
+      logger.debug("Environment: \(environment)")
 
       return StdioTransport(
         serverProcessInfo: processInfo,
@@ -325,11 +341,20 @@ actor MCPClientManager {
         }
       }
 
+      // Merge global and server environment, with server environment taking precedence
+      var environment = globalEnvironment
+      if let serverEnvironment = server.environment {
+        for (key, value) in serverEnvironment {
+          environment[key] = value
+        }
+      }
+
       return try await DXTTransport(
         dxtDirectory: dxtDirectoryURL,
         clientInfo: clientInfo,
         clientCapabilities: clientCapabilities,
-        userConfig: resolvedUserConfig
+        userConfig: resolvedUserConfig,
+        environment: environment.isEmpty ? nil : environment
       )
     }
   }

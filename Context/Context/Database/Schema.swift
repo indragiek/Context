@@ -47,3 +47,10 @@ struct MCPRoot: Equatable, Identifiable {
   var name: String
   var uri: String
 }
+
+@Table("global_environment")
+struct GlobalEnvironmentVariable: Equatable, Identifiable {
+  let id: UUID
+  var key: String
+  var value: String
+}

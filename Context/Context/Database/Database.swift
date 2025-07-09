@@ -76,6 +76,19 @@ func appDatabase() throws -> any DatabaseWriter {
     .execute(db)
   }
 
+  migrator.registerMigration("Create 'global_environment' table") { db in
+    try #sql(
+      """
+      CREATE TABLE "global_environment" (
+        "id" TEXT PRIMARY KEY NOT NULL ON CONFLICT REPLACE DEFAULT (uuid()),
+        "key" TEXT NOT NULL,
+        "value" TEXT NOT NULL
+      )
+      """
+    )
+    .execute(db)
+  }
+
   try migrator.migrate(dbWriter)
   return dbWriter
 }
