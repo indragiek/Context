@@ -5,10 +5,89 @@ import SwiftUI
 
 struct GlobalEnvironmentView: View {
   let store: StoreOf<GlobalEnvironmentFeature>
+  @State private var useCustomShell = GlobalEnvironmentHelper.isUsingCustomShell()
+  @State private var shellPath = GlobalEnvironmentHelper.isUsingCustomShell() 
+    ? GlobalEnvironmentHelper.readShellPath() 
+    : (ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh")
+  @State private var shellPathError: String?
 
   var body: some View {
     WithViewStore(self.store, observe: { $0 }) { viewStore in
       VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 8) {
+          Text("Shell")
+            .font(.headline)
+          
+          Text("The shell used to start local servers, which will inherit the environment configured in that shell, unless an override is specified below.")
+            .font(.caption)
+            .foregroundColor(.secondary)
+          
+          VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+              Image(systemName: useCustomShell ? "circle" : "circle.inset.filled")
+                .foregroundColor(.accentColor)
+                .font(.system(size: 13))
+                .onTapGesture {
+                  withAnimation(.easeInOut(duration: 0.15)) {
+                    useCustomShell = false
+                    saveShellSelection()
+                  }
+                }
+              Text("Default login shell")
+                .font(.system(size: 13))
+                .onTapGesture {
+                  withAnimation(.easeInOut(duration: 0.15)) {
+                    useCustomShell = false
+                    saveShellSelection()
+                  }
+                }
+              Spacer()
+            }
+            .frame(height: 20)
+            
+            HStack(spacing: 6) {
+              Image(systemName: useCustomShell ? "circle.inset.filled" : "circle")
+                .foregroundColor(.accentColor)
+                .font(.system(size: 13))
+                .onTapGesture {
+                  withAnimation(.easeInOut(duration: 0.15)) {
+                    useCustomShell = true
+                    saveShellSelection()
+                  }
+                }
+              Text("Command (complete path):")
+                .font(.system(size: 13))
+                .onTapGesture {
+                  withAnimation(.easeInOut(duration: 0.15)) {
+                    useCustomShell = true
+                    saveShellSelection()
+                  }
+                }
+              
+              TextField("/path/to/shell", text: $shellPath)
+                .textFieldStyle(.roundedBorder)
+                .font(.system(size: 13))
+                .disabled(!useCustomShell)
+                .onChange(of: shellPath) {
+                  if useCustomShell {
+                    saveShellSelection()
+                  }
+                }
+                .frame(width: 280)
+            }
+            .frame(height: 20)
+          }
+          .padding(.leading, 20)
+          
+          if let error = shellPathError {
+            Text(error)
+              .font(.caption)
+              .foregroundColor(.red)
+          }
+        }
+        
+        Divider()
+        
         Text(
           "These global environment variables are set for all local servers. Any environment variables configured on the server itself will take precedence over the global environment. Inline variables (e.g. $PATH) that are specified in the environment value will be expanded using the login shell."
         )
@@ -140,6 +219,22 @@ struct GlobalEnvironmentView: View {
       .onDisappear {
         store.send(.save)
       }
+    }
+  }
+  
+  private func saveShellSelection() {
+    shellPathError = nil
+    do {
+      if useCustomShell {
+        try GlobalEnvironmentHelper.writeShellPath(shellPath)
+      } else {
+        try GlobalEnvironmentHelper.writeShellPath(nil)
+      }
+    } catch {
+      shellPathError = error.localizedDescription
+      // Reset to previous state on error
+      useCustomShell = GlobalEnvironmentHelper.isUsingCustomShell()
+      shellPath = GlobalEnvironmentHelper.readShellPath()
     }
   }
 }

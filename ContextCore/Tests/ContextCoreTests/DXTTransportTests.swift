@@ -416,7 +416,8 @@ enum DXTTestError: Error {
       manifest: manifest,
       dxtDirectory: tempDir,
       userConfig: DXTUserConfigurationValues(),
-      environment: nil
+      environment: nil,
+      shellPath: nil
     )
     
     // The process info will have shell args: [shell, -c, command]
@@ -501,7 +502,8 @@ enum DXTTestError: Error {
       manifest: manifest,
       dxtDirectory: tempDir,
       userConfig: DXTUserConfigurationValues(),
-      environment: nil
+      environment: nil,
+      shellPath: nil
     )
     
     // Verify working directory substitution

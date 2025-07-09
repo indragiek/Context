@@ -222,7 +222,7 @@ actor MCPClientManager {
         throw MCPClientError.missingCommand
       }
 
-      let shellPath = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
+      let shellPath = GlobalEnvironmentHelper.readShellPath()
       var shellArgs = ["-l", "-c"]
 
       var commandString = command
@@ -349,12 +349,15 @@ actor MCPClientManager {
         }
       }
 
+      let shellPath = GlobalEnvironmentHelper.readShellPath()
+      
       return try await DXTTransport(
         dxtDirectory: dxtDirectoryURL,
         clientInfo: clientInfo,
         clientCapabilities: clientCapabilities,
         userConfig: resolvedUserConfig,
-        environment: environment.isEmpty ? nil : environment
+        environment: environment.isEmpty ? nil : environment,
+        shellPath: shellPath
       )
     }
   }

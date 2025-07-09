@@ -143,7 +143,8 @@ public actor DXTTransport: Transport {
     clientInfo: Implementation,
     clientCapabilities: ClientCapabilities,
     userConfig: DXTUserConfigurationValues? = nil,
-    environment: [String: String]? = nil
+    environment: [String: String]? = nil,
+    shellPath: String? = nil
   ) async throws {
     // Verify the directory exists
     var isDirectory: ObjCBool = false
@@ -233,7 +234,8 @@ public actor DXTTransport: Transport {
       manifest: parsedManifest,
       dxtDirectory: dxtDirectory,
       userConfig: userConfig,
-      environment: environment
+      environment: environment,
+      shellPath: shellPath
     )
     
     logger.debug("Starting DXT transport for package: \(parsedManifest.name)")
@@ -538,7 +540,8 @@ public actor DXTTransport: Transport {
     manifest: DXTManifest,
     dxtDirectory: URL,
     userConfig: DXTUserConfigurationValues?,
-    environment: [String: String]?
+    environment: [String: String]?,
+    shellPath: String?
   ) throws -> StdioTransport.ServerProcessInfo {
     
     // Start with base MCP config
@@ -708,8 +711,8 @@ public actor DXTTransport: Transport {
       command = uvPath
     }
     
-    // Get shell path from environment
-    let shellPath = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
+    // Get shell path from parameter or environment
+    let shell = shellPath ?? ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
     var shellArgs = ["-l", "-c"]
     
     // Build command string
@@ -732,7 +735,7 @@ public actor DXTTransport: Transport {
     }
     
     return StdioTransport.ServerProcessInfo(
-      executableURL: URL(fileURLWithPath: shellPath),
+      executableURL: URL(fileURLWithPath: shell),
       arguments: shellArgs,
       environment: env,
       currentDirectoryURL: workingDirectory ?? dxtDirectory
