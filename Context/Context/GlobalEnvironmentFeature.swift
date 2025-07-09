@@ -42,7 +42,6 @@ struct GlobalEnvironmentFeature {
   }
 
   @Dependency(\.defaultDatabase) var database
-  @Dependency(\.mcpClientManager) var clientManager
 
   enum CancelID {
     case saveDebounce
@@ -95,7 +94,13 @@ struct GlobalEnvironmentFeature {
 
       case let .keyChanged(id, key):
         if let index = state.environmentVariables.firstIndex(where: { $0.id == id }) {
-          state.environmentVariables[index].key = key
+          // Only allow valid environment variable names (alphanumeric and underscore, not starting with digit)
+          let validKey = key.replacingOccurrences(
+            of: #"[^a-zA-Z0-9_]"#,
+            with: "",
+            options: .regularExpression
+          )
+          state.environmentVariables[index].key = validKey
         }
         return .none
 

@@ -242,7 +242,6 @@ public actor DXTTransport: Transport {
     logger.debug("Environment: \(processInfo.environment ?? [:])")
     logger.debug("Working directory: \(processInfo.currentDirectoryURL?.path ?? "default")")
     
-    // Initialize stdio transport
     self.stdioTransport = StdioTransport(
       serverProcessInfo: processInfo,
       clientInfo: clientInfo,

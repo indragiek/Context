@@ -9,14 +9,12 @@ struct GlobalEnvironmentView: View {
   var body: some View {
     WithViewStore(self.store, observe: { $0 }) { viewStore in
       VStack(alignment: .leading, spacing: 16) {
-        // Explanatory text
         Text(
           "These global environment variables are set for all local servers. Any environment variables configured on the server itself will take precedence over the global environment. Inline variables (e.g. $PATH) that are specified in the environment value will be expanded using the login shell."
         )
         .font(.body)
         .foregroundColor(.secondary)
 
-        // Table with environment variables
         VStack(spacing: 0) {
           if viewStore.environmentVariables.isEmpty {
             VStack(spacing: 8) {

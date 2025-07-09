@@ -14,42 +14,38 @@ struct GlobalEnvironmentHelper {
       try GlobalEnvironmentVariable.all.fetchAll(db)
     }
 
-    var environment: [String: String] = [:]
-    for variable in variables {
-      environment[variable.key] = variable.value
-    }
+    let environment = Dictionary(
+      uniqueKeysWithValues: variables.map { ($0.key, $0.value) }
+    )
 
-    // Perform variable substitution using the login shell
     return try await expandEnvironmentVariables(environment)
   }
 
   /// Perform variable substitution using the user's login shell
-  private static func expandEnvironmentVariables(_ environment: [String: String]) async throws -> [String:
-    String]
-  {
+  private static func expandEnvironmentVariables(_ environment: [String: String]) async throws -> [String: String] {
     guard !environment.isEmpty else { return [:] }
 
-    var expandedEnvironment: [String: String] = [:]
-
-    for (key, value) in environment {
-      let expandedValue = try await expandVariableValue(value)
-      expandedEnvironment[key] = expandedValue
+    return try await withThrowingTaskGroup(of: (String, String).self) { group in
+      for (key, value) in environment {
+        group.addTask {
+          let expandedValue = try await expandVariableValue(value)
+          return (key, expandedValue)
+        }
+      }
+      
+      return try await group.reduce(into: [:]) { dict, pair in
+        dict[pair.0] = pair.1
+      }
     }
-
-    return expandedEnvironment
   }
 
   /// Expand a single environment variable value using the login shell
   private static func expandVariableValue(_ value: String) async throws -> String {
-    // If the value doesn't contain any $ symbols, no expansion is needed
     guard value.contains("$") else { return value }
 
     let shellPath = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
-
-    // Create a temporary script that will echo the expanded value
-    let script = """
-      echo "\(value.replacingOccurrences(of: "\"", with: "\\\""))"
-      """
+    let escapedValue = value.replacingOccurrences(of: "\"", with: "\\\"")
+    let script = "echo \"\(escapedValue)\""
 
     let process = Process()
     process.executableURL = URL(fileURLWithPath: shellPath)
@@ -64,11 +60,9 @@ struct GlobalEnvironmentHelper {
 
     let data = pipe.fileHandleForReading.readDataToEndOfFile()
     guard let output = String(data: data, encoding: .utf8) else {
-      return value  // If expansion fails, return original value
+      return value
     }
 
-    // Trim whitespace and newlines
     return output.trimmingCharacters(in: .whitespacesAndNewlines)
   }
 }
-
