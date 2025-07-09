@@ -460,38 +460,19 @@ struct ResourceTemplateDetailView: View {
     hasLoadedOnce = true
 
     Task {
-      do {
-        let loadedResource = try await resourceLoader.loadResource(uri, server)
+      let loadedResource = await resourceLoader.loadResource(uri, server)
 
-        await MainActor.run {
-          embeddedResources = loadedResource.embeddedResources
-          isLoadingResources = false
-          loadingFailed = loadedResource.requestError != nil
-          lastFetchedURI = uri
-          rawResponseJSON = loadedResource.rawResponseJSON
-          requestError = loadedResource.requestError
-
-          // Save the fetched resources to cache
-          Task {
-            await saveToCacheForTemplate(template.uriTemplate)
-          }
-        }
-      } catch {
-        // This should not happen as ResourceLoader handles errors internally
-        await MainActor.run {
-          embeddedResources = []
-          isLoadingResources = false
-          loadingFailed = true
-          lastFetchedURI = uri
-          requestError = error
-          rawResponseJSON = "null"
-
-          // Still save to cache to avoid repeated failed attempts
-          Task {
-            await saveToCacheForTemplate(template.uriTemplate)
-          }
-        }
+      await MainActor.run {
+        embeddedResources = loadedResource.embeddedResources
+        isLoadingResources = false
+        loadingFailed = loadedResource.requestError != nil
+        lastFetchedURI = uri
+        rawResponseJSON = loadedResource.rawResponseJSON
+        requestError = loadedResource.requestError
       }
+
+      // Save the fetched resources to cache
+      await saveToCacheForTemplate(template.uriTemplate)
     }
   }
 
@@ -504,14 +485,13 @@ struct ResourceTemplateDetailView: View {
   }
 
   private func extractTemplateVariables(from template: String) -> [String] {
-    let pattern = #"\{([^}]+)\}"#
-    let regex = try? NSRegularExpression(pattern: pattern)
-    let matches =
-      regex?.matches(in: template, range: NSRange(template.startIndex..., in: template)) ?? []
+    let matches = template.matches(of: Self.templateParameterRegex)
 
     return matches.compactMap { match in
-      guard let range = Range(match.range(at: 1), in: template) else { return nil }
-      return String(template[range])
+      let matchedString = String(template[match.range])
+      // Remove the curly braces to get just the variable name
+      let variable = matchedString.trimmingCharacters(in: CharacterSet(charactersIn: "{}"))
+      return variable.isEmpty ? nil : variable
     }
   }
 

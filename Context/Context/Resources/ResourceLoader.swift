@@ -11,7 +11,7 @@ struct LoadedResource: Equatable {
   let requestError: (any Error)?
 
   static func == (lhs: LoadedResource, rhs: LoadedResource) -> Bool {
-    lhs.embeddedResources.count == rhs.embeddedResources.count
+    lhs.embeddedResources == rhs.embeddedResources
       && lhs.rawResponseJSON == rhs.rawResponseJSON
       && (lhs.requestError != nil) == (rhs.requestError != nil)
   }
@@ -19,7 +19,7 @@ struct LoadedResource: Equatable {
 
 @DependencyClient
 struct ResourceLoader {
-  var loadResource: @Sendable (String, MCPServer) async throws -> LoadedResource
+  var loadResource: @Sendable (String, MCPServer) async -> LoadedResource
 }
 
 extension ResourceLoader: DependencyKey {

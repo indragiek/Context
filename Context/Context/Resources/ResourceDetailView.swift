@@ -239,37 +239,26 @@ struct ResourceDetailView: View {
         hasLoadedOnce = true
       }
 
-      do {
-        let loadedResource = try await resourceLoader.loadResource(resource.uri, server)
+      let loadedResource = await resourceLoader.loadResource(resource.uri, server)
 
-        await MainActor.run {
-          embeddedResources = loadedResource.embeddedResources
-          isLoadingResources = false
-          loadingFailed = loadedResource.requestError != nil
-          rawResponseJSON = loadedResource.rawResponseJSON
-          requestError = loadedResource.requestError
-        }
-
-        // Save state to cache
-        let state = ResourceCacheState(
-          variableValues: [:],  // Not used for static resources
-          embeddedResources: loadedResource.embeddedResources,
-          hasLoadedOnce: true,
-          lastFetchedURI: resource.uri,
-          rawResponseJSON: loadedResource.rawResponseJSON,
-          requestError: loadedResource.requestError
-        )
-        await resourceCache.set(state, for: resource.uri)
-      } catch {
-        // This should not happen as ResourceLoader handles errors internally
-        await MainActor.run {
-          embeddedResources = []
-          isLoadingResources = false
-          loadingFailed = true
-          requestError = error
-          rawResponseJSON = "null"
-        }
+      await MainActor.run {
+        embeddedResources = loadedResource.embeddedResources
+        isLoadingResources = false
+        loadingFailed = loadedResource.requestError != nil
+        rawResponseJSON = loadedResource.rawResponseJSON
+        requestError = loadedResource.requestError
       }
+
+      // Save state to cache
+      let state = ResourceCacheState(
+        variableValues: [:],  // Not used for static resources
+        embeddedResources: loadedResource.embeddedResources,
+        hasLoadedOnce: true,
+        lastFetchedURI: resource.uri,
+        rawResponseJSON: loadedResource.rawResponseJSON,
+        requestError: loadedResource.requestError
+      )
+      await resourceCache.set(state, for: resource.uri)
     }
   }
 
