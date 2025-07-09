@@ -35,13 +35,60 @@ struct PromptMessagesView: View {
   private var messagesContent: some View {
     switch promptState.loadingState {
     case .idle:
-      if !promptState.hasLoadedOnce && prompt.arguments?.isEmpty == false {
-        ContentUnavailableView(
-          "No Messages",
-          systemImage: "arrow.down.message",
-          description: Text("Enter arguments and click the 􀈄 button to load messages")
-        )
+      if viewMode == .raw {
+        // Always show raw view when in raw mode
+        rawView()
+      } else {
+        // Check if prompt has arguments that need to be filled
+        let hasArguments = prompt.arguments != nil && !(prompt.arguments?.isEmpty ?? true)
+        
+        if hasArguments && !allRequiredArgumentsFilled {
+          // Show prompt to fill arguments
+          ContentUnavailableView(
+            "No Messages",
+            systemImage: "arrow.down.message",
+            description: Text("Enter arguments and click the 􀈄 button to load messages")
+          )
+          .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if !promptState.messages.isEmpty {
+          // We have messages, show them
+          messageDisplayView
+        } else if promptState.hasLoadedOnce {
+          // We've loaded before and there are no messages
+          ContentUnavailableView(
+            "No Messages Available",
+            systemImage: "bubble.left.and.bubble.right",
+            description: Text("This prompt has no messages")
+          )
+          .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+          // Initial state - haven't loaded yet
+          if !hasArguments {
+            // For prompts without arguments, show loading (auto-fetch should trigger)
+            ProgressView()
+              .controlSize(.regular)
+              .frame(maxWidth: .infinity, maxHeight: .infinity)
+          } else {
+            // For prompts with arguments, wait for user action
+            ContentUnavailableView(
+              "No Messages",
+              systemImage: "arrow.down.message",
+              description: Text("Click the 􀈄 button to load messages")
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+          }
+        }
+      }
+      
+    case .loading:
+      ProgressView()
+        .controlSize(.regular)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+      
+    case .loaded:
+      if viewMode == .raw {
+        // Always show raw view when in raw mode, regardless of messages
+        rawView()
       } else if promptState.messages.isEmpty {
         ContentUnavailableView(
           "No Messages Available",
@@ -53,25 +100,11 @@ struct PromptMessagesView: View {
         messageDisplayView
       }
       
-    case .loading:
-      ProgressView()
-        .controlSize(.regular)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-      
-    case .loaded:
-      if promptState.messages.isEmpty {
-        ContentUnavailableView(
-          "No Messages Available",
-          systemImage: "bubble.left.and.bubble.right",
-          description: Text("This prompt has no messages")
-        )
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-      } else {
-        messageDisplayView
-      }
-      
     case .failed(_, let underlyingError):
-      if let error = underlyingError {
+      if viewMode == .raw {
+        // Show raw error data in raw mode
+        rawView()
+      } else if let error = underlyingError {
         errorView(error)
       } else {
         ContentUnavailableView(
@@ -86,18 +119,16 @@ struct PromptMessagesView: View {
   
   @ViewBuilder
   private var messageDisplayView: some View {
-    Group {
-      switch viewMode {
-      case .preview:
-        PromptMessagesList(
-          messages: promptState.messages,
-          argumentValues: promptState.argumentValues
-        )
-      case .raw:
-        rawView()
-      }
+    switch viewMode {
+    case .preview:
+      PromptMessagesList(
+        messages: promptState.messages,
+        argumentValues: promptState.argumentValues
+      )
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
+    case .raw:
+      rawView()
     }
-    .frame(maxWidth: .infinity, maxHeight: .infinity)
   }
 }
 

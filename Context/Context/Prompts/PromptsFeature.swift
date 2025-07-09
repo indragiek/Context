@@ -36,9 +36,19 @@ struct PromptState: Sendable {
 
 extension PromptState: Equatable {
   static func == (lhs: PromptState, rhs: PromptState) -> Bool {
-    lhs.argumentValues == rhs.argumentValues && lhs.hasLoadedOnce == rhs.hasLoadedOnce
-      && lhs.rawResponseError == rhs.rawResponseError && lhs.loadingState == rhs.loadingState
-      && lhs.viewMode == rhs.viewMode
+    // Compare properties that are Equatable
+    guard lhs.argumentValues == rhs.argumentValues &&
+          lhs.hasLoadedOnce == rhs.hasLoadedOnce &&
+          lhs.rawResponseError == rhs.rawResponseError &&
+          lhs.loadingState == rhs.loadingState &&
+          lhs.viewMode == rhs.viewMode &&
+          lhs.rawResponseJSON == rhs.rawResponseJSON else {
+      return false
+    }
+    
+    // For non-Equatable types, compare counts as a proxy
+    // This isn't perfect but better than always returning false
+    return lhs.messages.count == rhs.messages.count
   }
 }
 

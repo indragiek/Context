@@ -21,10 +21,11 @@ struct PromptErrorView: View {
       ContentUnavailableView {
         Label("Request Failed", systemImage: "exclamationmark.triangle")
       } description: {
-        VStack(alignment: .leading, spacing: 8) {
-          Text("Error \(jsonRPCError.error.code): \(jsonRPCError.error.message)")
+        VStack(spacing: 8) {
+          Text("**Error \(String(jsonRPCError.error.code)):** \(jsonRPCError.error.message)")
             .font(.callout)
             .foregroundColor(.secondary)
+            .multilineTextAlignment(.center)
           
           if let data = jsonRPCError.error.data {
             Text("Details:")
@@ -41,7 +42,7 @@ struct PromptErrorView: View {
               .textSelection(.enabled)
           }
         }
-        .multilineTextAlignment(.leading)
+        .multilineTextAlignment(.center)
         .frame(maxWidth: 400)
       }
       .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -50,10 +51,11 @@ struct PromptErrorView: View {
       ContentUnavailableView {
         Label("Invalid Response", systemImage: "exclamationmark.triangle")
       } description: {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(spacing: 8) {
           Text(underlyingError.localizedDescription)
             .font(.callout)
             .foregroundColor(.secondary)
+            .multilineTextAlignment(.center)
           
           if let stringData = String(data: data, encoding: .utf8) {
             Text("Response data:")
@@ -70,7 +72,7 @@ struct PromptErrorView: View {
               .textSelection(.enabled)
           }
         }
-        .multilineTextAlignment(.leading)
+        .multilineTextAlignment(.center)
         .frame(maxWidth: 400)
       }
       .frame(maxWidth: .infinity, maxHeight: .infinity)

@@ -84,7 +84,8 @@ struct PromptDetailView: View {
     .onAppear {
       initializeArguments()
       
-      if prompt.arguments == nil && !localPromptState.hasLoadedOnce {
+      // Auto-fetch if prompt has no arguments
+      if (prompt.arguments == nil || prompt.arguments?.isEmpty == true) && !localPromptState.hasLoadedOnce {
         fetchPromptMessages()
       }
     }
@@ -157,11 +158,17 @@ struct PromptDetailView: View {
             description: description, messages: fetchedMessages)
           
           do {
+            // Create the response structure to encode
+            let responseToEncode = GetPromptResponse.Result(
+              description: description,
+              messages: fetchedMessages
+            )
+            
             // TODO: Fix this inefficient encoding/decoding. We do this because we don't have access
             // to the raw JSON responses from the client.
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
-            let jsonData = try encoder.encode(localPromptState.rawResponse)
+            let jsonData = try encoder.encode(responseToEncode)
             localPromptState.rawResponseJSON = try JSONDecoder().decode(JSONValue.self, from: jsonData)
             localPromptState.rawResponseError = nil
           } catch {
