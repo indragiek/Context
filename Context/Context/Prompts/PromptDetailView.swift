@@ -71,7 +71,7 @@ struct PromptDetailView: View {
         allRequiredArgumentsFilled: allRequiredArgumentsFilled,
         onFetchMessages: fetchPromptMessages,
         errorView: { error in
-          AnyView(PromptErrorView(error: error))
+          AnyView(JSONRPCErrorView(error: error))
         },
         rawView: {
           AnyView(PromptRawDataView(promptState: localPromptState))

@@ -34,7 +34,7 @@ struct PromptRawDataView: View {
       case .requestInvalidResponse(_, _, let data):
         // For invalid response, check if the data is valid JSON
         if let stringData = String(data: data, encoding: .utf8) {
-          if JSONValueFormatter.isLikelyJSON(stringData) {
+          if JSONRPCErrorFormatter.isLikelyJSON(stringData) {
             // Try to parse as JSON
             if let jsonData = stringData.data(using: .utf8),
                let jsonValue = try? JSONDecoder().decode(JSONValue.self, from: jsonData) {

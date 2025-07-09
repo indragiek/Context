@@ -34,7 +34,7 @@ struct JSONRPCErrorView: View {
               .foregroundColor(.secondary)
               .padding(.top, 4)
             
-            Text(ValueFormatter.formatPreview(data))
+            Text(JSONRPCErrorFormatter.formatPreview(data))
               .font(.system(.caption, design: .monospaced))
               .foregroundColor(.secondary)
               .lineLimit(1)
@@ -90,33 +90,32 @@ struct JSONRPCErrorView: View {
     )
     .frame(maxWidth: .infinity, maxHeight: .infinity)
   }
+}
 
-  /// Utility for formatting JSON values for display
-  private struct ValueFormatter {
-    static func formatPreview(_ value: JSONValue) -> String {
-      switch value {
-      case .string(let str):
-        return str
-      case .number(let num):
-        return String(num)
-      case .integer(let int):
-        return String(int)
-      case .boolean(let bool):
-        return String(bool)
-      case .null:
-        return "null"
-      case .array(let arr):
-        return "[\(arr.count) items]"
-      case .object(let obj):
-        return "{\(obj.count) properties}"
-      }
-    }
-
-    static func isLikelyJSON(_ string: String) -> Bool {
-      let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
-      return (trimmed.hasPrefix("{") && trimmed.hasSuffix("}")) ||
-             (trimmed.hasPrefix("[") && trimmed.hasSuffix("]"))
+/// Utility for formatting JSON values for display
+struct JSONRPCErrorFormatter {
+  static func formatPreview(_ value: JSONValue) -> String {
+    switch value {
+    case .string(let str):
+      return str
+    case .number(let num):
+      return String(num)
+    case .integer(let int):
+      return String(int)
+    case .boolean(let bool):
+      return String(bool)
+    case .null:
+      return "null"
+    case .array(let arr):
+      return "[\(arr.count) items]"
+    case .object(let obj):
+      return "{\(obj.count) properties}"
     }
   }
 
+  static func isLikelyJSON(_ string: String) -> Bool {
+    let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
+    return (trimmed.hasPrefix("{") && trimmed.hasSuffix("}")) ||
+           (trimmed.hasPrefix("[") && trimmed.hasSuffix("]"))
+  }
 }
