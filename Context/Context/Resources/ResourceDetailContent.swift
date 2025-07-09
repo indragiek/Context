@@ -181,15 +181,6 @@ struct ResourceDetailContent: View {
     .onChange(of: resource.uri) { _, _ in
       loadEmbeddedResources()
     }
-    .onChange(of: viewMode) { _, newValue in
-      // Save the new view mode to cache
-      Task {
-        let state = await resourceCache.get(for: resource.uri) ?? ResourceCacheState()
-        var updatedState = state
-        updatedState.viewMode = newValue
-        await resourceCache.set(updatedState, for: resource.uri)
-      }
-    }
   }
 
   private func loadEmbeddedResources() {
@@ -200,7 +191,7 @@ struct ResourceDetailContent: View {
         await MainActor.run {
           embeddedResources = cachedState.embeddedResources
           hasLoadedOnce = true
-          viewMode = cachedState.viewMode
+          // viewMode is now global, don't restore from cache
           rawResponseJSON = cachedState.rawResponseJSON
           rawResponseError = cachedState.rawResponseError
           
@@ -244,7 +235,7 @@ struct ResourceDetailContent: View {
           embeddedResources: contents,
           hasLoadedOnce: true,
           lastFetchedURI: resource.uri,
-          viewMode: viewMode,
+          viewMode: .preview,  // Don't persist viewMode
           rawResponseJSON: jsonString,
           rawResponseError: nil
         )
@@ -287,7 +278,7 @@ struct ResourceDetailContent: View {
           embeddedResources: [],
           hasLoadedOnce: true,
           lastFetchedURI: resource.uri,
-          viewMode: viewMode,
+          viewMode: .preview,  // Don't persist viewMode
           rawResponseJSON: jsonString,
           rawResponseError: error.localizedDescription
         )

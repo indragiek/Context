@@ -358,15 +358,6 @@ struct ResourceTemplateDetailContent: View {
         loadCachedState()
       }
     }
-    .onChange(of: viewMode) { _, newValue in
-      // Save the new view mode to cache
-      Task {
-        let state = await resourceCache.get(for: template.uriTemplate) ?? ResourceCacheState()
-        var updatedState = state
-        updatedState.viewMode = newValue
-        await resourceCache.set(updatedState, for: template.uriTemplate)
-      }
-    }
   }
 
   private var uriTemplateWithBoldedParameters: Text {
@@ -404,7 +395,7 @@ struct ResourceTemplateDetailContent: View {
         embeddedResources = state.embeddedResources
         hasLoadedOnce = state.hasLoadedOnce
         lastFetchedURI = state.lastFetchedURI
-        viewMode = state.viewMode
+        // viewMode is now global, don't restore from cache
         rawResponseJSON = state.rawResponseJSON
         rawResponseError = state.rawResponseError
         
@@ -418,7 +409,7 @@ struct ResourceTemplateDetailContent: View {
       embeddedResources: embeddedResources,
       hasLoadedOnce: hasLoadedOnce,
       lastFetchedURI: lastFetchedURI,
-      viewMode: viewMode,
+      viewMode: .preview,  // Don't persist viewMode
       rawResponseJSON: rawResponseJSON,
       rawResponseError: rawResponseError
     )

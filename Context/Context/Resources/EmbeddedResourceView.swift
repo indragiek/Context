@@ -61,121 +61,81 @@ struct EmbeddedResourceView: View {
 
             Spacer()
 
-            if viewMode == .preview {
-              // Copy button for text and image content (only in preview mode)
-              Group {
-                switch resource {
-                case .text(let textContent):
-                  Button(action: {
-                    copyTextToClipboard(textContent.text)
-                  }) {
-                    HStack(spacing: 4) {
-                      Image(systemName: "doc.on.doc")
-                        .font(.system(size: 14))
-                      if showCopiedIndicator {
-                        Text("Copied!")
-                          .font(.caption)
-                          .foregroundColor(.secondary)
-                          .transition(.opacity.combined(with: .scale))
-                      }
-                    }
-                  }
-                  .buttonStyle(.plain)
-                  .help("Copy to clipboard")
-
-                case .blob(let blobContent):
-                  if let mimeType = blobContent.mimeType, mimeType.starts(with: "image/") {
-                    Button(action: {
-                      copyImageToClipboard(blobContent.blob)
-                    }) {
-                      HStack(spacing: 4) {
-                        Image(systemName: "doc.on.doc")
-                          .font(.system(size: 14))
-                        if showCopiedIndicator {
-                          Text("Copied!")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                            .transition(.opacity.combined(with: .scale))
-                        }
-                      }
-                    }
-                    .buttonStyle(.plain)
-                    .help("Copy to clipboard")
-                  }
+            // Copy button - behavior changes based on view mode
+            Button(action: {
+              if viewMode == .preview {
+                copyPreviewContent(resource)
+              } else {
+                copyRawJSONToClipboard()
+              }
+            }) {
+              HStack(spacing: 4) {
+                Image(systemName: "doc.on.doc")
+                  .font(.system(size: 14))
+                if showCopiedIndicator {
+                  Text("Copied!")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .transition(.opacity.combined(with: .scale))
                 }
               }
+            }
+            .buttonStyle(.plain)
+            .help(viewMode == .preview ? "Copy to clipboard" : "Copy raw JSON to clipboard")
+            .disabled(viewMode == .preview && shouldDisableCopyButton(for: resource))
 
-              // Save button
-              Button(action: {
-                saveResource(resource)
-              }) {
-                Image(systemName: "square.and.arrow.down")
-                  .font(.system(size: 14))
-              }
-              .buttonStyle(.plain)
-              .help("Save to disk")
+            // Save button
+            Button(action: {
+              saveResource(resource)
+            }) {
+              Image(systemName: "square.and.arrow.down")
+                .font(.system(size: 14))
+            }
+            .buttonStyle(.plain)
+            .help("Save to disk")
 
-              // Share button for all content types
-              Group {
-                switch resource {
-                case .text(let textContent):
-                  ShareLink(item: textContent.text) {
+            // Share button for all content types
+            Group {
+              switch resource {
+              case .text(let textContent):
+                ShareLink(item: textContent.text) {
+                  Image(systemName: "square.and.arrow.up")
+                    .font(.system(size: 14))
+                }
+                .buttonStyle(.plain)
+                .help("Share")
+
+              case .blob:
+                if let shareURL = shareURL {
+                  ShareLink(item: shareURL) {
                     Image(systemName: "square.and.arrow.up")
                       .font(.system(size: 14))
                   }
                   .buttonStyle(.plain)
                   .help("Share")
-
-                case .blob:
-                  if let shareURL = shareURL {
-                    ShareLink(item: shareURL) {
-                      Image(systemName: "square.and.arrow.up")
-                        .font(.system(size: 14))
-                    }
-                    .buttonStyle(.plain)
-                    .help("Share")
-                  } else {
-                    Button(action: {}) {
-                      Image(systemName: "square.and.arrow.up")
-                        .font(.system(size: 14))
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(true)
-                    .help("Preparing for share...")
+                } else {
+                  Button(action: {}) {
+                    Image(systemName: "square.and.arrow.up")
+                      .font(.system(size: 14))
                   }
+                  .buttonStyle(.plain)
+                  .disabled(true)
+                  .help("Preparing for share...")
                 }
               }
+            }
 
-              // Expand button (QuickLook)
-              if shareURL != nil {
-                Button(action: {
-                  quickLookURL = shareURL
-                }) {
-                  Image(systemName: "arrow.up.left.and.arrow.down.right")
-                    .font(.system(size: 14))
-                }
-                .buttonStyle(.plain)
-                .help("Expand preview")
-                .quickLookPreview($quickLookURL)
-              }
-            } else {
-              // Raw mode - show copy button for raw JSON
+            // Expand button (QuickLook)
+            if shareURL != nil {
               Button(action: {
-                copyRawJSONToClipboard()
+                quickLookURL = shareURL
               }) {
-                HStack(spacing: 4) {
-                  Image(systemName: "doc.on.doc")
-                    .font(.system(size: 14))
-                  if showCopiedIndicator {
-                    Text("Copied!")
-                      .font(.caption)
-                      .foregroundColor(.secondary)
-                      .transition(.opacity.combined(with: .scale))
-                  }
-                }
+                Image(systemName: "arrow.up.left.and.arrow.down.right")
+                  .font(.system(size: 14))
               }
               .buttonStyle(.plain)
-              .help("Copy raw JSON to clipboard")
+              .help("Expand preview")
+              .quickLookPreview($quickLookURL)
             }
           }
           .padding(.horizontal, 16)
@@ -487,30 +447,33 @@ struct EmbeddedResourceView: View {
     }
   }
 
-  private func copyRawJSONToClipboard() {
-    let jsonString = rawJSON ?? "null"
-    NSPasteboard.general.clearContents()
-    NSPasteboard.general.setString(jsonString, forType: .string)
-    
-    // Show copied indicator
-    withAnimation(.easeInOut(duration: 0.2)) {
-      showCopiedIndicator = true
-    }
-    
-    // Cancel any existing task
-    copiedIndicatorTask?.cancel()
-    
-    // Hide after delay
-    copiedIndicatorTask = Task {
-      try? await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds
-      if !Task.isCancelled {
-        await MainActor.run {
-          withAnimation(.easeInOut(duration: 0.2)) {
-            showCopiedIndicator = false
-          }
-        }
+  private func copyPreviewContent(_ resource: EmbeddedResource) {
+    switch resource {
+    case .text(let textContent):
+      copyTextToClipboard(textContent.text)
+    case .blob(let blobContent):
+      if let mimeType = blobContent.mimeType, mimeType.starts(with: "image/") {
+        copyImageToClipboard(blobContent.blob)
       }
     }
+  }
+  
+  private func shouldDisableCopyButton(for resource: EmbeddedResource) -> Bool {
+    switch resource {
+    case .text:
+      return false
+    case .blob(let blobContent):
+      // Only enable copy for images in preview mode
+      return !(blobContent.mimeType?.starts(with: "image/") ?? false)
+    }
+  }
+  
+  private func copyRawJSONToClipboard() {
+    let jsonString = rawJSON ?? "null"
+    let unescapedJson = jsonString.replacingOccurrences(of: "\\/", with: "/")
+    NSPasteboard.general.clearContents()
+    NSPasteboard.general.setString(unescapedJson, forType: .string)
+    displayCopiedIndicator()
   }
 
   private func copyTextToClipboard(_ text: String) {

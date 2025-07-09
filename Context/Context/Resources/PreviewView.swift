@@ -91,7 +91,7 @@ struct HighPerformanceTextView: NSViewRepresentable {
 
       // Start async highlighting
       context.coordinator.startHighlighting(
-        text: text, colorScheme: colorScheme, textView: textView)
+        text: text, colorScheme: colorScheme, textView: textView, mimeType: mimeType)
     }
 
     return scrollView
@@ -114,7 +114,7 @@ struct HighPerformanceTextView: NSViewRepresentable {
       }
 
       context.coordinator.startHighlighting(
-        text: text, colorScheme: colorScheme, textView: textView)
+        text: text, colorScheme: colorScheme, textView: textView, mimeType: mimeType)
     }
   }
 
@@ -152,12 +152,15 @@ struct HighPerformanceTextView: NSViewRepresentable {
   class Coordinator {
     private var highlightingTask: Task<Void, Never>?
 
-    func startHighlighting(text: String, colorScheme: ColorScheme, textView: NSTextView) {
+    func startHighlighting(text: String, colorScheme: ColorScheme, textView: NSTextView, mimeType: String?) {
       // Cancel any existing highlighting task
       highlightingTask?.cancel()
 
       // Don't highlight very large files (> 1MB) for performance
       guard text.utf8.count < 1_000_000 else { return }
+      
+      // Skip highlighting for text/plain content
+      guard mimeType != "text/plain" else { return }
 
       highlightingTask = Task.detached(priority: .userInitiated) {
         do {
