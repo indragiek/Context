@@ -20,6 +20,9 @@ struct ResourceDetailContent: View {
   @State private var loadingFailed = false
   @State private var hasLoadedOnce = false
   @State private var showingFullDescription = false
+  @State private var viewMode: ResourceViewMode = .preview
+  @State private var rawResponseJSON: String? = nil
+  @State private var rawResponseError: String? = nil
 
   var body: some View {
     VStack(spacing: 0) {
@@ -111,6 +114,11 @@ struct ResourceDetailContent: View {
 
         Spacer()
 
+        ToggleButton(
+          items: [("Preview", ResourceViewMode.preview), ("Raw", ResourceViewMode.raw)],
+          selection: $viewMode
+        )
+
         if isLoadingResources {
           ProgressView()
             .controlSize(.small)
@@ -150,9 +158,29 @@ struct ResourceDetailContent: View {
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
       } else {
-        // Show the actual content
-        EmbeddedResourceView(resources: embeddedResources)
-          .id(resource.uri)  // Force view to recreate when resource changes
+        // Show the actual content based on view mode
+        if viewMode == .preview {
+          if rawResponseError != nil {
+            ContentUnavailableView {
+              Label("Error Loading Resource", systemImage: "exclamationmark.triangle")
+            } description: {
+              if let errorMessage = rawResponseError {
+                Text(errorMessage)
+                  .font(.callout)
+                  .foregroundColor(.secondary)
+                  .multilineTextAlignment(.center)
+              }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+          } else {
+            EmbeddedResourceView(resources: embeddedResources)
+              .id(resource.uri)  // Force view to recreate when resource changes
+          }
+        } else {
+          // Raw view
+          RawResourceView(rawJSON: rawResponseJSON ?? "null", error: nil)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
       }
     }
     .sheet(isPresented: $showingFullDescription) {
@@ -164,6 +192,15 @@ struct ResourceDetailContent: View {
     .onChange(of: resource.uri) { _, _ in
       loadEmbeddedResources()
     }
+    .onChange(of: viewMode) { _, newValue in
+      // Save the new view mode to cache
+      Task {
+        let state = await resourceCache.get(for: resource.uri) ?? ResourceCacheState()
+        var updatedState = state
+        updatedState.viewMode = newValue
+        await resourceCache.set(updatedState, for: resource.uri)
+      }
+    }
   }
 
   private func loadEmbeddedResources() {
@@ -174,6 +211,9 @@ struct ResourceDetailContent: View {
         await MainActor.run {
           embeddedResources = cachedState.embeddedResources
           hasLoadedOnce = true
+          viewMode = cachedState.viewMode
+          rawResponseJSON = cachedState.rawResponseJSON
+          rawResponseError = cachedState.rawResponseError
         }
         return
       }
@@ -186,35 +226,80 @@ struct ResourceDetailContent: View {
       do {
         // Get the client and read the resource
         let client = try await mcpClientManager.client(for: server)
-        let contents = try await client.readResource(uri: resource.uri)
-
-        await MainActor.run {
-          embeddedResources = contents
-          isLoadingResources = false
-          loadingFailed = false
+        
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        
+        do {
+          let contents = try await client.readResource(uri: resource.uri)
+          
+          // Create the response structure for raw view
+          // Encode contents directly as the Result would contain just this
+          let responseToEncode = ["contents": contents]
+          
+          // Encode the raw response
+          let jsonData = try encoder.encode(responseToEncode)
+          let jsonString = String(data: jsonData, encoding: .utf8) ?? "null"
+          
+          await MainActor.run {
+            embeddedResources = contents
+            isLoadingResources = false
+            loadingFailed = false
+            rawResponseJSON = jsonString
+            rawResponseError = nil
+          }
+        } catch {
+          // Create error response for raw view
+          struct ErrorResponse: Encodable {
+            struct ErrorInfo: Encodable {
+              let code: Int
+              let message: String
+            }
+            let error: ErrorInfo
+          }
+          
+          let errorResponse = ErrorResponse(
+            error: ErrorResponse.ErrorInfo(
+              code: -32603,
+              message: error.localizedDescription
+            )
+          )
+          
+          let jsonData = try? encoder.encode(errorResponse)
+          let jsonString = jsonData.flatMap { String(data: $0, encoding: .utf8) } ?? "null"
+          
+          await MainActor.run {
+            embeddedResources = []
+            isLoadingResources = false
+            loadingFailed = true
+            rawResponseError = error.localizedDescription
+            rawResponseJSON = jsonString
+          }
         }
 
         // Save to cache
         let state = ResourceCacheState(
           variableValues: [:],  // Not used for static resources
-          embeddedResources: contents,
+          embeddedResources: embeddedResources,
           hasLoadedOnce: true,
-          lastFetchedURI: resource.uri
+          lastFetchedURI: resource.uri,
+          viewMode: viewMode,
+          rawResponseJSON: rawResponseJSON,
+          rawResponseError: rawResponseError
         )
         await resourceCache.set(state, for: resource.uri)
       } catch {
-        await MainActor.run {
-          embeddedResources = []
-          isLoadingResources = false
-          loadingFailed = true
-        }
+        // Error handling already done in the do-catch above
 
         // Still save to cache to avoid repeated failed attempts
         let state = ResourceCacheState(
           variableValues: [:],
           embeddedResources: [],
           hasLoadedOnce: true,
-          lastFetchedURI: resource.uri
+          lastFetchedURI: resource.uri,
+          viewMode: viewMode,
+          rawResponseJSON: rawResponseJSON,
+          rawResponseError: rawResponseError
         )
         await resourceCache.set(state, for: resource.uri)
       }

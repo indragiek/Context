@@ -25,6 +25,9 @@ struct ResourceTemplateDetailContent: View {
   @State private var hasLoadedOnce = false
   @State private var lastFetchedURI: String? = nil
   @State private var showingFullDescription = false
+  @State private var viewMode: ResourceViewMode = .preview
+  @State private var rawResponseJSON: String? = nil
+  @State private var rawResponseError: String? = nil
 
   // Cached regex for template parameters
   private static let templateParameterRegex = /\{[^}]+\}/
@@ -336,6 +339,15 @@ struct ResourceTemplateDetailContent: View {
         loadCachedState()
       }
     }
+    .onChange(of: viewMode) { _, newValue in
+      // Save the new view mode to cache
+      Task {
+        let state = await resourceCache.get(for: template.uriTemplate) ?? ResourceCacheState()
+        var updatedState = state
+        updatedState.viewMode = newValue
+        await resourceCache.set(updatedState, for: template.uriTemplate)
+      }
+    }
   }
 
   private var uriTemplateWithBoldedParameters: Text {
@@ -420,13 +432,27 @@ struct ResourceTemplateDetailContent: View {
       do {
         // Get the client and read the resource
         let client = try await mcpClientManager.client(for: server)
+        
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        
         let contents = try await client.readResource(uri: uri)
+        
+        // Create the response structure for raw view
+        // Encode contents directly as the Result would contain just this
+        let responseToEncode = ["contents": contents]
+        
+        // Encode the raw response
+        let jsonData = try encoder.encode(responseToEncode)
+        let jsonString = String(data: jsonData, encoding: .utf8) ?? "null"
 
         await MainActor.run {
           embeddedResources = contents
           isLoadingResources = false
           loadingFailed = false
           lastFetchedURI = uri
+          rawResponseJSON = jsonString
+          rawResponseError = nil
 
           // Save the fetched resources to cache
           Task {
@@ -434,11 +460,36 @@ struct ResourceTemplateDetailContent: View {
           }
         }
       } catch {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        
+        // Create error response for raw view
+        struct ErrorResponse: Encodable {
+          struct ErrorInfo: Encodable {
+            let code: Int
+            let message: String
+          }
+          let error: ErrorInfo
+        }
+        
+        let errorResponse = ErrorResponse(
+          error: ErrorResponse.ErrorInfo(
+            code: -32603,
+            message: error.localizedDescription
+          )
+        )
+        
+        // Encode the error for raw view
+        let jsonData = try? encoder.encode(errorResponse)
+        let jsonString = jsonData.flatMap { String(data: $0, encoding: .utf8) } ?? "null"
+        
         await MainActor.run {
           embeddedResources = []
           isLoadingResources = false
           loadingFailed = true
           lastFetchedURI = uri
+          rawResponseError = error.localizedDescription
+          rawResponseJSON = jsonString
 
           // Still save to cache to avoid repeated failed attempts
           Task {
