@@ -110,24 +110,38 @@ struct DetailView: View {
 
   @ViewBuilder
   private func resourcesTabContent(_ selectedServer: ServerFeature.State) -> some View {
-    if let selectedResourceID = selectedServer.resourcesFeature.selectedResourceID,
-      let selectedResource = selectedServer.resourcesFeature.resources.first(where: {
-        $0.id == selectedResourceID
-      })
-    {
-      ResourceDetailView(resource: selectedResource, server: selectedServer.server)
-    } else if let selectedTemplateID = selectedServer.resourcesFeature.selectedResourceTemplateID,
-      let selectedTemplate = selectedServer.resourcesFeature.resourceTemplates.first(where: {
-        $0.id == selectedTemplateID
-      })
-    {
-      ResourceTemplateDetailView(template: selectedTemplate, server: selectedServer.server)
-    } else {
-      ContentUnavailableView(
-        "No Resource Selected",
-        systemImage: "folder",
-        description: Text("Select a resource or template to view details")
-      )
+    IfLetStore(
+      store.scope(state: \.servers[id: selectedServer.id], action: { .server(id: selectedServer.id, action: $0) })
+    ) { serverStore in
+      WithViewStore(serverStore, observe: \.resourcesFeature.viewMode) { viewStore in
+        if let selectedResourceID = selectedServer.resourcesFeature.selectedResourceID,
+          let selectedResource = selectedServer.resourcesFeature.resources.first(where: {
+            $0.id == selectedResourceID
+          })
+        {
+          ResourceDetailView(
+            resource: selectedResource,
+            server: selectedServer.server,
+            viewMode: viewStore.binding(send: { .resources(.viewModeChanged($0)) })
+          )
+        } else if let selectedTemplateID = selectedServer.resourcesFeature.selectedResourceTemplateID,
+          let selectedTemplate = selectedServer.resourcesFeature.resourceTemplates.first(where: {
+            $0.id == selectedTemplateID
+          })
+        {
+          ResourceTemplateDetailView(
+            template: selectedTemplate,
+            server: selectedServer.server,
+            viewMode: viewStore.binding(send: { .resources(.viewModeChanged($0)) })
+          )
+        } else {
+          ContentUnavailableView(
+            "No Resource Selected",
+            systemImage: "folder",
+            description: Text("Select a resource or template to view details")
+          )
+        }
+      }
     }
   }
 

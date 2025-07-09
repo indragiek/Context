@@ -6,11 +6,12 @@ import Dependencies
 import MarkdownUI
 import SwiftUI
 
-struct ResourceTemplateDetailContent: View {
+struct ResourceTemplateDetailView: View {
   let template: ResourceTemplate
   let server: MCPServer
+  @Binding var viewMode: ResourceViewMode
   @Dependency(\.resourceCache) private var resourceCache
-  @Dependency(\.mcpClientManager) private var mcpClientManager
+  @Dependency(\.resourceLoader) private var resourceLoader
   @State private var isLoadingResources = false
   @State private var loadingFailed = false
   @FocusState private var focusedVariable: String?
@@ -21,7 +22,6 @@ struct ResourceTemplateDetailContent: View {
   @State private var hasLoadedOnce = false
   @State private var lastFetchedURI: String? = nil
   @State private var showingFullDescription = false
-  @State private var viewMode: ResourceViewMode = .preview
   @State private var rawResponseJSON: String? = nil
   @State private var requestError: (any Error)? = nil
 
@@ -57,15 +57,6 @@ struct ResourceTemplateDetailContent: View {
                   }
                   .buttonStyle(.plain)
                 }
-              } else {
-                Button(action: {
-                  showingFullDescription = true
-                }) {
-                  Text("Show more")
-                    .font(.caption)
-                    .foregroundColor(.accentColor)
-                }
-                .buttonStyle(.plain)
               }
             }
 
@@ -247,12 +238,11 @@ struct ResourceTemplateDetailContent: View {
                 copyRawJSONToClipboard()
               }
             }
-            
+
             if isLoadingResources {
               ProgressView()
                 .controlSize(.small)
             }
-
 
             // Only show button if there are template variables
             let variables = extractTemplateVariables(from: template.uriTemplate)
@@ -267,7 +257,8 @@ struct ResourceTemplateDetailContent: View {
               .buttonStyle(.plain)
               .disabled(isLoadingResources || !allVariablesFilled)
               .help(
-                allVariablesFilled ? "Fetch embedded resources" : "Fill in all variables to continue")
+                allVariablesFilled
+                  ? "Fetch embedded resources" : "Fill in all variables to continue")
             }
           }
         }
@@ -318,8 +309,9 @@ struct ResourceTemplateDetailContent: View {
           if viewMode == .raw {
             // Show raw error data in raw mode
             if let rawJSON = rawResponseJSON,
-               let jsonData = rawJSON.data(using: .utf8),
-               let jsonValue = try? JSONDecoder().decode(JSONValue.self, from: jsonData) {
+              let jsonData = rawJSON.data(using: .utf8),
+              let jsonValue = try? JSONDecoder().decode(JSONValue.self, from: jsonData)
+            {
               JSONRawView(jsonValue: jsonValue, searchText: "", isSearchActive: false)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
@@ -419,7 +411,6 @@ struct ResourceTemplateDetailContent: View {
         embeddedResources = state.embeddedResources
         hasLoadedOnce = state.hasLoadedOnce
         lastFetchedURI = state.lastFetchedURI
-        // viewMode is now global, don't restore from cache
         rawResponseJSON = state.rawResponseJSON
         requestError = state.requestError
         loadingFailed = state.requestError != nil
@@ -433,7 +424,6 @@ struct ResourceTemplateDetailContent: View {
       embeddedResources: embeddedResources,
       hasLoadedOnce: hasLoadedOnce,
       lastFetchedURI: lastFetchedURI,
-      viewMode: .preview,  // Don't persist viewMode
       rawResponseJSON: rawResponseJSON,
       requestError: requestError
     )
@@ -471,29 +461,15 @@ struct ResourceTemplateDetailContent: View {
 
     Task {
       do {
-        // Get the client and read the resource
-        let client = try await mcpClientManager.client(for: server)
-        
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        
-        let contents = try await client.readResource(uri: uri)
-        
-        // Create the response structure for raw view
-        // Encode contents directly as the Result would contain just this
-        let responseToEncode = ["contents": contents]
-        
-        // Encode the raw response
-        let jsonData = try encoder.encode(responseToEncode)
-        let jsonString = String(data: jsonData, encoding: .utf8) ?? "null"
-        
+        let loadedResource = try await resourceLoader.loadResource(uri, server)
+
         await MainActor.run {
-          embeddedResources = contents
+          embeddedResources = loadedResource.embeddedResources
           isLoadingResources = false
-          loadingFailed = false
+          loadingFailed = loadedResource.requestError != nil
           lastFetchedURI = uri
-          rawResponseJSON = jsonString
-          requestError = nil
+          rawResponseJSON = loadedResource.rawResponseJSON
+          requestError = loadedResource.requestError
 
           // Save the fetched resources to cache
           Task {
@@ -501,36 +477,14 @@ struct ResourceTemplateDetailContent: View {
           }
         }
       } catch {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        
-        // Create error response for raw view
-        struct ErrorResponse: Encodable {
-          struct ErrorInfo: Encodable {
-            let code: Int
-            let message: String
-          }
-          let error: ErrorInfo
-        }
-        
-        let errorResponse = ErrorResponse(
-          error: ErrorResponse.ErrorInfo(
-            code: -32603,
-            message: error.localizedDescription
-          )
-        )
-        
-        // Encode the error for raw view
-        let jsonData = try? encoder.encode(errorResponse)
-        let jsonString = jsonData.flatMap { String(data: $0, encoding: .utf8) } ?? "null"
-        
+        // This should not happen as ResourceLoader handles errors internally
         await MainActor.run {
           embeddedResources = []
           isLoadingResources = false
           loadingFailed = true
           lastFetchedURI = uri
           requestError = error
-          rawResponseJSON = jsonString
+          rawResponseJSON = "null"
 
           // Still save to cache to avoid repeated failed attempts
           Task {
@@ -548,7 +502,6 @@ struct ResourceTemplateDetailContent: View {
     }
     return uri
   }
-
 
   private func extractTemplateVariables(from template: String) -> [String] {
     let pattern = #"\{([^}]+)\}"#
@@ -632,7 +585,7 @@ struct ResourceTemplateDetailContent: View {
     .padding(20)
     .frame(width: 600, height: 400)
   }
-  
+
   private func copyRawJSONToClipboard() {
     guard let jsonString = rawResponseJSON else { return }
     let unescapedJson = jsonString.replacingOccurrences(of: "\\/", with: "/")

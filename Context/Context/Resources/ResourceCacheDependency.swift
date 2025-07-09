@@ -9,7 +9,6 @@ struct ResourceCacheState: Sendable {
   var embeddedResources: [EmbeddedResource] = []
   var hasLoadedOnce: Bool = false
   var lastFetchedURI: String? = nil
-  var viewMode: ResourceViewMode = .preview
   var rawResponseJSON: String? = nil
   var requestError: (any Error)? = nil
 }
@@ -17,19 +16,22 @@ struct ResourceCacheState: Sendable {
 // Manual Equatable implementation to handle non-Equatable types
 extension ResourceCacheState: Equatable {
   static func == (lhs: ResourceCacheState, rhs: ResourceCacheState) -> Bool {
-    // Compare properties that are Equatable
-    guard lhs.variableValues == rhs.variableValues &&
-          lhs.hasLoadedOnce == rhs.hasLoadedOnce &&
-          lhs.lastFetchedURI == rhs.lastFetchedURI &&
-          lhs.viewMode == rhs.viewMode &&
-          lhs.rawResponseJSON == rhs.rawResponseJSON else {
+    // Compare all Equatable properties
+    guard
+      lhs.variableValues == rhs.variableValues && lhs.embeddedResources == rhs.embeddedResources
+        && lhs.hasLoadedOnce == rhs.hasLoadedOnce && lhs.lastFetchedURI == rhs.lastFetchedURI
+        && lhs.rawResponseJSON == rhs.rawResponseJSON
+    else {
       return false
     }
-    
-    // For non-Equatable types, compare counts as a proxy
-    // Also check if both have errors or both don't
-    let bothHaveErrors = (lhs.requestError != nil) == (rhs.requestError != nil)
-    return lhs.embeddedResources.count == rhs.embeddedResources.count && bothHaveErrors
+
+    // For errors, compare both existence and type
+    let lhsErrorType = lhs.requestError.map { type(of: $0) }
+    let rhsErrorType = rhs.requestError.map { type(of: $0) }
+    let lhsErrorMessage = lhs.requestError?.localizedDescription
+    let rhsErrorMessage = rhs.requestError?.localizedDescription
+
+    return lhsErrorType == rhsErrorType && lhsErrorMessage == rhsErrorMessage
   }
 }
 
