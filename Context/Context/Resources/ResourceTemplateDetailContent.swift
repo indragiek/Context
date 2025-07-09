@@ -24,6 +24,8 @@ struct ResourceTemplateDetailContent: View {
   @State private var viewMode: ResourceViewMode = .preview
   @State private var rawResponseJSON: String? = nil
   @State private var requestError: (any Error)? = nil
+  @State private var showCopiedIndicator = false
+  @State private var copiedIndicatorTask: Task<Void, Never>?
 
   // Cached regex for template parameters
   private static let templateParameterRegex = /\{[^}]+\}/
@@ -241,12 +243,30 @@ struct ResourceTemplateDetailContent: View {
           Spacer()
 
           HStack(spacing: 8) {
-            ZStack {
+            // Copy button when in Raw mode with error
+            if requestError != nil && viewMode == .raw && rawResponseJSON != nil {
+              Button(action: {
+                copyRawJSONToClipboard()
+              }) {
+                HStack(spacing: 4) {
+                  Image(systemName: "doc.on.doc")
+                    .font(.system(size: 14))
+                  if showCopiedIndicator {
+                    Text("Copied!")
+                      .font(.caption)
+                      .foregroundColor(.secondary)
+                      .transition(.opacity.combined(with: .scale))
+                  }
+                }
+              }
+              .buttonStyle(.plain)
+              .help("Copy to clipboard")
+            }
+            
+            if isLoadingResources {
               ProgressView()
                 .controlSize(.small)
-                .opacity(isLoadingResources ? 1 : 0)
             }
-            .frame(width: 20)
 
 
             // Only show button if there are template variables
@@ -416,8 +436,8 @@ struct ResourceTemplateDetailContent: View {
         lastFetchedURI = state.lastFetchedURI
         // viewMode is now global, don't restore from cache
         rawResponseJSON = state.rawResponseJSON
-        requestError = nil  // Don't restore error objects from cache
-        
+        requestError = state.requestError
+        loadingFailed = state.requestError != nil
       }
     }
   }
@@ -430,7 +450,7 @@ struct ResourceTemplateDetailContent: View {
       lastFetchedURI: lastFetchedURI,
       viewMode: .preview,  // Don't persist viewMode
       rawResponseJSON: rawResponseJSON,
-      rawResponseError: requestError?.localizedDescription
+      requestError: requestError
     )
     await resourceCache.set(state, for: templateURI)
   }
@@ -626,5 +646,36 @@ struct ResourceTemplateDetailContent: View {
     }
     .padding(20)
     .frame(width: 600, height: 400)
+  }
+  
+  private func copyRawJSONToClipboard() {
+    guard let jsonString = rawResponseJSON else { return }
+    let unescapedJson = jsonString.replacingOccurrences(of: "\\/", with: "/")
+    NSPasteboard.general.clearContents()
+    NSPasteboard.general.setString(unescapedJson, forType: .string)
+    displayCopiedIndicator()
+  }
+  
+  private func displayCopiedIndicator() {
+    // Cancel any existing task
+    copiedIndicatorTask?.cancel()
+    
+    // Show indicator
+    withAnimation(.easeIn(duration: 0.1)) {
+      showCopiedIndicator = true
+    }
+    
+    // Hide indicator after delay
+    copiedIndicatorTask = Task {
+      try? await Task.sleep(nanoseconds: 1_500_000_000)  // 1.5 seconds
+      
+      if !Task.isCancelled {
+        await MainActor.run {
+          withAnimation(.easeOut(duration: 0.2)) {
+            showCopiedIndicator = false
+          }
+        }
+      }
+    }
   }
 }

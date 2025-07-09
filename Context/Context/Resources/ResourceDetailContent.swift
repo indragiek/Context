@@ -19,6 +19,8 @@ struct ResourceDetailContent: View {
   @State private var viewMode: ResourceViewMode = .preview
   @State private var rawResponseJSON: String? = nil
   @State private var requestError: (any Error)? = nil
+  @State private var showCopiedIndicator = false
+  @State private var copiedIndicatorTask: Task<Void, Never>?
 
   var body: some View {
     VStack(spacing: 0) {
@@ -167,6 +169,26 @@ struct ResourceDetailContent: View {
               
               Spacer()
               
+              // Copy button when in Raw mode
+              if viewMode == .raw, rawResponseJSON != nil {
+                Button(action: {
+                  copyRawJSONToClipboard()
+                }) {
+                  HStack(spacing: 4) {
+                    Image(systemName: "doc.on.doc")
+                      .font(.system(size: 14))
+                    if showCopiedIndicator {
+                      Text("Copied!")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .transition(.opacity.combined(with: .scale))
+                    }
+                  }
+                }
+                .buttonStyle(.plain)
+                .help("Copy to clipboard")
+              }
+              
               if isLoadingResources {
                 ProgressView()
                   .controlSize(.small)
@@ -231,8 +253,9 @@ struct ResourceDetailContent: View {
           hasLoadedOnce = true
           // viewMode is now global, don't restore from cache
           rawResponseJSON = cachedState.rawResponseJSON
-          requestError = nil  // Don't restore error objects from cache
-          
+          // Restore error state from cache
+          requestError = cachedState.requestError
+          loadingFailed = cachedState.requestError != nil
         }
         return
       }
@@ -275,7 +298,7 @@ struct ResourceDetailContent: View {
           lastFetchedURI: resource.uri,
           viewMode: .preview,  // Don't persist viewMode
           rawResponseJSON: jsonString,
-          rawResponseError: nil
+          requestError: nil
         )
         await resourceCache.set(state, for: resource.uri)
         
@@ -318,7 +341,7 @@ struct ResourceDetailContent: View {
           lastFetchedURI: resource.uri,
           viewMode: .preview,  // Don't persist viewMode
           rawResponseJSON: jsonString,
-          rawResponseError: error.localizedDescription
+          requestError: error
         )
         await resourceCache.set(state, for: resource.uri)
       }
@@ -381,5 +404,36 @@ struct ResourceDetailContent: View {
     }
     .padding(20)
     .frame(width: 600, height: 400)
+  }
+  
+  private func copyRawJSONToClipboard() {
+    guard let jsonString = rawResponseJSON else { return }
+    let unescapedJson = jsonString.replacingOccurrences(of: "\\/", with: "/")
+    NSPasteboard.general.clearContents()
+    NSPasteboard.general.setString(unescapedJson, forType: .string)
+    displayCopiedIndicator()
+  }
+  
+  private func displayCopiedIndicator() {
+    // Cancel any existing task
+    copiedIndicatorTask?.cancel()
+    
+    // Show indicator
+    withAnimation(.easeIn(duration: 0.1)) {
+      showCopiedIndicator = true
+    }
+    
+    // Hide indicator after delay
+    copiedIndicatorTask = Task {
+      try? await Task.sleep(nanoseconds: 1_500_000_000)  // 1.5 seconds
+      
+      if !Task.isCancelled {
+        await MainActor.run {
+          withAnimation(.easeOut(duration: 0.2)) {
+            showCopiedIndicator = false
+          }
+        }
+      }
+    }
   }
 }

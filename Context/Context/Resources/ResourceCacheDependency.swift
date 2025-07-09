@@ -11,7 +11,7 @@ struct ResourceCacheState: Sendable {
   var lastFetchedURI: String? = nil
   var viewMode: ResourceViewMode = .preview
   var rawResponseJSON: String? = nil
-  var rawResponseError: String? = nil
+  var requestError: (any Error)? = nil
 }
 
 // Manual Equatable implementation to handle non-Equatable types
@@ -22,13 +22,14 @@ extension ResourceCacheState: Equatable {
           lhs.hasLoadedOnce == rhs.hasLoadedOnce &&
           lhs.lastFetchedURI == rhs.lastFetchedURI &&
           lhs.viewMode == rhs.viewMode &&
-          lhs.rawResponseJSON == rhs.rawResponseJSON &&
-          lhs.rawResponseError == rhs.rawResponseError else {
+          lhs.rawResponseJSON == rhs.rawResponseJSON else {
       return false
     }
     
     // For non-Equatable types, compare counts as a proxy
-    return lhs.embeddedResources.count == rhs.embeddedResources.count
+    // Also check if both have errors or both don't
+    let bothHaveErrors = (lhs.requestError != nil) == (rhs.requestError != nil)
+    return lhs.embeddedResources.count == rhs.embeddedResources.count && bothHaveErrors
   }
 }
 
