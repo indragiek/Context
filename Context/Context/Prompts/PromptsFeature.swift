@@ -5,18 +5,40 @@ import ContextCore
 import GRDB
 import SharingGRDB
 
+enum PromptLoadingState: Sendable, Equatable {
+  case idle
+  case loading
+  case loaded
+  case failed(error: String, underlyingError: (any Error)?)
+  
+  static func == (lhs: PromptLoadingState, rhs: PromptLoadingState) -> Bool {
+    switch (lhs, rhs) {
+    case (.idle, .idle), (.loading, .loading), (.loaded, .loaded):
+      return true
+    case let (.failed(lError, _), .failed(rError, _)):
+      return lError == rError
+    default:
+      return false
+    }
+  }
+}
+
 struct PromptState: Sendable {
   var argumentValues: [String: String] = [:]
   var messages: [PromptMessage] = []
   var hasLoadedOnce = false
   var rawResponseJSON: JSONValue?
   var rawResponseError: String?
+  var loadingState: PromptLoadingState = .idle
+  var rawResponse: GetPromptResponse.Result?
+  var viewMode: PromptViewMode = .preview
 }
 
 extension PromptState: Equatable {
   static func == (lhs: PromptState, rhs: PromptState) -> Bool {
     lhs.argumentValues == rhs.argumentValues && lhs.hasLoadedOnce == rhs.hasLoadedOnce
-      && lhs.rawResponseError == rhs.rawResponseError
+      && lhs.rawResponseError == rhs.rawResponseError && lhs.loadingState == rhs.loadingState
+      && lhs.viewMode == rhs.viewMode
   }
 }
 
