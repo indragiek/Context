@@ -10,8 +10,6 @@ struct EmbeddedResourceView: View {
   @Binding var viewMode: ResourceViewMode
   let rawJSON: String?
   @State private var selectedResource: EmbeddedResource?
-  @State private var showCopiedIndicator = false
-  @State private var copiedIndicatorTask: Task<Void, Never>?
   @State private var shareURL: URL?
   @State private var quickLookURL: URL?
 
@@ -62,27 +60,15 @@ struct EmbeddedResourceView: View {
             Spacer()
 
             // Copy button - behavior changes based on view mode
-            Button(action: {
+            CopyButton {
               if viewMode == .preview {
                 copyPreviewContent(resource)
               } else {
                 copyRawJSONToClipboard()
               }
-            }) {
-              HStack(spacing: 4) {
-                Image(systemName: "doc.on.doc")
-                  .font(.system(size: 14))
-                if showCopiedIndicator {
-                  Text("Copied!")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .transition(.opacity.combined(with: .scale))
-                }
-              }
             }
-            .buttonStyle(.plain)
-            .help(viewMode == .preview ? "Copy to clipboard" : "Copy raw JSON to clipboard")
             .disabled(viewMode == .preview && shouldDisableCopyButton(for: resource))
+            .help(viewMode == .preview ? "Copy to clipboard" : "Copy raw JSON to clipboard")
 
             // Save button
             Button(action: {
@@ -214,10 +200,6 @@ struct EmbeddedResourceView: View {
       }
     }
     .onDisappear {
-      // Cancel any pending animation task
-      copiedIndicatorTask?.cancel()
-      copiedIndicatorTask = nil
-
       // Clean up temporary share URL
       if let shareURL = shareURL {
         try? FileManager.default.removeItem(at: shareURL)
@@ -473,43 +455,17 @@ struct EmbeddedResourceView: View {
     let unescapedJson = jsonString.replacingOccurrences(of: "\\/", with: "/")
     NSPasteboard.general.clearContents()
     NSPasteboard.general.setString(unescapedJson, forType: .string)
-    displayCopiedIndicator()
   }
 
   private func copyTextToClipboard(_ text: String) {
     NSPasteboard.general.clearContents()
     NSPasteboard.general.setString(text, forType: .string)
-    displayCopiedIndicator()
   }
 
   private func copyImageToClipboard(_ data: Data) {
     if let image = NSImage(data: data) {
       NSPasteboard.general.clearContents()
       NSPasteboard.general.writeObjects([image])
-      displayCopiedIndicator()
-    }
-  }
-
-  private func displayCopiedIndicator() {
-    // Cancel any existing task
-    copiedIndicatorTask?.cancel()
-
-    // Show indicator
-    withAnimation(.easeIn(duration: 0.1)) {
-      showCopiedIndicator = true
-    }
-
-    // Hide indicator after delay
-    copiedIndicatorTask = Task {
-      try? await Task.sleep(nanoseconds: 1_500_000_000)  // 1.5 seconds
-
-      if !Task.isCancelled {
-        await MainActor.run {
-          withAnimation(.easeOut(duration: 0.2)) {
-            showCopiedIndicator = false
-          }
-        }
-      }
     }
   }
 }

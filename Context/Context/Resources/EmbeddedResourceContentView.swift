@@ -7,8 +7,6 @@ import UniformTypeIdentifiers
 
 struct EmbeddedResourceContentView: View {
   let resource: EmbeddedResource
-  @State private var showCopiedIndicator = false
-  @State private var copiedIndicatorTask: Task<Void, Never>?
   @State private var shareURL: URL?
   @State private var quickLookURL: URL?
 
@@ -26,41 +24,15 @@ struct EmbeddedResourceContentView: View {
         Group {
           switch resource {
           case .text(let textContent):
-            Button(action: {
+            CopyButton {
               copyTextToClipboard(textContent.text)
-            }) {
-              HStack(spacing: 4) {
-                Image(systemName: "doc.on.doc")
-                  .font(.system(size: 14))
-                if showCopiedIndicator {
-                  Text("Copied!")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .transition(.opacity.combined(with: .scale))
-                }
-              }
             }
-            .buttonStyle(.plain)
-            .help("Copy to clipboard")
 
           case .blob(let blobContent):
             if let mimeType = blobContent.mimeType, mimeType.starts(with: "image/") {
-              Button(action: {
+              CopyButton {
                 copyImageToClipboard(blobContent.blob)
-              }) {
-                HStack(spacing: 4) {
-                  Image(systemName: "doc.on.doc")
-                    .font(.system(size: 14))
-                  if showCopiedIndicator {
-                    Text("Copied!")
-                      .font(.caption)
-                      .foregroundColor(.secondary)
-                      .transition(.opacity.combined(with: .scale))
-                  }
-                }
               }
-              .buttonStyle(.plain)
-              .help("Copy to clipboard")
             }
           }
         }
@@ -410,37 +382,12 @@ struct EmbeddedResourceContentView: View {
   private func copyTextToClipboard(_ text: String) {
     NSPasteboard.general.clearContents()
     NSPasteboard.general.setString(text, forType: .string)
-    displayCopiedIndicator()
   }
 
   private func copyImageToClipboard(_ data: Data) {
     if let image = NSImage(data: data) {
       NSPasteboard.general.clearContents()
       NSPasteboard.general.writeObjects([image])
-      displayCopiedIndicator()
-    }
-  }
-
-  private func displayCopiedIndicator() {
-    // Cancel any existing task
-    copiedIndicatorTask?.cancel()
-
-    // Show indicator
-    withAnimation(.easeIn(duration: 0.1)) {
-      showCopiedIndicator = true
-    }
-
-    // Hide indicator after delay
-    copiedIndicatorTask = Task {
-      try? await Task.sleep(nanoseconds: 1_500_000_000)  // 1.5 seconds
-
-      if !Task.isCancelled {
-        await MainActor.run {
-          withAnimation(.easeOut(duration: 0.2)) {
-            showCopiedIndicator = false
-          }
-        }
-      }
     }
   }
 }
