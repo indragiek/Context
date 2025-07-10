@@ -111,7 +111,10 @@ struct DetailView: View {
   @ViewBuilder
   private func resourcesTabContent(_ selectedServer: ServerFeature.State) -> some View {
     IfLetStore(
-      store.scope(state: \.servers[id: selectedServer.id], action: { .server(id: selectedServer.id, action: $0) })
+      store.scope(
+        state: \.serverLifecycleFeature.servers[id: selectedServer.id],
+        action: \.serverLifecycleFeature.serverFeature[id: selectedServer.id]
+      )
     ) { serverStore in
       WithViewStore(serverStore, observe: \.resourcesFeature.viewMode) { viewStore in
         if let selectedResourceID = selectedServer.resourcesFeature.selectedResourceID,
@@ -122,7 +125,7 @@ struct DetailView: View {
           ResourceDetailView(
             resource: selectedResource,
             server: selectedServer.server,
-            viewMode: viewStore.binding(send: { .resources(.viewModeChanged($0)) })
+            viewMode: viewStore.binding(send: { .resourcesFeature(.viewModeChanged($0)) })
           )
         } else if let selectedTemplateID = selectedServer.resourcesFeature.selectedResourceTemplateID,
           let selectedTemplate = selectedServer.resourcesFeature.resourceTemplates.first(where: {
@@ -132,7 +135,7 @@ struct DetailView: View {
           ResourceTemplateDetailView(
             template: selectedTemplate,
             server: selectedServer.server,
-            viewMode: viewStore.binding(send: { .resources(.viewModeChanged($0)) })
+            viewMode: viewStore.binding(send: { .resourcesFeature(.viewModeChanged($0)) })
           )
         } else {
           ContentUnavailableView(

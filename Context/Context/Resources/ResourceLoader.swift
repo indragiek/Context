@@ -19,7 +19,9 @@ struct LoadedResource: Equatable {
 
 @DependencyClient
 struct ResourceLoader {
-  var loadResource: @Sendable (String, MCPServer) async -> LoadedResource
+  var loadResource: @Sendable (String, MCPServer) async -> LoadedResource = { _, _ in
+    LoadedResource(embeddedResources: [], rawResponseJSON: "null", requestError: nil)
+  }
 }
 
 extension ResourceLoader: DependencyKey {

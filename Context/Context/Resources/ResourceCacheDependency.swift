@@ -3,6 +3,7 @@
 import ComposableArchitecture
 import ContextCore
 import Dependencies
+import Foundation
 
 struct ResourceCacheState: Sendable {
   var variableValues: [String: String] = [:]
