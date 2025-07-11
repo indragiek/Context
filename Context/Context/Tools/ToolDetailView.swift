@@ -1,11 +1,9 @@
 // Copyright © 2025 Indragie Karunaratne. All rights reserved.
 
+import AppKit
 import ComposableArchitecture
 import ContextCore
 import Dependencies
-import GRDB
-import MarkdownUI
-import SharingGRDB
 import SwiftUI
 
 struct ToolDetailView: View {
@@ -18,8 +16,8 @@ struct ToolDetailView: View {
   @State private var validationErrors: [String: String] = [:]
   @State private var toolResponse: CallToolResponse.Result?
   @State private var isLoading = false
-  @State private var rawResponseJSON: JSONValue?
-  @State private var rawResponseError: String?
+  @State private var responseJSON: JSONValue?
+  @State private var responseError: (any Error)?
   @State private var hasLoadedOnce = false
   @State private var debounceTask: Task<Void, Never>?
   @State private var focusedField: String?
@@ -28,12 +26,7 @@ struct ToolDetailView: View {
   @Dependency(\.mcpClientManager) private var mcpClientManager
   @Dependency(\.defaultDatabase) private var database
 
-  // View mode for response
-  enum ViewMode: String, CaseIterable {
-    case preview = "Preview"
-    case raw = "Raw"
-  }
-  @State private var viewMode: ViewMode = .preview
+  @State private var viewMode: ToolViewMode = .preview
 
   var body: some View {
     GeometryReader { geometry in
@@ -46,7 +39,8 @@ struct ToolDetailView: View {
       }
     }
     .sheet(isPresented: $showingFullDescription) {
-      fullDescriptionSheet
+      ToolHeaderView(tool: tool, showingFullDescription: $showingFullDescription)
+        .fullDescriptionSheet
     }
     .onAppear {
       loadFromToolState()
@@ -57,8 +51,8 @@ struct ToolDetailView: View {
       parameterValues.removeAll()
       validationErrors.removeAll()
       toolResponse = nil
-      rawResponseJSON = nil
-      rawResponseError = nil
+      responseJSON = nil
+      responseError = nil
       hasLoadedOnce = false
       initializeParameterValues()
     }
@@ -102,97 +96,8 @@ struct ToolDetailView: View {
   @ViewBuilder
   private var topPane: some View {
     VStack(spacing: 0) {
-      headerSection
+      ToolHeaderView(tool: tool, showingFullDescription: $showingFullDescription)
       argumentsSection
-    }
-  }
-
-  @ViewBuilder
-  private var headerSection: some View {
-    VStack(alignment: .leading, spacing: 16) {
-      HStack(alignment: .top, spacing: 12) {
-        toolInfo
-        Spacer()
-        annotationBadges
-      }
-    }
-    .padding(20)
-    .background(Color(NSColor.controlBackgroundColor))
-  }
-
-  @ViewBuilder
-  private var toolInfo: some View {
-    VStack(alignment: .leading, spacing: 4) {
-      Text(tool.name)
-        .font(.title2)
-        .fontWeight(.semibold)
-
-      if let description = tool.description {
-        VStack(alignment: .leading, spacing: 4) {
-          Text(description)
-            .font(.callout)
-            .foregroundColor(.secondary)
-            .textSelection(.enabled)
-            .lineLimit(3)
-
-          Button(action: {
-            showingFullDescription = true
-          }) {
-            Text("Show more")
-              .font(.caption)
-              .foregroundColor(.accentColor)
-          }
-          .buttonStyle(.plain)
-        }
-      } else {
-        Button(action: {
-          showingFullDescription = true
-        }) {
-          Text("Show more")
-            .font(.caption)
-            .foregroundColor(.accentColor)
-        }
-        .buttonStyle(.plain)
-      }
-    }
-  }
-
-  @ViewBuilder
-  private var annotationBadges: some View {
-    if let annotations = tool.annotations {
-      HStack(spacing: 8) {
-        if annotations.readOnlyHint == true {
-          AnnotationBadge(
-            label: "Read Only",
-            color: .green,
-            icon: "eye"
-          )
-        }
-
-        if annotations.destructiveHint == true {
-          AnnotationBadge(
-            label: "Destructive",
-            color: .red,
-            icon: "exclamationmark.triangle"
-          )
-        }
-
-        if annotations.idempotentHint == true {
-          AnnotationBadge(
-            label: "Idempotent",
-            color: .blue,
-            icon: "arrow.triangle.2.circlepath"
-          )
-        }
-
-        if annotations.openWorldHint == true {
-          AnnotationBadge(
-            label: "Open World",
-            color: .purple,
-            icon: "globe"
-          )
-        }
-      }
     }
   }
 
@@ -245,114 +150,16 @@ struct ToolDetailView: View {
 
   @ViewBuilder
   private var bottomPane: some View {
-    VStack(spacing: 0) {
-      responseHeader
-      Divider()
-      responseContent
-    }
-  }
-
-  @ViewBuilder
-  private var responseHeader: some View {
-    HStack {
-      Text("Response")
-        .font(.headline)
-
-      Spacer()
-
-      ToggleButton(selection: $viewMode)
-
-      Spacer()
-
-      runToolButton
-    }
-    .padding(.horizontal, 20)
-    .padding(.vertical, 8)
-    .background(Color(NSColor.controlBackgroundColor))
-  }
-
-  @ViewBuilder
-  private var runToolButton: some View {
-    Button(action: {
-      callTool()
-    }) {
-      ZStack {
-        Image(systemName: "play.fill")
-          .font(.system(size: 16))
-          .foregroundColor(.accentColor)
-          .opacity(isLoading ? 0 : 1)
-
-        if isLoading {
-          ProgressView()
-            .controlSize(.small)
-            .scaleEffect(0.8)
-        }
-      }
-    }
-    .buttonStyle(.plain)
-    .disabled(!canCallTool || isLoading)
-    .help("Run Tool (⌘↩)")
-  }
-
-  @ViewBuilder
-  private var responseContent: some View {
-    if let response = toolResponse {
-      Group {
-        switch viewMode {
-        case .preview:
-          let messages = response.content.map { content in
-            ToolResponseMessage(content: content)
-          }
-          MessageThreadView(messages: messages)
-        case .raw:
-          rawResponseView
-        }
-      }
-      .frame(maxWidth: .infinity, maxHeight: .infinity)
-    } else {
-      VStack {
-        ContentUnavailableView(
-          "No Response",
-          systemImage: "function",
-          description: Text("Enter arguments and click the ▶ button to call the tool")
-        )
-      }
-      .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-  }
-
-  @ViewBuilder
-  private var rawResponseView: some View {
-    if let jsonValue = rawResponseJSON {
-      JSONRawView(jsonValue: jsonValue, searchText: "", isSearchActive: false)
-    } else if let error = rawResponseError {
-      VStack(spacing: 16) {
-        Image(systemName: "exclamationmark.triangle")
-          .font(.largeTitle)
-          .foregroundColor(.red)
-
-        Text("JSON Error")
-          .font(.headline)
-
-        Text(error)
-          .font(.callout)
-          .foregroundColor(.secondary)
-          .multilineTextAlignment(.center)
-          .padding(.horizontal)
-      }
-      .frame(maxWidth: .infinity, maxHeight: .infinity)
-    } else {
-      Text("No raw data available")
-        .foregroundColor(.secondary)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-  }
-
-  private func calculateIdealHeight() -> CGFloat {
-    let baseHeight: CGFloat = 160  // Header + padding
-    let propertiesCount = tool.inputSchema.properties?.count ?? 0
-    let propertyHeight: CGFloat = 50  // Height per property
-    return baseHeight + (CGFloat(min(propertiesCount, 5)) * propertyHeight)
+    ToolResponseView(
+      hasLoadedOnce: hasLoadedOnce,
+      toolResponse: toolResponse,
+      responseJSON: responseJSON,
+      responseError: responseError,
+      viewMode: $viewMode,
+      canCallTool: canCallTool,
+      isLoading: isLoading,
+      onRunTool: callTool
+    )
   }
 
   private var canCallTool: Bool {
@@ -463,8 +270,8 @@ struct ToolDetailView: View {
     parameterValues = toolState.parameterValues
     toolResponse = toolState.toolResponse
     hasLoadedOnce = toolState.hasLoadedOnce
-    rawResponseJSON = toolState.rawResponseJSON
-    rawResponseError = toolState.rawResponseError
+    responseJSON = toolState.responseJSON
+    responseError = toolState.responseError
   }
 
   private func updateToolState(includeParameterValues: Bool = true) {
@@ -473,8 +280,8 @@ struct ToolDetailView: View {
       parameterValues: includeParameterValues ? parameterValues : toolState.parameterValues,
       toolResponse: toolResponse,
       hasLoadedOnce: hasLoadedOnce,
-      rawResponseJSON: rawResponseJSON,
-      rawResponseError: rawResponseError
+      responseJSON: responseJSON,
+      responseError: responseError
     )
     if toolState != newState {
       toolState = newState
@@ -501,18 +308,16 @@ struct ToolDetailView: View {
         let response = CallToolResponse.Result(content: content, isError: isError)
         toolResponse = response
         hasLoadedOnce = true
+        responseError = nil  // Clear any previous error
 
         do {
           // TODO: Fix this inefficient encoding/decoding. We do this because we don't have access
           // to the raw JSON responses from the client.
-          let encoder = JSONEncoder()
-          encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
-          let jsonData = try encoder.encode(response)
-          rawResponseJSON = try JSONDecoder().decode(JSONValue.self, from: jsonData)
-          rawResponseError = nil
+          let jsonData = try JSONUtility.prettyData(from: response)
+          responseJSON = try JSONDecoder().decode(JSONValue.self, from: jsonData)
         } catch {
-          rawResponseError = error.localizedDescription
-          rawResponseJSON = nil
+          // If we can't encode the response, keep responseJSON as nil
+          responseJSON = nil
         }
 
         isLoading = false
@@ -527,25 +332,13 @@ struct ToolDetailView: View {
           focusedField = savedField
         }
       } catch {
-        // Create more informative error message
-        let errorMessage: String
-        let errorDetails: String?
+        // Store the actual error object
+        responseError = error
 
-        errorMessage = "Error calling tool: \(error.localizedDescription)"
-        errorDetails = nil
+        // Clear the tool response - we'll show error view instead
+        toolResponse = nil
+        responseJSON = nil
 
-        var errorContent: [Content] = [.text(errorMessage)]
-        if let details = errorDetails {
-          errorContent.append(.text("\n\n💡 \(details)"))
-        }
-
-        let errorResponse = CallToolResponse.Result(
-          content: errorContent,
-          isError: true
-        )
-        toolResponse = errorResponse
-        rawResponseError = error.localizedDescription
-        rawResponseJSON = nil
         hasLoadedOnce = true
         isLoading = false
 
@@ -562,156 +355,4 @@ struct ToolDetailView: View {
     }
   }
 
-  @ViewBuilder
-  private var fullDescriptionSheet: some View {
-    VStack(spacing: 20) {
-      HStack {
-        Text(tool.name)
-          .font(.title2)
-          .fontWeight(.semibold)
-
-        Spacer()
-
-        Button("Done") {
-          showingFullDescription = false
-        }
-        .keyboardShortcut(.defaultAction)
-      }
-
-      ScrollView {
-        VStack(alignment: .leading, spacing: 16) {
-          if let description = tool.description {
-            Markdown(description)
-              .markdownTextStyle {
-                ForegroundColor(.primary)
-              }
-              .textSelection(.enabled)
-              .frame(maxWidth: .infinity, alignment: .leading)
-          }
-
-          if let properties = tool.inputSchema.properties, !properties.isEmpty {
-            Divider()
-
-            VStack(alignment: .leading, spacing: 8) {
-              Text("Arguments")
-                .font(.headline)
-
-              let requiredSet = Set(tool.inputSchema.required ?? [])
-              let sortedProperties = properties.sorted { $0.key < $1.key }
-
-              ForEach(sortedProperties, id: \.key) { key, schema in
-                VStack(alignment: .leading, spacing: 4) {
-                  HStack {
-                    Text(key)
-                      .font(.subheadline)
-                      .fontWeight(.medium)
-
-                    if requiredSet.contains(key) {
-                      Text("Required")
-                        .font(.caption2)
-                        .fontWeight(.medium)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(
-                          RoundedRectangle(cornerRadius: 4)
-                            .fill(Color.red.opacity(0.2))
-                        )
-                        .foregroundColor(.red)
-                    }
-
-                    if let type = extractSchemaType(from: schema) {
-                      Text(type)
-                        .font(.caption2)
-                        .fontWeight(.medium)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(
-                          RoundedRectangle(cornerRadius: 4)
-                            .fill(Color.blue.opacity(0.2))
-                        )
-                        .foregroundColor(.blue)
-                    }
-                  }
-
-                  if let desc = extractDescription(from: schema) {
-                    Markdown(desc)
-                      .markdownTextStyle {
-                        ForegroundColor(.secondary)
-                      }
-                      .font(.caption)
-                      .textSelection(.enabled)
-                  }
-                }
-                .padding(.vertical, 4)
-              }
-            }
-          }
-
-          if let annotations = tool.annotations {
-            Divider()
-
-            VStack(alignment: .leading, spacing: 8) {
-              Text("Annotations")
-                .font(.headline)
-
-              HStack(spacing: 12) {
-                if annotations.readOnlyHint == true {
-                  AnnotationBadge(
-                    label: "Read Only",
-                    color: .green,
-                    icon: "eye"
-                  )
-                }
-
-                if annotations.destructiveHint == true {
-                  AnnotationBadge(
-                    label: "Destructive",
-                    color: .red,
-                    icon: "exclamationmark.triangle"
-                  )
-                }
-
-                if annotations.idempotentHint == true {
-                  AnnotationBadge(
-                    label: "Idempotent",
-                    color: .blue,
-                    icon: "arrow.triangle.2.circlepath"
-                  )
-                }
-
-                if annotations.openWorldHint == true {
-                  AnnotationBadge(
-                    label: "Open World",
-                    color: .purple,
-                    icon: "globe"
-                  )
-                }
-              }
-            }
-          }
-        }
-        .padding(.vertical)
-      }
-    }
-    .padding(20)
-    .frame(width: 600, height: 400)
-  }
-
-  private func extractSchemaType(from schema: JSONValue) -> String? {
-    if case .object(let obj) = schema,
-      case .string(let typeStr) = obj["type"]
-    {
-      return typeStr
-    }
-    return nil
-  }
-
-  private func extractDescription(from schema: JSONValue) -> String? {
-    if case .object(let obj) = schema,
-      case .string(let desc) = obj["description"]
-    {
-      return desc
-    }
-    return nil
-  }
 }

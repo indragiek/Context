@@ -1,9 +1,16 @@
 ## Unreleased
 
+* Show formatted error responses when calling tools, getting prompts, and getting resources fails (#31)
+* Add missing copy buttons for copying responses and errors as JSON (#31)
+* Fix stepper control in tool input incrementing by 0.1 instead of 1 (#31)
+* Fix dropdown menus in tool input not persisting initial value (#31)
+* Fix commands being invoked using a non-interactive shell (#32)
+* Fix client not handling a roots/list request from the server (#33)
+
 ## Version 1.0.7 (107)
 
 * Update OAuth callback URL scheme to app.contextmcp (#9)
-* Support MCP Pagination (#10))
+* Support MCP Pagination (#10)
 * Support MCP Roots (#11)
 * Handle pings sent by server to client (#12)
 * Handle "Connection: keep-alive" HTTP header (#17)

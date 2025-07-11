@@ -21,4 +21,5 @@
 
 - Use the XcodeBuildMCP server to build and run the macOS application
 - Before launching the app, kill the app if it's already running using the command "killall Context || true"
+- NEVER use the stop_mac_app tool from XcodeBuildMCP, always use the killall command
 - Use the build_run_mac_proj tool from XcodeBuildMCP to build and run the Mac app

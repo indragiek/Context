@@ -490,8 +490,8 @@ public actor DXTTransport: Transport {
     let task = Process()
     
     // Use the user's shell to run commands
-    let shellPath = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
-    var shellArgs = ["-l", "-c"]
+    let shellPath = shellPath ?? (ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh")
+    var shellArgs = ["-l", "-i", "-c"]
     
     // Build command string with escaped arguments
     var commandString = command
@@ -712,9 +712,9 @@ public actor DXTTransport: Transport {
     }
     
     // Get shell path from parameter or environment
-    let shell = shellPath ?? ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
-    var shellArgs = ["-l", "-c"]
-    
+    let shell = shellPath ?? (ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh")
+    var shellArgs = ["-l", "-i", "-c"]
+
     // Build command string
     var commandString = command
     if !args.isEmpty {

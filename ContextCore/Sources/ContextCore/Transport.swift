@@ -244,7 +244,8 @@ private enum NotificationRegistry {
 private enum RequestRegistry {
   private static let types: [String: any JSONRPCRequest.Type] = [
     "sampling/createMessage": CreateMessageRequest.self,
-    "ping": PingRequest.self
+    "ping": PingRequest.self,
+    "roots/list": ListRootsRequest.self
   ]
 
   static func requestType(for method: String) -> (any JSONRPCRequest.Type)? {

@@ -420,13 +420,13 @@ enum DXTTestError: Error {
       shellPath: nil
     )
     
-    // The process info will have shell args: [shell, -c, command]
-    #expect(processInfo.arguments?.count == 3)
-    guard let args = processInfo.arguments, args.count >= 3 else {
+    // The process info will have shell args: [shell, -l, -i, -c, command]
+    #expect(processInfo.arguments?.count == 4)
+    guard let args = processInfo.arguments, args.count >= 4 else {
       Issue.record("Process info arguments are missing or invalid")
       return
     }
-    let fullCommand = args[2]
+    let fullCommand = args[3]
     
     // Verify command substitution
     #expect(fullCommand.contains("\(tempDir.path)/python3"))

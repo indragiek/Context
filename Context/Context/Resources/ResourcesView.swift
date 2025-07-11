@@ -260,7 +260,7 @@ struct ResourceRow: View {
 
       // URI
       if isTemplate {
-        uriWithBoldedParameters
+        createBoldedParameterText(for: uri)
           .font(.system(.caption, design: .monospaced))
           .foregroundColor(.secondary)
           .lineLimit(1)
@@ -276,31 +276,20 @@ struct ResourceRow: View {
     .padding(.vertical, 4)
   }
 
-  private var uriWithBoldedParameters: Text {
+  private func createBoldedParameterText(for uri: String) -> Text {
     let matches = uri.matches(of: Self.templateParameterRegex)
 
-    var result = Text("")
-    var lastIndex = uri.startIndex
+    var attributedString = AttributedString(uri)
 
     for match in matches {
-      // Add text before the parameter
-      let beforeText = String(uri[lastIndex..<match.range.lowerBound])
-      result = result + Text(beforeText)
-
-      // Add the parameter with bold
-      let parameterText = String(uri[match.range])
-      result = result + Text(parameterText).fontWeight(.semibold)
-
-      lastIndex = match.range.upperBound
+      if let lowerBound = AttributedString.Index(match.range.lowerBound, within: attributedString),
+        let upperBound = AttributedString.Index(match.range.upperBound, within: attributedString)
+      {
+        attributedString[lowerBound..<upperBound].font = .body.weight(.semibold)
+      }
     }
 
-    // Add any remaining text after the last parameter
-    if lastIndex < uri.endIndex {
-      let remainingText = String(uri[lastIndex...])
-      result = result + Text(remainingText)
-    }
-
-    return result
+    return Text(attributedString)
   }
 }
 

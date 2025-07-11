@@ -223,7 +223,7 @@ actor MCPClientManager {
       }
 
       let shellPath = GlobalEnvironmentHelper.readShellPath()
-      var shellArgs = ["-l", "-c"]
+      var shellArgs = ["-l", "-i", "-c"]
 
       var commandString = command
       if let args = server.args, !args.isEmpty {

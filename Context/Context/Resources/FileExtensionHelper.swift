@@ -1,6 +1,8 @@
 // Copyright © 2025 Indragie Karunaratne. All rights reserved.
 
-enum FileExtensionHelper {
+import UniformTypeIdentifiers
+
+struct FileExtensionHelper {
   static func fileExtension(for mimeType: String?) -> String {
     guard let mimeType = mimeType else { return "" }
 
@@ -68,6 +70,108 @@ enum FileExtensionHelper {
         return ".txt"
       }
       return ""
+    }
+  }
+
+  static func allowedContentTypes(for mimeType: String?) -> [UTType] {
+    guard let mimeType = mimeType else { return [] }
+
+    switch mimeType {
+    // Text formats
+    case "text/plain":
+      return [.plainText]
+    case "text/html":
+      return [.html]
+    case "text/css":
+      return [.css]
+    case "text/javascript", "application/javascript":
+      return [.javaScript]
+    case "text/markdown":
+      return [UTType(filenameExtension: "md") ?? .plainText]
+    case "text/csv":
+      return [.commaSeparatedText]
+    case "application/json":
+      return [.json]
+    case "application/xml", "text/xml":
+      return [.xml]
+    case "application/x-yaml", "text/yaml":
+      return [.yaml]
+    case "text/x-python", "application/x-python-code":
+      return [.pythonScript]
+    case "text/x-swift":
+      return [.swiftSource]
+    case "text/x-c":
+      return [.cSource]
+    case "text/x-c++":
+      return [.cPlusPlusSource]
+    case "text/x-ruby":
+      return [.rubyScript]
+    case "text/x-php":
+      return [.phpScript]
+
+    // Images
+    case "image/png":
+      return [.png]
+    case "image/jpeg", "image/jpg":
+      return [.jpeg]
+    case "image/gif":
+      return [.gif]
+    case "image/svg+xml":
+      return [.svg]
+    case "image/webp":
+      return [.webP]
+    case "image/bmp":
+      return [.bmp]
+    case "image/tiff":
+      return [.tiff]
+    case "image/x-icon":
+      return [.ico]
+
+    // Videos
+    case "video/mp4":
+      return [.mpeg4Movie]
+    case "video/quicktime":
+      return [.quickTimeMovie]
+    case "video/x-msvideo":
+      return [.avi]
+    case "video/mpeg":
+      return [.mpeg]
+
+    // Audio
+    case "audio/mpeg", "audio/mp3":
+      return [.mp3]
+    case "audio/wav", "audio/x-wav":
+      return [.wav]
+    case "audio/aac":
+      return [UTType(filenameExtension: "aac") ?? .audio]
+    case "audio/flac":
+      return [UTType(filenameExtension: "flac") ?? .audio]
+    case "audio/midi", "audio/x-midi":
+      return [.midi]
+
+    // Documents
+    case "application/pdf":
+      return [.pdf]
+    case "application/zip":
+      return [.zip]
+
+    default:
+      // Try to create UTType from file extension
+      let ext = fileExtension(for: mimeType).trimmingCharacters(in: CharacterSet(charactersIn: "."))
+      if !ext.isEmpty, let utType = UTType(filenameExtension: ext) {
+        return [utType]
+      }
+      // Fallback based on MIME type prefix
+      if mimeType.starts(with: "text/") {
+        return [.plainText]
+      } else if mimeType.starts(with: "image/") {
+        return [.image]
+      } else if mimeType.starts(with: "video/") {
+        return [.movie]
+      } else if mimeType.starts(with: "audio/") {
+        return [.audio]
+      }
+      return []
     }
   }
 }

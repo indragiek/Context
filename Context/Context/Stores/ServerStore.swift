@@ -148,13 +148,19 @@ struct ServerStore: ServerStoreProtocol {
       let validEnv = stdioConfig.environmentVariables.filter {
         !$0.name.isEmpty && !$0.value.isEmpty
       }
-      let envDict = Dictionary(uniqueKeysWithValues: validEnv.map { ($0.name, $0.value) })
+      var envDict: [String: String] = [:]
+      for envVar in validEnv {
+        envDict[envVar.name] = envVar.value
+      }
       server.environment = envDict.isEmpty ? nil : envDict
 
     case (.sse, .http(let httpConfig)), (.streamableHTTP, .http(let httpConfig)):
       server.url = httpConfig.url
       let validHeaders = httpConfig.headers.filter { !$0.key.isEmpty && !$0.value.isEmpty }
-      let headerDict = Dictionary(uniqueKeysWithValues: validHeaders.map { ($0.key, $0.value) })
+      var headerDict: [String: String] = [:]
+      for header in validHeaders {
+        headerDict[header.key] = header.value
+      }
       server.headers = headerDict.isEmpty ? nil : headerDict
 
     case (.dxt, .dxt(let dxtConfig)):

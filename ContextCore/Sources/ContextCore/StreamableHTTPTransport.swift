@@ -120,22 +120,16 @@ public actor StreamableHTTPTransport: Transport {
       // Try sending a request to the server to see if it supports the Streamable
       // HTTP transport.
       let result = try await tryInitialize(idGenerator: idGenerator)
-      consumerTasks.append(
-        Task {
-          do {
-            logger.info("Initialized. Opening SSE stream")
-            try await openSSEStream()
-          } catch let error as StreamableHTTPTransportError {
-            if case .sseNotSupported = error {
-              logger.info("SSE not supported by server, operating in request-response mode")
-              sseSupported = false
-            } else {
-              logger.error("Failed to open SSE stream: \(error)")
-            }
-          } catch let error {
-            logger.error("Failed to open SSE stream: \(error)")
-          }
-        })
+      
+      // Try to open SSE stream so that the server can immediately
+      // start sending messages to the client. It's OK if the server
+      // does not support SSE -- this is best effort.
+      do {
+        try await openSSEStreamIfSupported()
+      } catch {
+        logger.error("Failed to open SSE stream: \(error)")
+      }
+      
       return result
     } catch let error as StreamableHTTPTransportError {
       switch error {
@@ -145,9 +139,18 @@ public actor StreamableHTTPTransport: Transport {
         // falling back to HTTP+SSE.
         supportsStreamableHTTPTransport = false
         logger.info("Opening SSE stream to retry initialization")
-        try await openSSEStream()
-        // If this is successful, then `sendEventEndpointURL` will be set and
-        // we can retry initialization.
+        
+        // Try to open SSE stream for legacy HTTP+SSE transport
+        do {
+          try await openSSEStreamIfSupported()
+        } catch {
+          // If opening SSE stream fails for reasons other than "not supported",
+          // we still want to throw that error
+          throw error
+        }
+        
+        // If SSE is supported (either legacy or failed to open), retry initialization
+        // If SSE is not supported, we'll continue with POST-only mode
         return try await tryInitialize(idGenerator: idGenerator)
       default:
         throw error
@@ -246,6 +249,15 @@ public actor StreamableHTTPTransport: Transport {
     sessionID = nil
     negotiatedProtocolVersion = nil
     sseSupported = true  // Reset to default
+    
+    // Send disconnected state only for POST-only mode
+    // For SSE mode, decrementSSEConnectionCount will handle this automatically
+    if !sseSupported && activeSSEConnectionCount == 0 {
+      Task {
+        await connectionStateChannel.send(.disconnected)
+      }
+    }
+    
     // Don't reset activeSSEConnectionCount - let cancelled tasks decrement naturally
   }
 
@@ -336,6 +348,14 @@ public actor StreamableHTTPTransport: Transport {
       negotiatedProtocolVersion = initializeResponse.result.protocolVersion
       let initialized = InitializedNotification()
       try await send(notification: initialized)
+      
+      // If SSE is not supported and we're in POST-only mode, mark as connected
+      if !sseSupported && activeSSEConnectionCount == 0 {
+        Task {
+          await connectionStateChannel.send(.connected)
+        }
+      }
+      
       return initializeResponse.result
     case .failedRequest(request: _, let error):
       throw TransportError.initializationFailed(error)
@@ -347,6 +367,22 @@ public actor StreamableHTTPTransport: Transport {
       throw TransportError.initializationFailed(error)
     case .decodingError(request: _, error: _, let data):
       throw TransportError.invalidMessage(data: data)
+    }
+  }
+
+  /// Attempts to open an SSE stream if supported, handling the case where SSE is not available.
+  /// This method consolidates the logic for handling servers that don't support SSE (405 response).
+  private func openSSEStreamIfSupported() async throws {
+    do {
+      logger.info("Initialized. Opening SSE stream")
+      try await openSSEStream()
+    } catch let error as StreamableHTTPTransportError {
+      if case .sseNotSupported = error {
+        logger.info("SSE not supported by server, operating in request-response mode")
+        sseSupported = false
+      } else {
+        throw error
+      }
     }
   }
 

@@ -11,11 +11,13 @@ struct KeyValueListFeature {
     var key: String
     var value: String
     var shouldFocusKey: Bool = false
+    var isDuplicateKey: Bool = false
 
     init(key: String = "", value: String = "", shouldFocusKey: Bool = false) {
       self.key = key
       self.value = value
       self.shouldFocusKey = shouldFocusKey
+      self.isDuplicateKey = false
     }
   }
 
@@ -55,6 +57,19 @@ struct KeyValueListFeature {
     case focusHandled(Item.ID)
   }
 
+  private func validateDuplicateKeys(state: inout State) {
+    let keyGroups = Dictionary(grouping: state.items) { item in
+      item.key.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+
+    for i in state.items.indices {
+      let trimmedKey = state.items[i].key.trimmingCharacters(in: .whitespacesAndNewlines)
+        .lowercased()
+      let isDuplicate = !trimmedKey.isEmpty && (keyGroups[trimmedKey]?.count ?? 0) > 1
+      state.items[i].isDuplicateKey = isDuplicate
+    }
+  }
+
   var body: some ReducerOf<Self> {
     Reduce { state, action in
       switch action {
@@ -63,6 +78,7 @@ struct KeyValueListFeature {
           key: state.placeholder.key, value: state.placeholder.value, shouldFocusKey: true)
         state.items.append(newItem)
         state.selectedId = newItem.id
+        validateDuplicateKeys(state: &state)
         return .none
 
       case .removeSelected:
@@ -71,6 +87,7 @@ struct KeyValueListFeature {
         {
           state.items.remove(at: index)
           state.selectedId = nil
+          validateDuplicateKeys(state: &state)
         }
         return .none
 
@@ -87,6 +104,7 @@ struct KeyValueListFeature {
               state.selectedId = nil
             }
           }
+          validateDuplicateKeys(state: &state)
         }
         return .none
 

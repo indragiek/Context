@@ -39,6 +39,7 @@ struct KeyValueListView: View {
                   set: { store.send(.itemKeyChanged(item.id, $0)) }
                 ),
                 shouldFocus: item.shouldFocusKey,
+                hasError: item.isDuplicateKey,
                 onFocusHandled: {
                   store.send(.focusHandled(item.id))
                 }

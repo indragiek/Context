@@ -4,8 +4,10 @@ import ContextCore
 import QuickLook
 import SwiftUI
 import UniformTypeIdentifiers
+import os
 
 struct JSONViewerToolbar: View {
+  private static let logger = Logger(subsystem: "com.indragie.Context", category: "JSONViewerToolbar")
   @Binding var selectedTab: JSONValueView.Tab
   @Binding var searchText: String
   @Binding var showCopiedMessage: Bool
@@ -180,12 +182,7 @@ struct JSONViewerToolbar: View {
   }
 
   private func copyFullJSON() {
-    let encoder = JSONEncoder()
-    encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-
-    if let data = try? encoder.encode(jsonValue),
-      let jsonString = String(data: data, encoding: .utf8)
-    {
+    if let jsonString = JSONUtility.prettyString(from: jsonValue, escapeSlashes: true) {
       NSPasteboard.general.clearContents()
       NSPasteboard.general.setString(jsonString, forType: .string)
 
@@ -214,13 +211,10 @@ struct JSONViewerToolbar: View {
     savePanel.begin { response in
       if response == .OK, let url = savePanel.url {
         do {
-          let encoder = JSONEncoder()
-          encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-          if let data = try? encoder.encode(jsonValue) {
-            try data.write(to: url)
-          }
+          let data = try JSONUtility.prettyData(from: jsonValue, escapeSlashes: true)
+          try data.write(to: url)
         } catch {
-          print("Failed to save JSON: \(error)")
+          JSONViewerToolbar.logger.error("Failed to save JSON: \(error)")
         }
       }
     }
@@ -231,14 +225,11 @@ struct JSONViewerToolbar: View {
     let tempURL = tempDir.appendingPathComponent("data.json")
 
     do {
-      let encoder = JSONEncoder()
-      encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-      if let data = try? encoder.encode(jsonValue) {
-        try data.write(to: tempURL)
-        shareURL = tempURL
-      }
+      let data = try JSONUtility.prettyData(from: jsonValue, escapeSlashes: true)
+      try data.write(to: tempURL)
+      shareURL = tempURL
     } catch {
-      print("Failed to create share URL: \(error)")
+      JSONViewerToolbar.logger.error("Failed to create share URL: \(error)")
     }
   }
 

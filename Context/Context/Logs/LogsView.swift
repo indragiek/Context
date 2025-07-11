@@ -153,9 +153,7 @@ struct LogsView: View {
       }
     default:
       // For non-string, non-object data, convert to JSON string representation
-      if let data = try? JSONEncoder().encode(log.data),
-        let jsonString = String(data: data, encoding: .utf8)
-      {
+      if let jsonString = JSONUtility.prettyString(from: log.data, escapeSlashes: true) {
         Text(jsonString)
           .font(.system(.body, design: .monospaced))
       } else {
@@ -196,9 +194,7 @@ struct LogsView: View {
 
     default:
       // For non-string, non-object data, convert to JSON string representation
-      if let data = try? JSONEncoder().encode(log.data),
-        let jsonString = String(data: data, encoding: .utf8)
-      {
+      if let jsonString = JSONUtility.prettyString(from: log.data, escapeSlashes: true) {
         return jsonString
       } else {
         return "Unable to display log data"
