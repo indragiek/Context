@@ -113,6 +113,7 @@ struct ResourceOperations {
 
   // MARK: - Save Operations
 
+  @MainActor
   static func saveResource(_ resource: EmbeddedResource) {
     let savePanel = NSSavePanel()
 
