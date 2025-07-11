@@ -84,17 +84,25 @@ struct GlobalEnvironmentView: View {
           }
         }
         
-        Menu("Import from...") {
+        Menu {
           ForEach(TerminalApp.allCases) { terminal in
             if terminal.isInstalled {
               Button(action: {
                 store.send(.importShellFrom(terminal))
               }) {
-                Label(terminal.name, image: terminal.icon)
+                HStack {
+                  Image(nsImage: terminal.icon)
+                    .resizable()
+                    .frame(width: 16, height: 16)
+                  Text(terminal.name)
+                }
               }
             }
           }
+        } label: {
+          Text("Import from...")
         }
+        .menuStyle(.automatic)
         .controlSize(.regular)
         .fixedSize()
         .disabled(viewStore.shellSelection == .loginShell)
@@ -236,12 +244,3 @@ struct GlobalEnvironmentView: View {
   }
 }
 
-extension Label where Title == Text, Icon == Image {
-  init(_ title: String, image nsImage: NSImage) {
-    self.init {
-      Text(title)
-    } icon: {
-      Image(nsImage: nsImage)
-    }
-  }
-}
