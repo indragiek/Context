@@ -313,9 +313,7 @@ struct ToolDetailView: View {
         do {
           // TODO: Fix this inefficient encoding/decoding. We do this because we don't have access
           // to the raw JSON responses from the client.
-          let encoder = JSONEncoder()
-          encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
-          let jsonData = try encoder.encode(response)
+          let jsonData = try JSONUtility.prettyData(from: response)
           responseJSON = try JSONDecoder().decode(JSONValue.self, from: jsonData)
         } catch {
           // If we can't encode the response, keep responseJSON as nil

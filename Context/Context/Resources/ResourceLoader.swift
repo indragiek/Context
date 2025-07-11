@@ -39,9 +39,6 @@ extension ResourceLoader: DependencyKey {
     loadResource: { uri, server in
       @Dependency(\.mcpClientManager) var mcpClientManager
 
-      let encoder = JSONEncoder()
-      encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-
       do {
         // Get the client and read the resource
         let client = try await mcpClientManager.client(for: server)
@@ -52,7 +49,7 @@ extension ResourceLoader: DependencyKey {
         let responseToEncode = ["contents": contents]
 
         // Encode the raw response and then decode to JSONValue
-        let jsonData = try encoder.encode(responseToEncode)
+        let jsonData = try JSONUtility.prettyData(from: responseToEncode, escapeSlashes: true)
         let jsonValue = try JSONDecoder().decode(JSONValue.self, from: jsonData)
 
         return LoadedResource(

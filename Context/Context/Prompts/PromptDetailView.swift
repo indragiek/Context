@@ -166,9 +166,7 @@ struct PromptDetailView: View {
             
             // TODO: Fix this inefficient encoding/decoding. We do this because we don't have access
             // to the raw JSON responses from the client.
-            let encoder = JSONEncoder()
-            encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
-            let jsonData = try encoder.encode(responseToEncode)
+            let jsonData = try JSONUtility.prettyData(from: responseToEncode)
             localPromptState.responseJSON = try JSONDecoder().decode(JSONValue.self, from: jsonData)
             localPromptState.responseError = nil
           } catch {

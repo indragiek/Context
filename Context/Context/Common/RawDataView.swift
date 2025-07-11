@@ -102,16 +102,11 @@ extension RawDataView {
   ) {
     // Try to copy raw response JSON first
     if let jsonValue = responseJSON {
-      do {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
-        let jsonData = try encoder.encode(jsonValue)
-        if let jsonString = String(data: jsonData, encoding: .utf8) {
-          NSPasteboard.general.clearContents()
-          NSPasteboard.general.setString(jsonString, forType: .string)
-        }
-      } catch {
-        logger.error("Failed to encode JSON for clipboard: \(error)")
+      if let jsonString = JSONUtility.prettyString(from: jsonValue) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(jsonString, forType: .string)
+      } else {
+        logger.error("Failed to encode JSON for clipboard")
       }
       return
     }
@@ -122,16 +117,11 @@ extension RawDataView {
         switch clientError {
         case .requestFailed(_, let jsonRPCError):
           // Copy the JSON-RPC error
-          do {
-            let encoder = JSONEncoder()
-            encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
-            let jsonData = try encoder.encode(jsonRPCError)
-            if let jsonString = String(data: jsonData, encoding: .utf8) {
-              NSPasteboard.general.clearContents()
-              NSPasteboard.general.setString(jsonString, forType: .string)
-            }
-          } catch {
-            logger.error("Failed to encode error JSON for clipboard: \(error)")
+          if let jsonString = JSONUtility.prettyString(from: jsonRPCError) {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(jsonString, forType: .string)
+          } else {
+            logger.error("Failed to encode error JSON for clipboard")
           }
 
         case .requestInvalidResponse(_, _, let data):

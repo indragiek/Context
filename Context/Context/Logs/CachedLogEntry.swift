@@ -17,14 +17,8 @@ struct CachedLogEntry: Identifiable, Equatable {
   init(_ logEntry: LogEntry) {
     self.logEntry = logEntry
 
-    // Create JSON encoder with consistent settings
-    let encoder = JSONEncoder()
-    encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-
     // Encode JSON once during initialization
-    if let data = try? encoder.encode(logEntry.params),
-      let string = String(data: data, encoding: .utf8)
-    {
+    if let string = JSONUtility.prettyString(from: logEntry.params, escapeSlashes: true) {
       self.jsonString = string
       self.searchText = string.lowercased()
     } else {

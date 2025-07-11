@@ -93,9 +93,7 @@ actor KeychainManager {
     let account = serverID.uuidString
 
     let storedToken = StoredOAuthToken(token: token, clientID: clientID)
-    let encoder = JSONEncoder()
-    encoder.dateEncodingStrategy = .iso8601
-    let tokenData = try encoder.encode(storedToken)
+    let tokenData = try JSONUtility.keychainData(from: storedToken)
 
     guard tokenData.count <= maxTokenDataSize else {
       logger.error("Token data too large for server \(serverID): \(tokenData.count) bytes")
