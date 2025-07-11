@@ -85,24 +85,6 @@ public class HTTPTestServer {
   private let process: Process
   public let serverURL: URL
   private let allocatedPort: Int
-  
-  /// Kills any hanging Python server processes from previous test runs
-  public static func killHangingProcesses() {
-    let task = Process()
-    task.executableURL = URL(fileURLWithPath: "/bin/sh")
-    task.arguments = ["-c", "pkill -f 'python.*echo-http' || true"]
-    try? task.run()
-    task.waitUntilExit()
-    
-    // Also kill any processes on common test ports
-    for port in 9000...9100 {
-      let killTask = Process()
-      killTask.executableURL = URL(fileURLWithPath: "/bin/sh")
-      killTask.arguments = ["-c", "lsof -ti:\(port) | xargs kill -9 2>/dev/null || true"]
-      try? killTask.run()
-      killTask.waitUntilExit()
-    }
-  }
 
   /// Creates a server with an automatically allocated port for parallel test execution
   public convenience init(streamableHTTP: Bool, scriptName: String, extraArgs: [String] = []) async throws {

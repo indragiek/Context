@@ -7,11 +7,6 @@ import os
 @testable import ContextCore
 
 @Suite(.serialized, .timeLimit(.minutes(1))) struct StreamableHTTPTransportTests {
-  init() {
-    // Clean up any hanging processes from previous test runs
-    HTTPTestServer.killHangingProcesses()
-  }
-  
   @Test func testInitialization() async throws {
     let server = try await HTTPTestServer(
       streamableHTTP: true, scriptName: "echo-http-streamable")
