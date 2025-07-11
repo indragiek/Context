@@ -121,15 +121,16 @@ public actor StreamableHTTPTransport: Transport {
       // HTTP transport.
       let result = try await tryInitialize(idGenerator: idGenerator)
       
-      // Try to open SSE stream so that the server can immediately
-      // start sending messages to the client. It's OK if the server
-      // does not support SSE -- this is best effort.
-      do {
-        try await openSSEStreamIfSupported()
-      } catch {
-        logger.error("Failed to open SSE stream: \(error)")
+      // Try to open SSE stream in the background so that the server can immediately
+      // start sending messages to the client. We don't block on this because this is not part of
+      // initialization when using the Streamable HTTP transport, and the server may not support SSE.
+      Task {
+        do {
+          try await openSSEStreamIfSupported()
+        } catch {
+          logger.error("Failed to open SSE stream: \(error)")
+        }
       }
-      
       return result
     } catch let error as StreamableHTTPTransportError {
       switch error {
@@ -140,7 +141,16 @@ public actor StreamableHTTPTransport: Transport {
         supportsStreamableHTTPTransport = false
         logger.info("Opening SSE stream to retry initialization")
         
-        // Try to open SSE stream for legacy HTTP+SSE transport
+        // Try to open SSE stream for legacy HTTP+SSE transport. In the prior scenario, when the
+        // server supports the Streamble HTTP transport, we wrap it in a Task don't block
+        // initialization on it because the stream is opened only for the purpose of optionally
+        // allowing the server start sending the client events.
+        //
+        // In this scenario, when using the HTTP+SSE transport, we block initialization on opening
+        // the SSE stream because the server should either fail immediately with HTTP 405 if SSE
+        // is not supported, OR it should send the `endpoint` event over the SSE stream to tell the
+        // client where it should POST events to. If this event is not sent, then initialization
+        // cannot be considered complete.
         do {
           try await openSSEStreamIfSupported()
         } catch {
