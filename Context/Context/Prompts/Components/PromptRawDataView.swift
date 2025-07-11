@@ -10,18 +10,7 @@ struct PromptRawDataView: View {
   var body: some View {
     RawDataView(
       responseJSON: promptState.responseJSON,
-      responseError: promptState.responseError ?? promptState.loadingState.underlyingError
+      responseError: promptState.responseError
     )
-  }
-}
-
-extension PromptLoadingState {
-  var underlyingError: (any Error)? {
-    switch self {
-    case .failed(_, let error):
-      return error
-    default:
-      return nil
-    }
   }
 }

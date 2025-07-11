@@ -197,7 +197,7 @@ struct PromptDetailView: View {
           localPromptState.rawResponse = nil
           localPromptState.responseJSON = nil
           localPromptState.responseError = error
-          localPromptState.loadingState = .failed(error: error.localizedDescription, underlyingError: error)
+          localPromptState.loadingState = .failed
           localPromptState.hasLoadedOnce = true
           
           updatePromptState()

@@ -102,11 +102,11 @@ struct PromptMessagesView: View {
         messageDisplayView
       }
       
-    case .failed(_, let underlyingError):
+    case .failed:
       if viewMode == .raw {
         // Show raw error data in raw mode
         rawView()
-      } else if let error = underlyingError {
+      } else if let error = promptState.responseError {
         errorView(error)
       } else {
         ContentUnavailableView(
@@ -184,13 +184,13 @@ private struct MessagesHeader: View {
   
   private var shouldShowCopyButton: Bool {
     // Show copy button if we have raw JSON or if there's an error
-    promptState.responseJSON != nil || promptState.responseError != nil || promptState.loadingState.underlyingError != nil
+    promptState.responseJSON != nil || promptState.responseError != nil
   }
   
   private func copyRawJSONToClipboard() {
     RawDataView.copyRawDataToClipboard(
       responseJSON: promptState.responseJSON,
-      responseError: promptState.responseError ?? promptState.loadingState.underlyingError
+      responseError: promptState.responseError
     )
   }
 }

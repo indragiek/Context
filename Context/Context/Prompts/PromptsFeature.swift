@@ -10,18 +10,7 @@ enum PromptLoadingState: Sendable, Equatable {
   case idle
   case loading
   case loaded
-  case failed(error: String, underlyingError: (any Error)?)
-  
-  static func == (lhs: PromptLoadingState, rhs: PromptLoadingState) -> Bool {
-    switch (lhs, rhs) {
-    case (.idle, .idle), (.loading, .loading), (.loaded, .loaded):
-      return true
-    case let (.failed(lError, _), .failed(rError, _)):
-      return lError == rError
-    default:
-      return false
-    }
-  }
+  case failed
 }
 
 struct PromptState: Sendable {
