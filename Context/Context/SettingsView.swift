@@ -19,14 +19,14 @@ struct SettingsView: View {
 
   var body: some View {
     TabView {
-      RootsView(store: rootsStore)
-        .tabItem {
-          Label("Roots", systemImage: "folder")
-        }
-        .tag(0)
       GlobalEnvironmentView(store: globalEnvironmentStore)
         .tabItem {
           Label("Environment", systemImage: "curlybraces")
+        }
+        .tag(0)
+      RootsView(store: rootsStore)
+        .tabItem {
+          Label("Roots", systemImage: "folder")
         }
         .tag(1)
       UpdaterSettingsView(updater: updater)
@@ -35,7 +35,7 @@ struct SettingsView: View {
         }
         .tag(2)
     }
-    .frame(width: 600, height: 350)
+    .frame(width: 600, height: 450)
   }
 }
 

@@ -9,13 +9,6 @@ struct RootsView: View {
   var body: some View {
     WithViewStore(self.store, observe: { $0 }) { viewStore in
       VStack(alignment: .leading, spacing: 16) {
-        // Explanatory text
-        Text(
-          "A root is a URI that a client suggests a server should focus on. When a client connects to a server, it declares which roots the server should work with. While primarily used for filesystem paths, roots can be any valid URI including HTTP URLs."
-        )
-        .font(.body)
-        .foregroundColor(.secondary)
-
         // Table with roots
         VStack(spacing: 0) {
           if viewStore.roots.isEmpty {
@@ -133,6 +126,14 @@ struct RootsView: View {
           RoundedRectangle(cornerRadius: 6)
             .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
         )
+        
+        // Explanatory text
+        Text(
+          "A root is a URI that a client suggests a server should focus on. When a client connects to a server, it declares which roots the server should work with. While primarily used for filesystem paths, roots can be any valid URI including HTTP URLs."
+        )
+        .font(.footnote)
+        .foregroundColor(.secondary)
+        .fixedSize(horizontal: false, vertical: true)
 
         if viewStore.isLoading {
           ProgressView()

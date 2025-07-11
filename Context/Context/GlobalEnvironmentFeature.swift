@@ -20,6 +20,17 @@ struct GlobalEnvironmentFeature {
     var selectedId: GlobalEnvironmentVariableItem.ID?
     var errorMessage: String?
     var isLoading = false
+    
+    // Shell configuration
+    var shellSelection: ShellSelection = .loginShell
+    var shellPath: String = ""
+    var shellPathError: String?
+    var showImportSuccess = false
+    
+    enum ShellSelection: Equatable {
+      case loginShell
+      case custom
+    }
   }
 
   enum Action {
@@ -34,6 +45,16 @@ struct GlobalEnvironmentFeature {
     case save
     case saved(Result<Void, any Error>)
     case errorDismissed
+    
+    // Shell configuration actions
+    case shellSelectionChanged(State.ShellSelection)
+    case shellPathChanged(String)
+    case validateShellPath
+    case shellPathValidated(String?)
+    case importShellFrom(TerminalApp)
+    case shellImported
+    case dismissImportSuccess
+    case saveShellConfiguration
 
     enum Field {
       case key
@@ -45,6 +66,8 @@ struct GlobalEnvironmentFeature {
 
   enum CancelID {
     case saveDebounce
+    case shellPathValidation
+    case importSuccessDismissal
   }
 
   var body: some ReducerOf<Self> {
@@ -52,6 +75,10 @@ struct GlobalEnvironmentFeature {
       switch action {
       case .task:
         state.isLoading = true
+        // Load shell configuration
+        state.shellSelection = GlobalEnvironmentHelper.isUsingCustomShell() ? .custom : .loginShell
+        state.shellPath = GlobalEnvironmentHelper.readShellPath()
+        
         return .run { send in
           do {
             let variables = try await database.read { db in
@@ -154,6 +181,80 @@ struct GlobalEnvironmentFeature {
 
       case .errorDismissed:
         state.errorMessage = nil
+        return .none
+        
+      // Shell configuration actions
+      case let .shellSelectionChanged(selection):
+        state.shellSelection = selection
+        state.shellPathError = nil
+        return .send(.saveShellConfiguration)
+        
+      case let .shellPathChanged(path):
+        state.shellPath = path
+        return .send(.validateShellPath)
+        
+      case .validateShellPath:
+        guard state.shellSelection == .custom else { return .none }
+        
+        // Clear error immediately if path is empty
+        if state.shellPath.isEmpty {
+          state.shellPathError = nil
+          return .none
+        }
+        
+        let path = state.shellPath
+        return .run { send in
+          try await Task.sleep(nanoseconds: 500_000_000) // 0.5 second debounce
+          
+          var error: String?
+          if !FileManager.default.fileExists(atPath: path) {
+            error = "File does not exist"
+          } else if !FileManager.default.isExecutableFile(atPath: path) {
+            error = "File is not executable"
+          }
+          
+          await send(.shellPathValidated(error))
+        }
+        .cancellable(id: CancelID.shellPathValidation)
+        
+      case let .shellPathValidated(error):
+        state.shellPathError = error
+        return .none
+        
+      case let .importShellFrom(terminal):
+        let importedShell = terminal.readShellPath() ?? GlobalEnvironmentHelper.readShellPath()
+        
+        state.shellPath = importedShell
+        state.shellPathError = nil
+        state.showImportSuccess = true
+        
+        return .run { send in
+          try? GlobalEnvironmentHelper.writeShellPath(importedShell)
+          await send(.shellImported)
+          
+          try await Task.sleep(nanoseconds: 1_500_000_000) // 1.5 seconds
+          await send(.dismissImportSuccess)
+        }
+        .cancellable(id: CancelID.importSuccessDismissal)
+        
+      case .shellImported:
+        return .none
+        
+      case .dismissImportSuccess:
+        state.showImportSuccess = false
+        return .none
+        
+      case .saveShellConfiguration:
+        do {
+          if state.shellSelection == .custom {
+            try GlobalEnvironmentHelper.writeShellPath(state.shellPath)
+          } else {
+            try GlobalEnvironmentHelper.writeShellPath(nil)
+          }
+          state.shellPathError = nil
+        } catch {
+          state.shellPathError = error.localizedDescription
+        }
         return .none
       }
     }

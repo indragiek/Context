@@ -71,7 +71,7 @@ struct GlobalEnvironmentHelper {
     return try await expandEnvironmentVariables(environment)
   }
 
-  /// Perform variable substitution using the user's login shell
+  /// Perform variable substitution using the user's configured shell
   private static func expandEnvironmentVariables(_ environment: [String: String]) async throws -> [String: String] {
     guard !environment.isEmpty else { return [:] }
 
@@ -89,7 +89,7 @@ struct GlobalEnvironmentHelper {
     }
   }
 
-  /// Expand a single environment variable value using the login shell
+  /// Expand a single environment variable value using the configured shell
   private static func expandVariableValue(_ value: String) async throws -> String {
     guard value.contains("$") else { return value }
 
