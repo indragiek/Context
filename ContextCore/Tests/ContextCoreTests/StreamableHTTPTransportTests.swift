@@ -936,6 +936,157 @@ import os
     server.terminate()
   }
 
+  @Test func testNoSSE405Response() async throws {
+    // Test that transport handles 405 response gracefully (environments without SSE support)
+    let server = try HTTPTestServer(
+      streamableHTTP: true, scriptName: "no-sse-405", port: 9005)
+    let transport = try await server.createTransport()
+
+    try await transport.start()
+    
+    // Initialize should succeed even though SSE is not supported
+    let initializeResult = try await transport.initialize(idGenerator: TestFixtures.idGenerator)
+    #expect(initializeResult.serverInfo.name == "no-sse-405")
+    
+    // Verify connection state is connected even without SSE
+    let connectionStateTask = Task {
+      try await withTimeout(
+        timeoutMessage: "Connection state check timed out",
+        defaultValue: TransportConnectionState.disconnected
+      ) {
+        for try await state in try await transport.receiveConnectionState() {
+          if state == .connected {
+            return state
+          }
+        }
+        return TransportConnectionState.disconnected
+      }
+    }
+    
+    let connectionState = try await connectionStateTask.value
+    #expect(connectionState == .connected, "Should be connected even without SSE support")
+    
+    // Test that requests work in POST-only mode
+    let request = ListToolsRequest(id: "no-sse-test", cursor: nil)
+    let response = try await transport.testOnly_sendAndWaitForResponse(request: request)
+    
+    if case let .successfulRequest(_, toolsResponse) = response {
+      guard let toolsResponse = toolsResponse as? ListToolsResponse else {
+        Issue.record("Expected ListToolsResponse but got \(type(of: response))")
+        return
+      }
+      // The server should return at least the echo_tool
+      #expect(toolsResponse.result.tools.count >= 1)
+      #expect(toolsResponse.result.tools.contains { $0.name == "echo_tool" })
+    } else {
+      recordErrorsForNonSuccessfulResponse(response)
+    }
+    
+    // Test calling a tool works
+    let toolCall = CallToolRequest(
+      id: "no-sse-tool-call",
+      name: "echo_tool",
+      arguments: ["message": "Hello from POST-only mode!"]
+    )
+    let toolResponse = try await transport.testOnly_sendAndWaitForResponse(request: toolCall)
+    
+    if case let .successfulRequest(_, callResponse) = toolResponse {
+      guard let callResponse = callResponse as? CallToolResponse else {
+        Issue.record("Expected CallToolResponse but got \(type(of: callResponse))")
+        return
+      }
+      #expect(callResponse.result.content.contains { content in
+        if case let .text(text, annotations: _) = content {
+          return text == "Hello from POST-only mode!"
+        }
+        return false
+      })
+    } else {
+      recordErrorsForNonSuccessfulResponse(toolResponse)
+    }
+    
+    try await transport.close()
+    server.terminate()
+  }
+
+  @Test func testNoSSEFallbackDuringInitialization() async throws {
+    // Test the fallback scenario where initial request fails with 4xx
+    // and then SSE also returns 405
+    let server = try HTTPTestServer(
+      streamableHTTP: true, scriptName: "no-sse-405", port: 9006)
+    
+    // Create transport that will fail initial streamable HTTP attempt
+    let transport = StreamableHTTPTransport(
+      serverURL: server.serverURL,
+      urlSessionConfiguration: URLSessionConfiguration.ephemeral,
+      clientInfo: TestFixtures.clientInfo,
+      clientCapabilities: TestFixtures.clientCapabilities,
+      encoder: TestFixtures.jsonEncoder
+    )
+    
+    try await transport.start()
+    
+    // This should succeed by falling back through the error path
+    let initializeResult = try await transport.initialize(idGenerator: TestFixtures.idGenerator)
+    #expect(initializeResult.serverInfo.name == "no-sse-405")
+    
+    // Verify we can still communicate
+    let request = ListToolsRequest(id: "fallback-test", cursor: nil)
+    let response = try await transport.testOnly_sendAndWaitForResponse(request: request)
+    
+    if case .successfulRequest = response {
+      // Success
+    } else {
+      recordErrorsForNonSuccessfulResponse(response)
+    }
+    
+    try await transport.close()
+    server.terminate()
+  }
+
+  @Test func testNoSSEConnectionStateLifecycle() async throws {
+    // Test that connection state is properly managed for POST-only mode
+    let server = try HTTPTestServer(
+      streamableHTTP: true, scriptName: "no-sse-405", port: 9007)
+    let transport = try await server.createTransport()
+    
+    try await transport.start()
+    
+    let connectionStateTask = Task {
+      try await withTimeout(
+        timeoutMessage: "Connection state lifecycle test timed out",
+        defaultValue: [] as [TransportConnectionState]
+      ) {
+        var states: [TransportConnectionState] = []
+        for try await state in try await transport.receiveConnectionState() {
+          states.append(state)
+          if states.count >= 2 && states.last == .disconnected {
+            break
+          }
+        }
+        return states
+      }
+    }
+    
+    // Initialize should trigger connected state
+    _ = try await transport.initialize(idGenerator: TestFixtures.idGenerator)
+    
+    // Give time for connection state to be sent
+    try await Task.sleep(for: .milliseconds(100))
+    
+    // Close should trigger disconnected state
+    try await transport.close()
+    
+    let connectionStates = try await connectionStateTask.value
+    
+    #expect(connectionStates.count >= 2, "Expected at least 2 connection states, got \(connectionStates.count)")
+    #expect(connectionStates.contains(.connected), "Should have received connected state")
+    #expect(connectionStates.contains(.disconnected), "Should have received disconnected state")
+    #expect(connectionStates.last == .disconnected, "Last state should be disconnected")
+    
+    server.terminate()
+  }
+
 }
 
 
