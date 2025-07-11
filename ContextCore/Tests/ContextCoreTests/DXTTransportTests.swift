@@ -415,7 +415,9 @@ enum DXTTestError: Error {
     let processInfo = try DXTTransport.buildProcessInfo(
       manifest: manifest,
       dxtDirectory: tempDir,
-      userConfig: DXTUserConfigurationValues()
+      userConfig: DXTUserConfigurationValues(),
+      environment: nil,
+      shellPath: nil
     )
     
     // The process info will have shell args: [shell, -l, -i, -c, command]
@@ -499,7 +501,9 @@ enum DXTTestError: Error {
     let processInfo = try DXTTransport.buildProcessInfo(
       manifest: manifest,
       dxtDirectory: tempDir,
-      userConfig: DXTUserConfigurationValues()
+      userConfig: DXTUserConfigurationValues(),
+      environment: nil,
+      shellPath: nil
     )
     
     // Verify working directory substitution
@@ -1133,5 +1137,195 @@ enum DXTTestError: Error {
     } catch {
       // Expected to throw an error
     }
+  }
+  
+  @Test func testGlobalEnvironmentMerging() async throws {
+    // Test that global environment is merged correctly with manifest environment
+    let manifestJSON = """
+    {
+      "dxt_version": "0.1",
+      "name": "test-global-env",
+      "version": "1.0.0",
+      "description": "Test server for global environment",
+      "author": {"name": "Test"},
+      "server": {
+        "type": "python",
+        "entry_point": "main.py",
+        "mcp_config": {
+          "command": "python3",
+          "args": ["${__dirname}/main.py"],
+          "env": {
+            "MANIFEST_VAR": "manifest_value",
+            "OVERRIDE_VAR": "manifest_override"
+          }
+        }
+      }
+    }
+    """
+    
+    let script = """
+    import os
+    import json
+    import sys
+    
+    # MCP echo server that returns environment variables in initialize response
+    while True:
+      line = sys.stdin.readline()
+      if not line:
+        break
+      
+      message = json.loads(line)
+      if message.get("method") == "initialize":
+        # Include environment variables in the version string for testing
+        env_info = {
+          "GLOBAL_VAR": os.environ.get("GLOBAL_VAR", "not_set"),
+          "MANIFEST_VAR": os.environ.get("MANIFEST_VAR", "not_set"),
+          "OVERRIDE_VAR": os.environ.get("OVERRIDE_VAR", "not_set")
+        }
+        
+        response = {
+          "jsonrpc": "2.0",
+          "id": message["id"],
+          "result": {
+            "protocolVersion": "2025-03-26",
+            "capabilities": {},
+            "serverInfo": {
+              "name": "Test Server",
+              "version": json.dumps(env_info)
+            }
+          }
+        }
+        print(json.dumps(response))
+        sys.stdout.flush()
+    """
+    
+    let tempDir = try createTestDXTDirectory(manifest: manifestJSON, entryPoint: script)
+    defer {
+      try? FileManager.default.removeItem(at: tempDir)
+    }
+    
+    // Create transport with global environment
+    let globalEnvironment = [
+      "GLOBAL_VAR": "global_value",
+      "OVERRIDE_VAR": "global_override"  // This should be overridden by manifest
+    ]
+    
+    let transport = try await DXTTransport(
+      dxtDirectory: tempDir,
+      clientInfo: TestFixtures.clientInfo,
+      clientCapabilities: TestFixtures.clientCapabilities,
+      userConfig: nil,
+      environment: globalEnvironment
+    )
+    
+    try await transport.start()
+    let initResult = try await withTimeout(
+      5.0,
+      timeoutMessage: "Initialize timed out after 5 seconds",
+      defaultValue: InitializeResponse.Result(
+        protocolVersion: "",
+        capabilities: ServerCapabilities(),
+        serverInfo: Implementation(name: "", version: "")
+      )
+    ) {
+      try await transport.initialize(idGenerator: TestFixtures.idGenerator)
+    }
+    
+    // Parse the version string to check environment variables
+    if let versionData = initResult.serverInfo.version.data(using: .utf8),
+       let envInfo = try? JSONDecoder().decode([String: String].self, from: versionData) {
+      #expect(envInfo["GLOBAL_VAR"] == "global_value")  // Global environment set
+      #expect(envInfo["MANIFEST_VAR"] == "manifest_value")  // Manifest environment set
+      #expect(envInfo["OVERRIDE_VAR"] == "manifest_override")  // Manifest takes precedence
+    } else {
+      Issue.record("Failed to parse environment info from version string")
+    }
+    
+    try await transport.close()
+  }
+  
+  @Test func testEmptyGlobalEnvironment() async throws {
+    // Test that empty global environment doesn't affect anything
+    let manifestJSON = """
+    {
+      "dxt_version": "0.1",
+      "name": "test-empty-env",
+      "version": "1.0.0",
+      "description": "Test server",
+      "author": {"name": "Test"},
+      "server": {
+        "type": "python",
+        "entry_point": "main.py",
+        "mcp_config": {
+          "command": "python3",
+          "args": ["${__dirname}/main.py"],
+          "env": {
+            "TEST_VAR": "test_value"
+          }
+        }
+      }
+    }
+    """
+    
+    let script = """
+    import os
+    import json
+    import sys
+    
+    while True:
+      line = sys.stdin.readline()
+      if not line:
+        break
+      
+      message = json.loads(line)
+      if message.get("method") == "initialize":
+        test_var = os.environ.get("TEST_VAR", "not_set")
+        response = {
+          "jsonrpc": "2.0",
+          "id": message["id"],
+          "result": {
+            "protocolVersion": "2025-03-26",
+            "capabilities": {},
+            "serverInfo": {
+              "name": "Test Server",
+              "version": test_var
+            }
+          }
+        }
+        print(json.dumps(response))
+        sys.stdout.flush()
+    """
+    
+    let tempDir = try createTestDXTDirectory(manifest: manifestJSON, entryPoint: script)
+    defer {
+      try? FileManager.default.removeItem(at: tempDir)
+    }
+    
+    // Create transport with empty global environment
+    let transport = try await DXTTransport(
+      dxtDirectory: tempDir,
+      clientInfo: TestFixtures.clientInfo,
+      clientCapabilities: TestFixtures.clientCapabilities,
+      userConfig: nil,
+      environment: [:]  // Empty environment
+    )
+    
+    try await transport.start()
+    let initResult = try await withTimeout(
+      5.0,
+      timeoutMessage: "Initialize timed out after 5 seconds", 
+      defaultValue: InitializeResponse.Result(
+        protocolVersion: "",
+        capabilities: ServerCapabilities(),
+        serverInfo: Implementation(name: "", version: "")
+      )
+    ) {
+      try await transport.initialize(idGenerator: TestFixtures.idGenerator)
+    }
+    
+    // Verify manifest environment is still applied
+    #expect(initResult.serverInfo.version == "test_value")
+    
+    try await transport.close()
   }
 }

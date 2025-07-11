@@ -142,7 +142,9 @@ public actor DXTTransport: Transport {
     dxtDirectory: URL,
     clientInfo: Implementation,
     clientCapabilities: ClientCapabilities,
-    userConfig: DXTUserConfigurationValues? = nil
+    userConfig: DXTUserConfigurationValues? = nil,
+    environment: [String: String]? = nil,
+    shellPath: String? = nil
   ) async throws {
     // Verify the directory exists
     var isDirectory: ObjCBool = false
@@ -169,7 +171,7 @@ public actor DXTTransport: Transport {
     self.manifest = parsedManifest
     
     // Validate compatibility
-    try Self.validateCompatibility(manifest: parsedManifest)
+    try Self.validateCompatibility(manifest: parsedManifest, shellPath: shellPath)
     
     // Check if user config contains sensitive values (not allowed)
     if let config = userConfig, config.containsSensitiveValues {
@@ -231,10 +233,17 @@ public actor DXTTransport: Transport {
     let processInfo = try Self.buildProcessInfo(
       manifest: parsedManifest,
       dxtDirectory: dxtDirectory,
-      userConfig: userConfig
+      userConfig: userConfig,
+      environment: environment,
+      shellPath: shellPath
     )
     
-    // Initialize stdio transport
+    logger.debug("Starting DXT transport for package: \(parsedManifest.name)")
+    logger.debug("Command: \(processInfo.executableURL.path)")
+    logger.debug("Arguments: \(processInfo.arguments ?? [])")
+    logger.debug("Environment: \(processInfo.environment ?? [:])")
+    logger.debug("Working directory: \(processInfo.currentDirectoryURL?.path ?? "default")")
+    
     self.stdioTransport = StdioTransport(
       serverProcessInfo: processInfo,
       clientInfo: clientInfo,
@@ -243,10 +252,12 @@ public actor DXTTransport: Transport {
   }
   
   /// Validates the compatibility requirements specified in a DXT manifest
-  /// - Parameter manifest: The DXT manifest to validate
+  /// - Parameters:
+  ///   - manifest: The DXT manifest to validate
+  ///   - shellPath: Optional custom shell path to use for validation commands
   /// - Throws: DXTTransportError if any compatibility requirements are not met
-  public static func validateManifestCompatibility(_ manifest: DXTManifest) throws {
-    try validateCompatibility(manifest: manifest)
+  public static func validateManifestCompatibility(_ manifest: DXTManifest, shellPath: String? = nil) throws {
+    try validateCompatibility(manifest: manifest, shellPath: shellPath)
   }
   
   // MARK: - Transport Protocol Implementation
@@ -301,7 +312,7 @@ public actor DXTTransport: Transport {
   
   // MARK: - Private Methods
   
-  private static func validateCompatibility(manifest: DXTManifest) throws {
+  private static func validateCompatibility(manifest: DXTManifest, shellPath: String? = nil) throws {
     guard let compatibility = manifest.compatibility else {
       // No compatibility checks needed
       return
@@ -319,9 +330,9 @@ public actor DXTTransport: Transport {
       for (runtime, requirement) in runtimes {
         switch runtime {
         case "python":
-          try validatePythonVersion(requirement: requirement)
+          try validatePythonVersion(requirement: requirement, shellPath: shellPath)
         case "node":
-          try validateNodeVersion(requirement: requirement)
+          try validateNodeVersion(requirement: requirement, shellPath: shellPath)
         default:
           // Unknown runtime requirement - skip validation
           break
@@ -335,14 +346,14 @@ public actor DXTTransport: Transport {
     }
   }
   
-  private static func validatePythonVersion(requirement: String) throws {
+  private static func validatePythonVersion(requirement: String, shellPath: String? = nil) throws {
     // Try "python" first, then fallback to "python3"
     let commands = ["python", "python3"]
     var lastError: Error?
     
     for command in commands {
       do {
-        let result = try runCommand(command, args: ["--version"])
+        let result = try runCommand(command, args: ["--version"], shellPath: shellPath)
         guard let output = result.output else {
           continue
         }
@@ -406,8 +417,8 @@ public actor DXTTransport: Transport {
     }
   }
   
-  private static func validateNodeVersion(requirement: String) throws {
-    let result = try runCommand("node", args: ["--version"])
+  private static func validateNodeVersion(requirement: String, shellPath: String? = nil) throws {
+    let result = try runCommand("node", args: ["--version"], shellPath: shellPath)
     guard let output = result.output else {
       throw DXTTransportError.runtimeNotInstalled(runtime: "node")
     }
@@ -477,11 +488,11 @@ public actor DXTTransport: Transport {
     return input.contains(placeholderRegex)
   }
   
-  private static func runCommand(_ command: String, args: [String]) throws -> (output: String?, error: String?) {
+  private static func runCommand(_ command: String, args: [String], shellPath: String? = nil) throws -> (output: String?, error: String?) {
     let task = Process()
     
     // Use the user's shell to run commands
-    let shellPath = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
+    let shellPath = shellPath ?? (ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh")
     var shellArgs = ["-l", "-i", "-c"]
     
     // Build command string with escaped arguments
@@ -530,7 +541,9 @@ public actor DXTTransport: Transport {
   static func buildProcessInfo(
     manifest: DXTManifest,
     dxtDirectory: URL,
-    userConfig: DXTUserConfigurationValues?
+    userConfig: DXTUserConfigurationValues?,
+    environment: [String: String]?,
+    shellPath: String?
   ) throws -> StdioTransport.ServerProcessInfo {
     
     // Start with base MCP config
@@ -559,6 +572,16 @@ public actor DXTTransport: Transport {
     // Apply compatibility environment variables
     if let compatEnv = manifest.compatibility?.env {
       env.merge(compatEnv) { _, new in new }
+    }
+    
+    // Merge provided global environment (it has the lowest precedence)
+    if let globalEnvironment = environment {
+      // Start with global environment and let manifest/compat override
+      var mergedEnv = globalEnvironment
+      for (key, value) in env {
+        mergedEnv[key] = value
+      }
+      env = mergedEnv
     }
     
     // Build substitution context
@@ -690,8 +713,8 @@ public actor DXTTransport: Transport {
       command = uvPath
     }
     
-    // Get shell path from environment
-    let shellPath = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
+    // Get shell path from parameter or environment
+    let shell = shellPath ?? (ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh")
     var shellArgs = ["-l", "-i", "-c"]
 
     // Build command string
@@ -714,7 +737,7 @@ public actor DXTTransport: Transport {
     }
     
     return StdioTransport.ServerProcessInfo(
-      executableURL: URL(fileURLWithPath: shellPath),
+      executableURL: URL(fileURLWithPath: shell),
       arguments: shellArgs,
       environment: env,
       currentDirectoryURL: workingDirectory ?? dxtDirectory

@@ -5,28 +5,37 @@ import SwiftUI
 struct SettingsView: View {
   private let updater: SPUUpdater
   private let rootsStore: StoreOf<RootsFeature>
+  private let globalEnvironmentStore: StoreOf<GlobalEnvironmentFeature>
 
   init(updater: SPUUpdater) {
     self.updater = updater
     self.rootsStore = Store(initialState: RootsFeature.State()) {
       RootsFeature()
     }
+    self.globalEnvironmentStore = Store(initialState: GlobalEnvironmentFeature.State()) {
+      GlobalEnvironmentFeature()
+    }
   }
 
   var body: some View {
     TabView {
+      GlobalEnvironmentView(store: globalEnvironmentStore)
+        .tabItem {
+          Label("Environment", systemImage: "curlybraces")
+        }
+        .tag(0)
       RootsView(store: rootsStore)
         .tabItem {
           Label("Roots", systemImage: "folder")
         }
-        .tag(0)
+        .tag(1)
       UpdaterSettingsView(updater: updater)
         .tabItem {
           Label("Updates", systemImage: "arrow.down.circle")
         }
-        .tag(1)
+        .tag(2)
     }
-    .frame(width: 600, height: 350)
+    .frame(width: 600, height: 450)
   }
 }
 
