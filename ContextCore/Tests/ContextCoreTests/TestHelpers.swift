@@ -61,12 +61,39 @@ public struct TestFixtures {
   }
 }
 
+/// Port allocation for test servers to avoid conflicts during parallel execution
+private actor PortAllocator {
+  private var nextPort: Int = 9000
+  private var allocatedPorts: Set<Int> = []
+  
+  static let shared = PortAllocator()
+  
+  func allocatePort() -> Int {
+    defer { nextPort += 1 }
+    let port = nextPort
+    allocatedPorts.insert(port)
+    return port
+  }
+  
+  func releasePort(_ port: Int) {
+    allocatedPorts.remove(port)
+  }
+}
+
 /// HTTP test server for running Python MCP servers over HTTP
 public class HTTPTestServer {
   private let process: Process
   public let serverURL: URL
+  private let allocatedPort: Int
+
+  /// Creates a server with an automatically allocated port for parallel test execution
+  public convenience init(streamableHTTP: Bool, scriptName: String, extraArgs: [String] = []) async throws {
+    let port = await PortAllocator.shared.allocatePort()
+    try self.init(streamableHTTP: streamableHTTP, scriptName: scriptName, port: port, extraArgs: extraArgs)
+  }
 
   public init(streamableHTTP: Bool, scriptName: String, port: Int, extraArgs: [String] = []) throws {
+    self.allocatedPort = port
     if streamableHTTP {
       let serverBaseURL = URL(string: "http://127.0.0.1:\(port)")!
       serverURL = serverBaseURL.appending(component: "mcp")
@@ -107,7 +134,7 @@ public class HTTPTestServer {
     var data = Data()
     let fileHandle = errorPipe.fileHandleForReading
     let startTime = Date()
-    let timeout: TimeInterval = 5.0
+    let timeout: TimeInterval = 2.0
 
     while Date().timeIntervalSince(startTime) < timeout {
       let availableData = fileHandle.availableData
@@ -136,7 +163,7 @@ public class HTTPTestServer {
       customConfiguration
       ?? {
         let config = URLSessionConfiguration.ephemeral
-        config.timeoutIntervalForRequest = 3600
+        config.timeoutIntervalForRequest = 30
         return config
       }()
 
@@ -173,6 +200,10 @@ public class HTTPTestServer {
       process.terminate()
       process.waitUntilExit()
     }
+    let port = allocatedPort
+    Task {
+      await PortAllocator.shared.releasePort(port)
+    }
   }
 
   deinit {
@@ -201,13 +232,13 @@ func recordErrorsForNonSuccessfulResponse(_ response: TransportResponse) {
 /// Executes a task with a configurable timeout interval and records an issue when the timeout is reached.
 ///
 /// - Parameters:
-///   - timeout: The timeout interval in seconds (default: 5.0)
+///   - timeout: The timeout interval in seconds (default: 2.0)
 ///   - timeoutMessage: The message to record when timeout is reached
 ///   - defaultValue: The value to return when timeout occurs
 ///   - operation: The async operation to execute
 /// - Returns: The result of the operation or the default value on timeout
 func withTimeout<T: Sendable>(
-  _ timeout: TimeInterval = 5.0,
+  _ timeout: TimeInterval = 2.0,
   timeoutMessage: String,
   defaultValue: T,
   operation: @escaping @Sendable () async throws -> T

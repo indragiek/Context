@@ -69,7 +69,7 @@ import Testing
     try await transport.start()
     let initialized = InitializedNotification()
     try await transport.send(notification: initialized)
-    try await Task.sleep(for: .milliseconds(100))
+    try await Task.sleep(for: .milliseconds(50))
     try await transport.close()
   }
 
@@ -262,7 +262,7 @@ import Testing
     }
 
     // No requests sent, so we shouldn't receive any responses
-    try await Task.sleep(for: .milliseconds(200))
+    try await Task.sleep(for: .milliseconds(100))
     task.cancel()
 
     do {

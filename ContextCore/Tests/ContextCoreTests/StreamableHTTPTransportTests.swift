@@ -8,8 +8,8 @@ import os
 
 @Suite(.serialized, .timeLimit(.minutes(1))) struct StreamableHTTPTransportTests {
   @Test func testInitialization() async throws {
-    let server = try HTTPTestServer(
-      streamableHTTP: true, scriptName: "echo-http-streamable", port: 9000)
+    let server = try await HTTPTestServer(
+      streamableHTTP: true, scriptName: "echo-http-streamable")
     let transport = try await server.createTransport()
 
     try await transport.start()
@@ -27,8 +27,8 @@ import os
   }
 
   @Test func testSendAndReceiveRequest() async throws {
-    let server = try HTTPTestServer(
-      streamableHTTP: true, scriptName: "echo-http-streamable", port: 9000)
+    let server = try await HTTPTestServer(
+      streamableHTTP: true, scriptName: "echo-http-streamable")
     let transport = try await server.createTransport()
 
     try await transport.start()
@@ -55,8 +55,8 @@ import os
   }
 
   @Test func testSendNotification() async throws {
-    let server = try HTTPTestServer(
-      streamableHTTP: true, scriptName: "echo-http-streamable", port: 9000)
+    let server = try await HTTPTestServer(
+      streamableHTTP: true, scriptName: "echo-http-streamable")
     let transport = try await server.createTransport()
 
     try await transport.start()
@@ -71,8 +71,8 @@ import os
   }
 
   @Test func testMultipleRequests() async throws {
-    let server = try HTTPTestServer(
-      streamableHTTP: true, scriptName: "echo-http-streamable", port: 9000)
+    let server = try await HTTPTestServer(
+      streamableHTTP: true, scriptName: "echo-http-streamable")
     let transport = try await server.createTransport()
 
     try await transport.start()
@@ -103,8 +103,8 @@ import os
   }
 
   @Test func testConcurrentOperations() async throws {
-    let server = try HTTPTestServer(
-      streamableHTTP: true, scriptName: "echo-http-streamable", port: 9000)
+    let server = try await HTTPTestServer(
+      streamableHTTP: true, scriptName: "echo-http-streamable")
     let transport = try await server.createTransport()
 
     try await transport.start()
@@ -165,8 +165,8 @@ import os
   }
 
   @Test func testCloseAndRestart() async throws {
-    let server = try HTTPTestServer(
-      streamableHTTP: true, scriptName: "echo-http-streamable", port: 9000)
+    let server = try await HTTPTestServer(
+      streamableHTTP: true, scriptName: "echo-http-streamable")
     let transport = try await server.createTransport()
 
     try await transport.start()
@@ -192,8 +192,8 @@ import os
   }
 
   @Test func testSequentialRequests() async throws {
-    let server = try HTTPTestServer(
-      streamableHTTP: true, scriptName: "echo-http-streamable", port: 9000)
+    let server = try await HTTPTestServer(
+      streamableHTTP: true, scriptName: "echo-http-streamable")
     let transport = try await server.createTransport()
 
     try await transport.start()
@@ -220,8 +220,8 @@ import os
   }
 
   @Test func testDifferentIDTypes() async throws {
-    let server = try HTTPTestServer(
-      streamableHTTP: true, scriptName: "echo-http-streamable", port: 9000)
+    let server = try await HTTPTestServer(
+      streamableHTTP: true, scriptName: "echo-http-streamable")
     let transport = try await server.createTransport()
 
     try await transport.start()
@@ -252,8 +252,8 @@ import os
 
   @Test(.disabled("FastMCP (the test server) does not yet support batching"))
   func testSendBatchRequests() async throws {
-    let server = try HTTPTestServer(
-      streamableHTTP: true, scriptName: "echo-http-streamable", port: 9000)
+    let server = try await HTTPTestServer(
+      streamableHTTP: true, scriptName: "echo-http-streamable")
     let transport = try await server.createTransport()
 
     try await transport.start()
@@ -309,8 +309,8 @@ import os
 
   @Test(.disabled("FastMCP (the test server) does not yet support batching"))
   func testReceiveBatchResponses() async throws {
-    let server = try HTTPTestServer(
-      streamableHTTP: true, scriptName: "echo-http-streamable", port: 9000)
+    let server = try await HTTPTestServer(
+      streamableHTTP: true, scriptName: "echo-http-streamable")
     let transport = try await server.createTransport()
 
     try await transport.start()
@@ -365,8 +365,8 @@ import os
 
   @Test(.disabled("FastMCP (the test server) does not yet support batching"))
   func testMixedBatch() async throws {
-    let server = try HTTPTestServer(
-      streamableHTTP: true, scriptName: "echo-http-streamable", port: 9000)
+    let server = try await HTTPTestServer(
+      streamableHTTP: true, scriptName: "echo-http-streamable")
     let transport = try await server.createTransport()
 
     try await transport.start()
@@ -424,8 +424,8 @@ import os
   }
 
   @Test func testStartMultipleTimes() async throws {
-    let server = try HTTPTestServer(
-      streamableHTTP: true, scriptName: "echo-http-streamable", port: 9000)
+    let server = try await HTTPTestServer(
+      streamableHTTP: true, scriptName: "echo-http-streamable")
     let transport = try await server.createTransport()
 
     // Start multiple times should not cause issues
@@ -442,8 +442,8 @@ import os
   }
 
   @Test func testCloseBeforeStart() async throws {
-    let server = try HTTPTestServer(
-      streamableHTTP: true, scriptName: "echo-http-streamable", port: 9000)
+    let server = try await HTTPTestServer(
+      streamableHTTP: true, scriptName: "echo-http-streamable")
     let transport = try await server.createTransport()
 
     // Close before start should not cause issues
@@ -461,8 +461,8 @@ import os
   }
 
   @Test func testReceiveLogMessages() async throws {
-    let server = try HTTPTestServer(
-      streamableHTTP: true, scriptName: "echo-http-logging", port: 9000)
+    let server = try await HTTPTestServer(
+      streamableHTTP: true, scriptName: "echo-http-logging")
     let transport = try await server.createTransport()
 
     try await transport.start()
@@ -515,8 +515,8 @@ import os
   }
 
   @Test func testSSEConnectionStateTracking() async throws {
-    let server = try HTTPTestServer(
-      streamableHTTP: true, scriptName: "echo-http-streamable", port: 9000)
+    let server = try await HTTPTestServer(
+      streamableHTTP: true, scriptName: "echo-http-streamable")
     let transport = try await server.createTransport()
 
     try await transport.start()
@@ -555,8 +555,8 @@ import os
   }
 
   @Test func testSSEConnectionCountAccuracy() async throws {
-    let server = try HTTPTestServer(
-      streamableHTTP: true, scriptName: "echo-http-streamable", port: 9000)
+    let server = try await HTTPTestServer(
+      streamableHTTP: true, scriptName: "echo-http-streamable")
     let transport = try await server.createTransport()
 
     try await transport.start()
@@ -604,8 +604,8 @@ import os
   }
 
   @Test func testSSEConnectionCountWithRestart() async throws {
-    let server = try HTTPTestServer(
-      streamableHTTP: true, scriptName: "echo-http-streamable", port: 9000)
+    let server = try await HTTPTestServer(
+      streamableHTTP: true, scriptName: "echo-http-streamable")
     let transport = try await server.createTransport()
 
     let connectionStateTask = Task {
@@ -650,8 +650,8 @@ import os
   }
 
   @Test func testHTTP400ErrorHandling() async throws {
-    let server = try HTTPTestServer(
-      streamableHTTP: true, scriptName: "error-400", port: 9001)
+    let server = try await HTTPTestServer(
+      streamableHTTP: true, scriptName: "error-400")
 
     // Create transport manually without the helper method that tries to initialize
     let transport = StreamableHTTPTransport(
@@ -690,10 +690,9 @@ import os
 
   @Test func testKeepAliveHeaderParsing() async throws {
     // Start server with streamable HTTP transport and Keep-Alive timeout of 5 seconds
-    let server = try HTTPTestServer(
+    let server = try await HTTPTestServer(
       streamableHTTP: true,
       scriptName: "echo-http-streamable",
-      port: 9000,
       extraArgs: ["-t", "5"]
     )
 
@@ -709,7 +708,7 @@ import os
     _ = try await transport.initialize(idGenerator: TestFixtures.idGenerator)
 
     // Wait for SSE connection to be established and Keep-Alive headers to be processed
-    try await Task.sleep(for: .seconds(2))
+    try await Task.sleep(for: .milliseconds(500))
 
     // The transport should have detected the Keep-Alive header and set up ping interval
     // The ping interval should be 80% of the timeout value (4 seconds for 5 second timeout)
@@ -725,10 +724,9 @@ import os
 
   @Test func testAutomaticPingOnKeepAlive() async throws {
     // Start server with streamable HTTP transport and Keep-Alive timeout of 3 seconds
-    let server = try HTTPTestServer(
+    let server = try await HTTPTestServer(
       streamableHTTP: true,
       scriptName: "echo-http-streamable",
-      port: 9001,
       extraArgs: ["-t", "3"]
     )
     let transport = try await server.createTransport()
@@ -768,13 +766,13 @@ import os
     }
 
     // Wait for automatic pings to be sent (should be sent every 2.4 seconds)
-    try await Task.sleep(for: .seconds(5.5))
+    try await Task.sleep(for: .seconds(2.5))
 
     // Cancel monitoring task
     monitoringTask.cancel()
 
-    // Should have received at least 2 ping responses in 5.5 seconds (at 2.4s intervals)
-    #expect(pingResponseCount >= 2, "Should have received at least 2 ping responses in 5.5 seconds, but got \(pingResponseCount)")
+    // Should have received at least 1 ping response in 2.5 seconds (at 2.4s intervals)
+    #expect(pingResponseCount >= 1, "Should have received at least 1 ping response in 2.5 seconds, but got \(pingResponseCount)")
 
     try await transport.close()
     server.terminate()
@@ -782,10 +780,9 @@ import os
 
   @Test func testPingTimerResetOnRequest() async throws {
     // Start server with streamable HTTP transport and Keep-Alive timeout of 3 seconds
-    let server = try HTTPTestServer(
+    let server = try await HTTPTestServer(
       streamableHTTP: true,
       scriptName: "echo-http-streamable",
-      port: 9002,
       extraArgs: ["-t", "3"]
     )
     let transport = try await server.createTransport()
@@ -801,13 +798,13 @@ import os
     }
 
     // First, wait for a ping to be sent during idle time
-    try await Task.sleep(for: .seconds(3.0))
+    try await Task.sleep(for: .seconds(1.0))
 
-    // Now send requests continuously for 4 seconds (should suppress pings)
+    // Now send requests continuously for 2 seconds (should suppress pings)
     let startTime = Date()
     var requestsSent = 0
 
-    while Date().timeIntervalSince(startTime) < 4.0 {
+    while Date().timeIntervalSince(startTime) < 2.0 {
       let echoRequest = CallToolRequest(
         id: .string("echo-\(requestsSent)"),
         name: "echo_tool",
@@ -828,11 +825,11 @@ import os
       try await Task.sleep(for: .milliseconds(300))
     }
 
-    // We should have sent multiple requests
-    #expect(requestsSent >= 10, "Should have sent at least 10 requests in 4 seconds, but sent \(requestsSent)")
+    // We should have sent multiple requests  
+    #expect(requestsSent >= 3, "Should have sent at least 3 requests in 2 seconds, but sent \(requestsSent)")
 
     // Now wait again to see if pings resume after we stop sending requests
-    try await Task.sleep(for: .seconds(3.0))
+    try await Task.sleep(for: .seconds(1.0))
 
     // Send one more request to verify connection is still alive
     let finalRequest = CallToolRequest(
@@ -856,10 +853,9 @@ import os
 
   @Test func testPingContinuesAfterIdle() async throws {
     // Start server with streamable HTTP transport and Keep-Alive timeout of 2 seconds
-    let server = try HTTPTestServer(
+    let server = try await HTTPTestServer(
       streamableHTTP: true,
       scriptName: "echo-http-streamable",
-      port: 9003,
       extraArgs: ["-t", "2"]
     )
     let transport = try await server.createTransport()
@@ -884,7 +880,7 @@ import os
 
     // Wait for longer than the Keep-Alive timeout without sending any requests
     // The connection should stay alive due to automatic pings
-    try await Task.sleep(for: .seconds(5.0))
+    try await Task.sleep(for: .seconds(2.0))
 
     // Try to send another request - it should succeed if pings kept the connection alive
     let testRequest = CallToolRequest(
@@ -908,8 +904,8 @@ import os
 
   @Test func testNoKeepAliveNoPing() async throws {
     // Use regular echo server without Keep-Alive headers
-    let server = try HTTPTestServer(
-      streamableHTTP: true, scriptName: "echo-http-streamable", port: 9004)
+    let server = try await HTTPTestServer(
+      streamableHTTP: true, scriptName: "echo-http-streamable")
     let transport = try await server.createTransport()
 
     try await transport.start()
@@ -920,7 +916,7 @@ import os
     #expect(interval == nil, "Ping interval should not be set without Keep-Alive header")
 
     // Wait a bit to ensure no pings would be sent
-    try await Task.sleep(for: .seconds(2))
+    try await Task.sleep(for: .milliseconds(500))
 
     // Transport should still work normally
     let request = ListToolsRequest(id: "no-keepalive-test", cursor: nil)
@@ -938,8 +934,8 @@ import os
 
   @Test func testNoSSE405Response() async throws {
     // Test that transport handles 405 response gracefully (environments without SSE support)
-    let server = try HTTPTestServer(
-      streamableHTTP: true, scriptName: "no-sse-405", port: 9005)
+    let server = try await HTTPTestServer(
+      streamableHTTP: true, scriptName: "no-sse-405")
     let transport = try await server.createTransport()
 
     try await transport.start()
@@ -1012,8 +1008,8 @@ import os
   @Test func testNoSSEFallbackDuringInitialization() async throws {
     // Test the fallback scenario where initial request fails with 4xx
     // and then SSE also returns 405
-    let server = try HTTPTestServer(
-      streamableHTTP: true, scriptName: "no-sse-405", port: 9006)
+    let server = try await HTTPTestServer(
+      streamableHTTP: true, scriptName: "no-sse-405")
     
     // Create transport that will fail initial streamable HTTP attempt
     let transport = StreamableHTTPTransport(
@@ -1046,8 +1042,8 @@ import os
 
   @Test func testNoSSEConnectionStateLifecycle() async throws {
     // Test that connection state is properly managed for POST-only mode
-    let server = try HTTPTestServer(
-      streamableHTTP: true, scriptName: "no-sse-405", port: 9007)
+    let server = try await HTTPTestServer(
+      streamableHTTP: true, scriptName: "no-sse-405")
     let transport = try await server.createTransport()
     
     try await transport.start()

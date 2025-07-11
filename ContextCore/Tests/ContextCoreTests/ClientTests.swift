@@ -9,8 +9,8 @@ import AsyncAlgorithms
 
 @Suite(.serialized, .timeLimit(.minutes(1))) struct ClientTests {
   @Test func testListPrompts() async throws {
-    let server = try HTTPTestServer(
-      streamableHTTP: true, scriptName: "echo-http-streamable", port: 9001)
+    let server = try await HTTPTestServer(
+      streamableHTTP: true, scriptName: "echo-http-streamable")
     let client = Client(transport: try await server.createTransport())
 
     try await client.connect()
@@ -26,8 +26,8 @@ import AsyncAlgorithms
   }
 
   @Test func testGetPrompt() async throws {
-    let server = try HTTPTestServer(
-      streamableHTTP: true, scriptName: "echo-http-streamable", port: 9001)
+    let server = try await HTTPTestServer(
+      streamableHTTP: true, scriptName: "echo-http-streamable")
     let client = Client(transport: try await server.createTransport())
 
     try await client.connect()
@@ -49,8 +49,8 @@ import AsyncAlgorithms
   }
 
   @Test func testListResources() async throws {
-    let server = try HTTPTestServer(
-      streamableHTTP: true, scriptName: "echo-http-streamable", port: 9001)
+    let server = try await HTTPTestServer(
+      streamableHTTP: true, scriptName: "echo-http-streamable")
     let client = Client(transport: try await server.createTransport())
 
     try await client.connect()
@@ -67,8 +67,8 @@ import AsyncAlgorithms
   }
 
   @Test func testReadResource() async throws {
-    let server = try HTTPTestServer(
-      streamableHTTP: true, scriptName: "echo-http-streamable", port: 9001)
+    let server = try await HTTPTestServer(
+      streamableHTTP: true, scriptName: "echo-http-streamable")
     let client = Client(transport: try await server.createTransport())
 
     try await client.connect()
@@ -90,8 +90,8 @@ import AsyncAlgorithms
   }
 
   @Test func testListResourceTemplates() async throws {
-    let server = try HTTPTestServer(
-      streamableHTTP: true, scriptName: "echo-http-streamable", port: 9001)
+    let server = try await HTTPTestServer(
+      streamableHTTP: true, scriptName: "echo-http-streamable")
     let client = Client(transport: try await server.createTransport())
 
     try await client.connect()
@@ -108,8 +108,8 @@ import AsyncAlgorithms
   }
 
   @Test func testListTools() async throws {
-    let server = try HTTPTestServer(
-      streamableHTTP: true, scriptName: "echo-http-streamable", port: 9001)
+    let server = try await HTTPTestServer(
+      streamableHTTP: true, scriptName: "echo-http-streamable")
     let client = Client(transport: try await server.createTransport())
 
     try await client.connect()
@@ -125,8 +125,8 @@ import AsyncAlgorithms
   }
 
   @Test func testCallTool() async throws {
-    let server = try HTTPTestServer(
-      streamableHTTP: true, scriptName: "echo-http-streamable", port: 9001)
+    let server = try await HTTPTestServer(
+      streamableHTTP: true, scriptName: "echo-http-streamable")
     let client = Client(transport: try await server.createTransport())
 
     try await client.connect()
@@ -148,8 +148,8 @@ import AsyncAlgorithms
 
   @Test(.disabled("FastMCP (the test server) does not yet support completions"))
   func testCompletePrompt() async throws {
-    let server = try HTTPTestServer(
-      streamableHTTP: true, scriptName: "echo-http-streamable", port: 9001)
+    let server = try await HTTPTestServer(
+      streamableHTTP: true, scriptName: "echo-http-streamable")
     let client = Client(transport: try await server.createTransport())
 
     try await client.connect()
@@ -169,8 +169,8 @@ import AsyncAlgorithms
 
   @Test(.disabled("FastMCP (the test server) does not yet support completions"))
   func testCompleteResource() async throws {
-    let server = try HTTPTestServer(
-      streamableHTTP: true, scriptName: "echo-http-streamable", port: 9001)
+    let server = try await HTTPTestServer(
+      streamableHTTP: true, scriptName: "echo-http-streamable")
     let client = Client(transport: try await server.createTransport())
 
     try await client.connect()
@@ -189,8 +189,8 @@ import AsyncAlgorithms
   }
 
   @Test func testPing() async throws {
-    let server = try HTTPTestServer(
-      streamableHTTP: true, scriptName: "echo-http-streamable", port: 9001)
+    let server = try await HTTPTestServer(
+      streamableHTTP: true, scriptName: "echo-http-streamable")
     let client = Client(transport: try await server.createTransport())
 
     try await client.connect()
@@ -381,7 +381,7 @@ import AsyncAlgorithms
     }
 
     // Wait a bit for the error to be streamed
-    try await Task.sleep(for: .milliseconds(100))
+    try await Task.sleep(for: .milliseconds(50))
     errorCollector.cancel()
 
     let collectedErrors = await errorCollector.value
@@ -467,7 +467,7 @@ import AsyncAlgorithms
     }
 
     // Wait for errors to be collected
-    try await Task.sleep(for: .milliseconds(200))
+    try await Task.sleep(for: .milliseconds(100))
     errorCollector.cancel()
 
     // We should have collected capability errors
