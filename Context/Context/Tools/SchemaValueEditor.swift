@@ -63,7 +63,7 @@ struct SchemaValueEditor: View {
                 if case .string(let str) = value, stringEnums.contains(str) {
                   return str
                 }
-                // Return first enum value as fallback
+                // Return first enum value as fallback for display only
                 return stringEnums.first ?? ""
               },
               set: { newValue in
@@ -77,12 +77,13 @@ struct SchemaValueEditor: View {
           }
           .labelsHidden()
           .onAppear {
-            // Initialize value to first enum option if current value is invalid
+            // Always ensure we have a valid enum value selected
             if case .string(let str) = value, stringEnums.contains(str) {
               // Current value is valid, keep it
               return
-            } else if let firstEnum = stringEnums.first {
-              // Current value is invalid or missing, set to first enum option
+            }
+            // Current value is invalid, missing, or not a string - set to first enum option
+            if let firstEnum = stringEnums.first {
               value = .string(firstEnum)
             }
           }
