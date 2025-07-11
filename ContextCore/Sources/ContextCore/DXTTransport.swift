@@ -171,7 +171,7 @@ public actor DXTTransport: Transport {
     self.manifest = parsedManifest
     
     // Validate compatibility
-    try Self.validateCompatibility(manifest: parsedManifest)
+    try Self.validateCompatibility(manifest: parsedManifest, shellPath: shellPath)
     
     // Check if user config contains sensitive values (not allowed)
     if let config = userConfig, config.containsSensitiveValues {
@@ -252,10 +252,12 @@ public actor DXTTransport: Transport {
   }
   
   /// Validates the compatibility requirements specified in a DXT manifest
-  /// - Parameter manifest: The DXT manifest to validate
+  /// - Parameters:
+  ///   - manifest: The DXT manifest to validate
+  ///   - shellPath: Optional custom shell path to use for validation commands
   /// - Throws: DXTTransportError if any compatibility requirements are not met
-  public static func validateManifestCompatibility(_ manifest: DXTManifest) throws {
-    try validateCompatibility(manifest: manifest)
+  public static func validateManifestCompatibility(_ manifest: DXTManifest, shellPath: String? = nil) throws {
+    try validateCompatibility(manifest: manifest, shellPath: shellPath)
   }
   
   // MARK: - Transport Protocol Implementation
@@ -310,7 +312,7 @@ public actor DXTTransport: Transport {
   
   // MARK: - Private Methods
   
-  private static func validateCompatibility(manifest: DXTManifest) throws {
+  private static func validateCompatibility(manifest: DXTManifest, shellPath: String? = nil) throws {
     guard let compatibility = manifest.compatibility else {
       // No compatibility checks needed
       return
@@ -328,9 +330,9 @@ public actor DXTTransport: Transport {
       for (runtime, requirement) in runtimes {
         switch runtime {
         case "python":
-          try validatePythonVersion(requirement: requirement)
+          try validatePythonVersion(requirement: requirement, shellPath: shellPath)
         case "node":
-          try validateNodeVersion(requirement: requirement)
+          try validateNodeVersion(requirement: requirement, shellPath: shellPath)
         default:
           // Unknown runtime requirement - skip validation
           break
@@ -344,14 +346,14 @@ public actor DXTTransport: Transport {
     }
   }
   
-  private static func validatePythonVersion(requirement: String) throws {
+  private static func validatePythonVersion(requirement: String, shellPath: String? = nil) throws {
     // Try "python" first, then fallback to "python3"
     let commands = ["python", "python3"]
     var lastError: Error?
     
     for command in commands {
       do {
-        let result = try runCommand(command, args: ["--version"])
+        let result = try runCommand(command, args: ["--version"], shellPath: shellPath)
         guard let output = result.output else {
           continue
         }
@@ -415,8 +417,8 @@ public actor DXTTransport: Transport {
     }
   }
   
-  private static func validateNodeVersion(requirement: String) throws {
-    let result = try runCommand("node", args: ["--version"])
+  private static func validateNodeVersion(requirement: String, shellPath: String? = nil) throws {
+    let result = try runCommand("node", args: ["--version"], shellPath: shellPath)
     guard let output = result.output else {
       throw DXTTransportError.runtimeNotInstalled(runtime: "node")
     }
@@ -486,7 +488,7 @@ public actor DXTTransport: Transport {
     return input.contains(placeholderRegex)
   }
   
-  private static func runCommand(_ command: String, args: [String]) throws -> (output: String?, error: String?) {
+  private static func runCommand(_ command: String, args: [String], shellPath: String? = nil) throws -> (output: String?, error: String?) {
     let task = Process()
     
     // Use the user's shell to run commands
