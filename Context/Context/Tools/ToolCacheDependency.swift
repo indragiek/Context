@@ -11,6 +11,7 @@ struct ToolState: Sendable {
   var hasLoadedOnce = false
   var rawResponseJSON: JSONValue?
   var rawResponseError: String?
+  var underlyingError: (any Error)?
 }
 
 // Manual Equatable conformance that excludes toolResponse and raw JSON
@@ -18,7 +19,8 @@ extension ToolState: Equatable {
   static func == (lhs: ToolState, rhs: ToolState) -> Bool {
     lhs.parameterValues == rhs.parameterValues && lhs.hasLoadedOnce == rhs.hasLoadedOnce
       && lhs.rawResponseError == rhs.rawResponseError
-    // Exclude toolResponse and rawResponseJSON from equality check since they are not Equatable
+      && (lhs.underlyingError != nil) == (rhs.underlyingError != nil)
+    // Exclude toolResponse, rawResponseJSON, and underlyingError details from equality check since they are not Equatable
   }
 }
 

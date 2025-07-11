@@ -1,5 +1,6 @@
 // Copyright © 2025 Indragie Karunaratne. All rights reserved.
 
+import AppKit
 import ComposableArchitecture
 import ContextCore
 import Dependencies
@@ -20,6 +21,7 @@ struct ToolDetailView: View {
   @State private var isLoading = false
   @State private var rawResponseJSON: JSONValue?
   @State private var rawResponseError: String?
+  @State private var underlyingError: (any Error)?
   @State private var hasLoadedOnce = false
   @State private var debounceTask: Task<Void, Never>?
   @State private var focusedField: String?
@@ -59,6 +61,7 @@ struct ToolDetailView: View {
       toolResponse = nil
       rawResponseJSON = nil
       rawResponseError = nil
+      underlyingError = nil
       hasLoadedOnce = false
       initializeParameterValues()
     }
@@ -254,21 +257,29 @@ struct ToolDetailView: View {
 
   @ViewBuilder
   private var responseHeader: some View {
-    HStack {
+    HStack(spacing: 12) {
       Text("Response")
         .font(.headline)
 
       Spacer()
 
-      ToggleButton(selection: $viewMode)
-
-      Spacer()
+      // Copy button when in Raw mode
+      if viewMode == .raw && shouldShowCopyButton {
+        CopyButton {
+          copyRawDataToClipboard()
+        }
+        .help("Copy raw JSON to clipboard")
+      }
 
       runToolButton
     }
     .padding(.horizontal, 20)
-    .padding(.vertical, 8)
+    .frame(height: 50)
     .background(Color(NSColor.controlBackgroundColor))
+    .overlay(
+      // Centered toggle buttons
+      ToggleButton(selection: $viewMode)
+    )
   }
 
   @ViewBuilder
@@ -296,57 +307,59 @@ struct ToolDetailView: View {
 
   @ViewBuilder
   private var responseContent: some View {
-    if let response = toolResponse {
-      Group {
-        switch viewMode {
-        case .preview:
-          let messages = response.content.map { content in
-            ToolResponseMessage(content: content)
+    if hasLoadedOnce {
+      if let response = toolResponse {
+        Group {
+          switch viewMode {
+          case .preview:
+            let messages = response.content.map { content in
+              ToolResponseMessage(content: content)
+            }
+            MessageThreadView(messages: messages)
+          case .raw:
+            ToolRawDataView(
+              rawResponseJSON: rawResponseJSON,
+              rawResponseError: rawResponseError,
+              underlyingError: underlyingError
+            )
           }
-          MessageThreadView(messages: messages)
-        case .raw:
-          rawResponseView
         }
-      }
-      .frame(maxWidth: .infinity, maxHeight: .infinity)
-    } else {
-      VStack {
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+      } else if underlyingError != nil {
+        // Error state
+        Group {
+          switch viewMode {
+          case .preview:
+            if let error = underlyingError {
+              JSONRPCErrorView(error: error)
+            }
+          case .raw:
+            ToolRawDataView(
+              rawResponseJSON: rawResponseJSON,
+              rawResponseError: rawResponseError,
+              underlyingError: underlyingError
+            )
+          }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+      } else {
         ContentUnavailableView(
           "No Response",
           systemImage: "function",
-          description: Text("Enter arguments and click the ▶ button to call the tool")
+          description: Text("Tool call completed but no response was returned")
         )
-      }
-      .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-  }
-
-  @ViewBuilder
-  private var rawResponseView: some View {
-    if let jsonValue = rawResponseJSON {
-      JSONRawView(jsonValue: jsonValue, searchText: "", isSearchActive: false)
-    } else if let error = rawResponseError {
-      VStack(spacing: 16) {
-        Image(systemName: "exclamationmark.triangle")
-          .font(.largeTitle)
-          .foregroundColor(.red)
-
-        Text("JSON Error")
-          .font(.headline)
-
-        Text(error)
-          .font(.callout)
-          .foregroundColor(.secondary)
-          .multilineTextAlignment(.center)
-          .padding(.horizontal)
-      }
-      .frame(maxWidth: .infinity, maxHeight: .infinity)
-    } else {
-      Text("No raw data available")
-        .foregroundColor(.secondary)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+      }
+    } else {
+      ContentUnavailableView(
+        "No Response",
+        systemImage: "function",
+        description: Text("Enter arguments and click the ▶ button to call the tool")
+      )
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
   }
+
 
   private func calculateIdealHeight() -> CGFloat {
     let baseHeight: CGFloat = 160  // Header + padding
@@ -376,6 +389,18 @@ struct ToolDetailView: View {
     }
 
     return validationErrors.isEmpty
+  }
+  
+  private var shouldShowCopyButton: Bool {
+    // Show copy button if we have raw JSON or if there's an error
+    rawResponseJSON != nil || underlyingError != nil
+  }
+  
+  private func copyRawDataToClipboard() {
+    ToolRawDataView.copyRawDataToClipboard(
+      rawResponseJSON: rawResponseJSON,
+      underlyingError: underlyingError
+    )
   }
 
   private func initializeParameterValues() {
@@ -465,6 +490,7 @@ struct ToolDetailView: View {
     hasLoadedOnce = toolState.hasLoadedOnce
     rawResponseJSON = toolState.rawResponseJSON
     rawResponseError = toolState.rawResponseError
+    underlyingError = toolState.underlyingError
   }
 
   private func updateToolState(includeParameterValues: Bool = true) {
@@ -474,7 +500,8 @@ struct ToolDetailView: View {
       toolResponse: toolResponse,
       hasLoadedOnce: hasLoadedOnce,
       rawResponseJSON: rawResponseJSON,
-      rawResponseError: rawResponseError
+      rawResponseError: rawResponseError,
+      underlyingError: underlyingError
     )
     if toolState != newState {
       toolState = newState
@@ -501,6 +528,7 @@ struct ToolDetailView: View {
         let response = CallToolResponse.Result(content: content, isError: isError)
         toolResponse = response
         hasLoadedOnce = true
+        underlyingError = nil  // Clear any previous error
 
         do {
           // TODO: Fix this inefficient encoding/decoding. We do this because we don't have access
@@ -527,25 +555,33 @@ struct ToolDetailView: View {
           focusedField = savedField
         }
       } catch {
-        // Create more informative error message
-        let errorMessage: String
-        let errorDetails: String?
-
-        errorMessage = "Error calling tool: \(error.localizedDescription)"
-        errorDetails = nil
-
-        var errorContent: [Content] = [.text(errorMessage)]
-        if let details = errorDetails {
-          errorContent.append(.text("\n\n💡 \(details)"))
-        }
-
-        let errorResponse = CallToolResponse.Result(
-          content: errorContent,
-          isError: true
-        )
-        toolResponse = errorResponse
+        // Store the actual error object
+        underlyingError = error
+        
+        // Clear the tool response - we'll show error view instead
+        toolResponse = nil
         rawResponseError = error.localizedDescription
-        rawResponseJSON = nil
+        
+        // Try to create JSON representation of the error
+        do {
+          if let clientError = error as? ClientError {
+            switch clientError {
+            case .requestFailed(_, let jsonRPCError):
+              // Encode the JSON-RPC error
+              let encoder = JSONEncoder()
+              encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+              let jsonData = try encoder.encode(jsonRPCError)
+              rawResponseJSON = try JSONDecoder().decode(JSONValue.self, from: jsonData)
+            default:
+              rawResponseJSON = nil
+            }
+          } else {
+            rawResponseJSON = nil
+          }
+        } catch {
+          rawResponseJSON = nil
+        }
+        
         hasLoadedOnce = true
         isLoading = false
 
