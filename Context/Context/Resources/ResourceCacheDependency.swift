@@ -10,9 +10,8 @@ struct ResourceCacheState: Sendable {
   var embeddedResources: [EmbeddedResource] = []
   var hasLoadedOnce: Bool = false
   var lastFetchedURI: String? = nil
-  var rawResponseJSON: JSONValue? = nil
-  var rawResponseError: String? = nil
-  var requestError: (any Error)? = nil
+  var responseJSON: JSONValue? = nil
+  var responseError: (any Error)? = nil
 }
 
 // Manual Equatable implementation to handle non-Equatable types
@@ -22,19 +21,18 @@ extension ResourceCacheState: Equatable {
     guard
       lhs.variableValues == rhs.variableValues && lhs.embeddedResources == rhs.embeddedResources
         && lhs.hasLoadedOnce == rhs.hasLoadedOnce && lhs.lastFetchedURI == rhs.lastFetchedURI
-        && lhs.rawResponseError == rhs.rawResponseError
+        && lhs.responseJSON == rhs.responseJSON
     else {
       return false
     }
 
     // For errors, compare both existence and type
-    let lhsErrorType = lhs.requestError.map { type(of: $0) }
-    let rhsErrorType = rhs.requestError.map { type(of: $0) }
-    let lhsErrorMessage = lhs.requestError?.localizedDescription
-    let rhsErrorMessage = rhs.requestError?.localizedDescription
+    let lhsErrorType = lhs.responseError.map { type(of: $0) }
+    let rhsErrorType = rhs.responseError.map { type(of: $0) }
+    let lhsErrorMessage = lhs.responseError?.localizedDescription
+    let rhsErrorMessage = rhs.responseError?.localizedDescription
 
     return lhsErrorType == rhsErrorType && lhsErrorMessage == rhsErrorMessage
-    // Note: rawResponseJSON is not compared because JSONValue is not Equatable
   }
 }
 

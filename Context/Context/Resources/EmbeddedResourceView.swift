@@ -7,9 +7,8 @@ import SwiftUI
 struct EmbeddedResourceView: View {
   let resources: [EmbeddedResource]
   @Binding var viewMode: ResourceViewMode
-  let rawJSON: JSONValue?
-  let rawResponseError: String?
-  let underlyingError: (any Error)?
+  let responseJSON: JSONValue?
+  let responseError: (any Error)?
   @State private var selectedResource: EmbeddedResource?
   @State private var shareURL: URL?
   @State private var quickLookURL: URL?
@@ -145,9 +144,8 @@ struct EmbeddedResourceView: View {
           } else {
             // Raw view
             RawDataView(
-              rawResponseJSON: rawJSON,
-              rawResponseError: rawResponseError,
-              underlyingError: underlyingError
+              responseJSON: responseJSON,
+              responseError: responseError
             )
             .transition(.opacity)
           }
@@ -228,8 +226,8 @@ struct EmbeddedResourceView: View {
 
   private func copyRawJSONToClipboard() {
     RawDataView.copyRawDataToClipboard(
-      rawResponseJSON: rawJSON,
-      underlyingError: underlyingError
+      responseJSON: responseJSON,
+      responseError: responseError
     )
   }
 }

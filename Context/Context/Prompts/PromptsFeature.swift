@@ -2,6 +2,7 @@
 
 import ComposableArchitecture
 import ContextCore
+import Foundation
 import GRDB
 import SharingGRDB
 
@@ -27,8 +28,8 @@ struct PromptState: Sendable {
   var argumentValues: [String: String] = [:]
   var messages: [PromptMessage] = []
   var hasLoadedOnce = false
-  var rawResponseJSON: JSONValue?
-  var rawResponseError: String?
+  var responseJSON: JSONValue?
+  var responseError: (any Error)?
   var loadingState: PromptLoadingState = .idle
   var rawResponse: GetPromptResponse.Result?
   var viewMode: PromptViewMode = .preview
@@ -39,10 +40,19 @@ extension PromptState: Equatable {
     // Compare properties that are Equatable
     guard lhs.argumentValues == rhs.argumentValues &&
           lhs.hasLoadedOnce == rhs.hasLoadedOnce &&
-          lhs.rawResponseError == rhs.rawResponseError &&
           lhs.loadingState == rhs.loadingState &&
           lhs.viewMode == rhs.viewMode &&
-          lhs.rawResponseJSON == rhs.rawResponseJSON else {
+          lhs.responseJSON == rhs.responseJSON else {
+      return false
+    }
+    
+    // Compare errors by their existence and type
+    let lhsErrorType = lhs.responseError.map { type(of: $0) }
+    let rhsErrorType = rhs.responseError.map { type(of: $0) }
+    let lhsErrorMessage = lhs.responseError?.localizedDescription
+    let rhsErrorMessage = rhs.responseError?.localizedDescription
+    
+    guard lhsErrorType == rhsErrorType && lhsErrorMessage == rhsErrorMessage else {
       return false
     }
     

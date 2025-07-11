@@ -22,9 +22,8 @@ struct ResourceTemplateDetailView: View {
   @State private var hasLoadedOnce = false
   @State private var lastFetchedURI: String? = nil
   @State private var showingFullDescription = false
-  @State private var rawResponseJSON: JSONValue? = nil
-  @State private var rawResponseError: String? = nil
-  @State private var requestError: (any Error)? = nil
+  @State private var responseJSON: JSONValue? = nil
+  @State private var responseError: (any Error)? = nil
 
   // Cached regex for template parameters
   private static let templateParameterRegex = /\{[^}]+\}/
@@ -234,7 +233,7 @@ struct ResourceTemplateDetailView: View {
 
           HStack(spacing: 8) {
             // Copy button when in Raw mode with error or data
-            if viewMode == .raw && (rawResponseJSON != nil || requestError != nil) {
+            if viewMode == .raw && (responseJSON != nil || responseError != nil) {
               CopyButton {
                 copyRawJSONToClipboard()
               }
@@ -269,7 +268,7 @@ struct ResourceTemplateDetailView: View {
         .overlay(
           // Show toggle ONLY when there's an error
           Group {
-            if requestError != nil {
+            if responseError != nil {
               ToggleButton(
                 items: [("Preview", ResourceViewMode.preview), ("Raw", ResourceViewMode.raw)],
                 selection: $viewMode
@@ -305,18 +304,17 @@ struct ResourceTemplateDetailView: View {
               .frame(minWidth: 200, idealWidth: 400)
               .frame(maxWidth: .infinity, maxHeight: .infinity)
           }
-        } else if requestError != nil {
+        } else if responseError != nil {
           // Error content based on view mode - handle this BEFORE checking loadingFailed
           if viewMode == .raw {
             // Show raw error data in raw mode
             RawDataView(
-              rawResponseJSON: rawResponseJSON,
-              rawResponseError: rawResponseError,
-              underlyingError: requestError
+              responseJSON: responseJSON,
+              responseError: responseError
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
           } else {
-            if let error = requestError {
+            if let error = responseError {
               JSONRPCErrorView(error: error)
             }
           }
@@ -342,9 +340,8 @@ struct ResourceTemplateDetailView: View {
           EmbeddedResourceView(
             resources: embeddedResources,
             viewMode: $viewMode,
-            rawJSON: rawResponseJSON,
-            rawResponseError: rawResponseError,
-            underlyingError: requestError
+            responseJSON: responseJSON,
+            responseError: responseError
           )
           .id(template.uriTemplate)  // Force view to recreate when template changes
         }
@@ -406,10 +403,9 @@ struct ResourceTemplateDetailView: View {
         embeddedResources = state.embeddedResources
         hasLoadedOnce = state.hasLoadedOnce
         lastFetchedURI = state.lastFetchedURI
-        rawResponseJSON = state.rawResponseJSON
-        rawResponseError = state.rawResponseError
-        requestError = state.requestError
-        loadingFailed = state.requestError != nil
+        responseJSON = state.responseJSON
+        responseError = state.responseError
+        loadingFailed = state.responseError != nil
       }
     }
   }
@@ -420,9 +416,8 @@ struct ResourceTemplateDetailView: View {
       embeddedResources: embeddedResources,
       hasLoadedOnce: hasLoadedOnce,
       lastFetchedURI: lastFetchedURI,
-      rawResponseJSON: rawResponseJSON,
-      rawResponseError: rawResponseError,
-      requestError: requestError
+      responseJSON: responseJSON,
+      responseError: responseError
     )
     await resourceCache.set(state, for: templateURI)
   }
@@ -462,11 +457,10 @@ struct ResourceTemplateDetailView: View {
       await MainActor.run {
         embeddedResources = loadedResource.embeddedResources
         isLoadingResources = false
-        loadingFailed = loadedResource.requestError != nil
+        loadingFailed = loadedResource.responseError != nil
         lastFetchedURI = uri
-        rawResponseJSON = loadedResource.rawResponseJSON
-        rawResponseError = nil // Clear any previous error
-        requestError = loadedResource.requestError
+        responseJSON = loadedResource.responseJSON
+        responseError = loadedResource.responseError
       }
 
       // Save the fetched resources to cache
@@ -566,8 +560,8 @@ struct ResourceTemplateDetailView: View {
 
   private func copyRawJSONToClipboard() {
     RawDataView.copyRawDataToClipboard(
-      rawResponseJSON: rawResponseJSON,
-      underlyingError: requestError
+      responseJSON: responseJSON,
+      responseError: responseError
     )
   }
 }

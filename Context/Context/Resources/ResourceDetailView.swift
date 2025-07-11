@@ -17,9 +17,8 @@ struct ResourceDetailView: View {
   @State private var loadingFailed = false
   @State private var hasLoadedOnce = false
   @State private var showingFullDescription = false
-  @State private var rawResponseJSON: JSONValue? = nil
-  @State private var rawResponseError: String? = nil
-  @State private var requestError: (any Error)? = nil
+  @State private var responseJSON: JSONValue? = nil
+  @State private var responseError: (any Error)? = nil
 
   var body: some View {
     VStack(spacing: 0) {
@@ -140,7 +139,7 @@ struct ResourceDetailView: View {
               ? "Unable to fetch resource contents" : "This resource has no embedded contents")
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-      } else if requestError != nil {
+      } else if responseError != nil {
         // Error state - show with toggle
         VStack(spacing: 0) {
           // Error toolbar with toggle
@@ -158,7 +157,7 @@ struct ResourceDetailView: View {
             Spacer()
 
             // Copy button when in Raw mode
-            if viewMode == .raw, rawResponseJSON != nil {
+            if viewMode == .raw, responseJSON != nil {
               CopyButton {
                 copyRawJSONToClipboard()
               }
@@ -179,13 +178,12 @@ struct ResourceDetailView: View {
           if viewMode == .raw {
             // Show raw error data in raw mode
             RawDataView(
-              rawResponseJSON: rawResponseJSON,
-              rawResponseError: rawResponseError,
-              underlyingError: requestError
+              responseJSON: responseJSON,
+              responseError: responseError
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
           } else {
-            if let error = requestError {
+            if let error = responseError {
               JSONRPCErrorView(error: error)
             }
           }
@@ -195,9 +193,8 @@ struct ResourceDetailView: View {
         EmbeddedResourceView(
           resources: embeddedResources,
           viewMode: $viewMode,
-          rawJSON: rawResponseJSON,
-          rawResponseError: rawResponseError,
-          underlyingError: requestError
+          responseJSON: responseJSON,
+          responseError: responseError
         )
         .id(resource.uri)  // Force view to recreate when resource changes
       }
@@ -221,10 +218,9 @@ struct ResourceDetailView: View {
         await MainActor.run {
           embeddedResources = cachedState.embeddedResources
           hasLoadedOnce = true
-          rawResponseJSON = cachedState.rawResponseJSON
-          rawResponseError = cachedState.rawResponseError
-          requestError = cachedState.requestError
-          loadingFailed = cachedState.requestError != nil
+          responseJSON = cachedState.responseJSON
+          responseError = cachedState.responseError
+          loadingFailed = cachedState.responseError != nil
         }
         return
       }
@@ -240,10 +236,9 @@ struct ResourceDetailView: View {
       await MainActor.run {
         embeddedResources = loadedResource.embeddedResources
         isLoadingResources = false
-        loadingFailed = loadedResource.requestError != nil
-        rawResponseJSON = loadedResource.rawResponseJSON
-        rawResponseError = nil // Clear any previous error
-        requestError = loadedResource.requestError
+        loadingFailed = loadedResource.responseError != nil
+        responseJSON = loadedResource.responseJSON
+        responseError = loadedResource.responseError
       }
 
       // Save state to cache
@@ -252,9 +247,8 @@ struct ResourceDetailView: View {
         embeddedResources: loadedResource.embeddedResources,
         hasLoadedOnce: true,
         lastFetchedURI: resource.uri,
-        rawResponseJSON: loadedResource.rawResponseJSON,
-        rawResponseError: nil,
-        requestError: loadedResource.requestError
+        responseJSON: loadedResource.responseJSON,
+        responseError: loadedResource.responseError
       )
       await resourceCache.set(state, for: resource.uri)
     }
@@ -319,8 +313,8 @@ struct ResourceDetailView: View {
 
   private func copyRawJSONToClipboard() {
     RawDataView.copyRawDataToClipboard(
-      rawResponseJSON: rawResponseJSON,
-      underlyingError: requestError
+      responseJSON: responseJSON,
+      responseError: responseError
     )
   }
 }

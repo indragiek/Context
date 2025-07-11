@@ -184,13 +184,13 @@ private struct MessagesHeader: View {
   
   private var shouldShowCopyButton: Bool {
     // Show copy button if we have raw JSON or if there's an error
-    promptState.rawResponseJSON != nil || promptState.loadingState.underlyingError != nil
+    promptState.responseJSON != nil || promptState.responseError != nil || promptState.loadingState.underlyingError != nil
   }
   
   private func copyRawJSONToClipboard() {
     RawDataView.copyRawDataToClipboard(
-      rawResponseJSON: promptState.rawResponseJSON,
-      underlyingError: promptState.loadingState.underlyingError
+      responseJSON: promptState.responseJSON,
+      responseError: promptState.responseError ?? promptState.loadingState.underlyingError
     )
   }
 }

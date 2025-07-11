@@ -169,11 +169,11 @@ struct PromptDetailView: View {
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
             let jsonData = try encoder.encode(responseToEncode)
-            localPromptState.rawResponseJSON = try JSONDecoder().decode(JSONValue.self, from: jsonData)
-            localPromptState.rawResponseError = nil
+            localPromptState.responseJSON = try JSONDecoder().decode(JSONValue.self, from: jsonData)
+            localPromptState.responseError = nil
           } catch {
-            localPromptState.rawResponseJSON = nil
-            localPromptState.rawResponseError = "Failed to encode/decode JSON: \(error.localizedDescription)"
+            localPromptState.responseJSON = nil
+            localPromptState.responseError = error
           }
           
           let templateProcessor = TemplateProcessor(argumentValues: localPromptState.argumentValues)
@@ -195,8 +195,8 @@ struct PromptDetailView: View {
         await MainActor.run {
           localPromptState.messages = []
           localPromptState.rawResponse = nil
-          localPromptState.rawResponseJSON = nil
-          localPromptState.rawResponseError = error.localizedDescription
+          localPromptState.responseJSON = nil
+          localPromptState.responseError = error
           localPromptState.loadingState = .failed(error: error.localizedDescription, underlyingError: error)
           localPromptState.hasLoadedOnce = true
           

@@ -9,9 +9,8 @@ struct PromptRawDataView: View {
   
   var body: some View {
     RawDataView(
-      rawResponseJSON: promptState.rawResponseJSON,
-      rawResponseError: promptState.rawResponseError,
-      underlyingError: promptState.loadingState.underlyingError
+      responseJSON: promptState.responseJSON,
+      responseError: promptState.responseError ?? promptState.loadingState.underlyingError
     )
   }
 }

@@ -7,17 +7,14 @@ import SwiftUI
 /// A common view for displaying raw JSON data, errors, and empty states
 /// Used by both ToolDetailView and PromptDetailView
 struct RawDataView: View {
-  let rawResponseJSON: JSONValue?
-  let rawResponseError: String?
-  let underlyingError: (any Error)?
+  let responseJSON: JSONValue?
+  let responseError: (any Error)?
 
   var body: some View {
-    if let error = underlyingError {
+    if let error = responseError {
       errorRawView(for: error)
-    } else if let jsonValue = rawResponseJSON {
+    } else if let jsonValue = responseJSON {
       JSONRawView(jsonValue: jsonValue, searchText: "", isSearchActive: false)
-    } else if let error = rawResponseError {
-      jsonErrorView(error)
     } else {
       emptyRawView
     }
@@ -76,23 +73,6 @@ struct RawDataView: View {
     }
   }
 
-  private func jsonErrorView(_ error: String) -> some View {
-    VStack(spacing: 16) {
-      Image(systemName: "exclamationmark.triangle")
-        .font(.largeTitle)
-        .foregroundColor(.red)
-
-      Text("JSON Error")
-        .font(.headline)
-
-      Text(error)
-        .font(.callout)
-        .foregroundColor(.secondary)
-        .multilineTextAlignment(.center)
-        .padding(.horizontal)
-    }
-    .frame(maxWidth: .infinity, maxHeight: .infinity)
-  }
 
   private var errorPlaceholder: some View {
     ContentUnavailableView(
@@ -115,11 +95,11 @@ struct RawDataView: View {
 extension RawDataView {
   /// Copies raw data to clipboard, handling both JSON responses and errors
   static func copyRawDataToClipboard(
-    rawResponseJSON: JSONValue?,
-    underlyingError: (any Error)?
+    responseJSON: JSONValue?,
+    responseError: (any Error)?
   ) {
     // Try to copy raw response JSON first
-    if let jsonValue = rawResponseJSON {
+    if let jsonValue = responseJSON {
       do {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
@@ -135,7 +115,7 @@ extension RawDataView {
     }
 
     // If no raw response, try to copy error data
-    if let error = underlyingError {
+    if let error = responseError {
       if let clientError = error as? ClientError {
         switch clientError {
         case .requestFailed(_, let jsonRPCError):

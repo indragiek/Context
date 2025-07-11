@@ -19,9 +19,8 @@ struct ToolDetailView: View {
   @State private var validationErrors: [String: String] = [:]
   @State private var toolResponse: CallToolResponse.Result?
   @State private var isLoading = false
-  @State private var rawResponseJSON: JSONValue?
-  @State private var rawResponseError: String?
-  @State private var underlyingError: (any Error)?
+  @State private var responseJSON: JSONValue?
+  @State private var responseError: (any Error)?
   @State private var hasLoadedOnce = false
   @State private var debounceTask: Task<Void, Never>?
   @State private var focusedField: String?
@@ -59,9 +58,8 @@ struct ToolDetailView: View {
       parameterValues.removeAll()
       validationErrors.removeAll()
       toolResponse = nil
-      rawResponseJSON = nil
-      rawResponseError = nil
-      underlyingError = nil
+      responseJSON = nil
+      responseError = nil
       hasLoadedOnce = false
       initializeParameterValues()
     }
@@ -318,26 +316,24 @@ struct ToolDetailView: View {
             MessageThreadView(messages: messages)
           case .raw:
             ToolRawDataView(
-              rawResponseJSON: rawResponseJSON,
-              rawResponseError: rawResponseError,
-              underlyingError: underlyingError
+              responseJSON: responseJSON,
+              responseError: responseError
             )
           }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-      } else if underlyingError != nil {
+      } else if responseError != nil {
         // Error state
         Group {
           switch viewMode {
           case .preview:
-            if let error = underlyingError {
+            if let error = responseError {
               JSONRPCErrorView(error: error)
             }
           case .raw:
             ToolRawDataView(
-              rawResponseJSON: rawResponseJSON,
-              rawResponseError: rawResponseError,
-              underlyingError: underlyingError
+              responseJSON: responseJSON,
+              responseError: responseError
             )
           }
         }
@@ -393,13 +389,13 @@ struct ToolDetailView: View {
   
   private var shouldShowCopyButton: Bool {
     // Show copy button if we have raw JSON or if there's an error
-    rawResponseJSON != nil || underlyingError != nil
+    responseJSON != nil || responseError != nil
   }
   
   private func copyRawDataToClipboard() {
     RawDataView.copyRawDataToClipboard(
-      rawResponseJSON: rawResponseJSON,
-      underlyingError: underlyingError
+      responseJSON: responseJSON,
+      responseError: responseError
     )
   }
 
@@ -488,9 +484,8 @@ struct ToolDetailView: View {
     parameterValues = toolState.parameterValues
     toolResponse = toolState.toolResponse
     hasLoadedOnce = toolState.hasLoadedOnce
-    rawResponseJSON = toolState.rawResponseJSON
-    rawResponseError = toolState.rawResponseError
-    underlyingError = toolState.underlyingError
+    responseJSON = toolState.responseJSON
+    responseError = toolState.responseError
   }
 
   private func updateToolState(includeParameterValues: Bool = true) {
@@ -499,9 +494,8 @@ struct ToolDetailView: View {
       parameterValues: includeParameterValues ? parameterValues : toolState.parameterValues,
       toolResponse: toolResponse,
       hasLoadedOnce: hasLoadedOnce,
-      rawResponseJSON: rawResponseJSON,
-      rawResponseError: rawResponseError,
-      underlyingError: underlyingError
+      responseJSON: responseJSON,
+      responseError: responseError
     )
     if toolState != newState {
       toolState = newState
@@ -528,7 +522,7 @@ struct ToolDetailView: View {
         let response = CallToolResponse.Result(content: content, isError: isError)
         toolResponse = response
         hasLoadedOnce = true
-        underlyingError = nil  // Clear any previous error
+        responseError = nil  // Clear any previous error
 
         do {
           // TODO: Fix this inefficient encoding/decoding. We do this because we don't have access
@@ -536,11 +530,10 @@ struct ToolDetailView: View {
           let encoder = JSONEncoder()
           encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
           let jsonData = try encoder.encode(response)
-          rawResponseJSON = try JSONDecoder().decode(JSONValue.self, from: jsonData)
-          rawResponseError = nil
+          responseJSON = try JSONDecoder().decode(JSONValue.self, from: jsonData)
         } catch {
-          rawResponseError = error.localizedDescription
-          rawResponseJSON = nil
+          // If we can't encode the response, keep responseJSON as nil
+          responseJSON = nil
         }
 
         isLoading = false
@@ -556,11 +549,10 @@ struct ToolDetailView: View {
         }
       } catch {
         // Store the actual error object
-        underlyingError = error
+        responseError = error
         
         // Clear the tool response - we'll show error view instead
         toolResponse = nil
-        rawResponseError = error.localizedDescription
         
         // Try to create JSON representation of the error
         do {
@@ -571,15 +563,15 @@ struct ToolDetailView: View {
               let encoder = JSONEncoder()
               encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
               let jsonData = try encoder.encode(jsonRPCError)
-              rawResponseJSON = try JSONDecoder().decode(JSONValue.self, from: jsonData)
+              responseJSON = try JSONDecoder().decode(JSONValue.self, from: jsonData)
             default:
-              rawResponseJSON = nil
+              responseJSON = nil
             }
           } else {
-            rawResponseJSON = nil
+            responseJSON = nil
           }
         } catch {
-          rawResponseJSON = nil
+          responseJSON = nil
         }
         
         hasLoadedOnce = true

@@ -7,20 +7,30 @@ import Foundation
 
 struct LoadedResource: Equatable {
   let embeddedResources: [EmbeddedResource]
-  let rawResponseJSON: JSONValue?
-  let requestError: (any Error)?
+  let responseJSON: JSONValue?
+  let responseError: (any Error)?
 
   static func == (lhs: LoadedResource, rhs: LoadedResource) -> Bool {
-    lhs.embeddedResources == rhs.embeddedResources
-      && (lhs.requestError != nil) == (rhs.requestError != nil)
-    // Note: rawResponseJSON is not compared because JSONValue is not Equatable
+    // Compare Equatable properties
+    guard lhs.embeddedResources == rhs.embeddedResources &&
+          lhs.responseJSON == rhs.responseJSON else {
+      return false
+    }
+    
+    // Compare errors by their existence and type
+    let lhsErrorType = lhs.responseError.map { type(of: $0) }
+    let rhsErrorType = rhs.responseError.map { type(of: $0) }
+    let lhsErrorMessage = lhs.responseError?.localizedDescription
+    let rhsErrorMessage = rhs.responseError?.localizedDescription
+    
+    return lhsErrorType == rhsErrorType && lhsErrorMessage == rhsErrorMessage
   }
 }
 
 @DependencyClient
 struct ResourceLoader {
   var loadResource: @Sendable (String, MCPServer) async -> LoadedResource = { _, _ in
-    LoadedResource(embeddedResources: [], rawResponseJSON: nil, requestError: nil)
+    LoadedResource(embeddedResources: [], responseJSON: nil, responseError: nil)
   }
 }
 
@@ -47,20 +57,11 @@ extension ResourceLoader: DependencyKey {
 
         return LoadedResource(
           embeddedResources: contents,
-          rawResponseJSON: jsonValue,
-          requestError: nil
+          responseJSON: jsonValue,
+          responseError: nil
         )
       } catch {
-        // Create error response for raw view
-        struct ErrorResponse: Encodable {
-          struct ErrorInfo: Encodable {
-            let code: Int
-            let message: String
-          }
-          let error: ErrorInfo
-        }
-
-        // Try to create JSON representation of the error
+        // Try to create JSON representation of the error for specific error types
         var jsonValue: JSONValue? = nil
         
         if let clientError = error as? ClientError {
@@ -74,25 +75,11 @@ extension ResourceLoader: DependencyKey {
             break
           }
         }
-        
-        // If we couldn't create a specific error JSON, create a generic one
-        if jsonValue == nil {
-          let errorResponse = ErrorResponse(
-            error: ErrorResponse.ErrorInfo(
-              code: -32603,
-              message: error.localizedDescription
-            )
-          )
-          
-          if let jsonData = try? encoder.encode(errorResponse) {
-            jsonValue = try? JSONDecoder().decode(JSONValue.self, from: jsonData)
-          }
-        }
 
         return LoadedResource(
           embeddedResources: [],
-          rawResponseJSON: jsonValue,
-          requestError: error
+          responseJSON: jsonValue,
+          responseError: error
         )
       }
     }
