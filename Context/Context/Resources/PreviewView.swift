@@ -5,8 +5,10 @@ import ContextCore
 import HighlightSwift
 import SwiftUI
 import WebKit
+import os
 
 struct PreviewView: View {
+  private static let logger = Logger(subsystem: "com.indragie.Context", category: "PreviewView")
   let resource: EmbeddedResource
 
   var body: some View {
@@ -271,6 +273,7 @@ struct ImagePreview: View {
 // MARK: - Media Preview (Audio/Video)
 
 struct MediaPreview: View {
+  private static let logger = Logger(subsystem: "com.indragie.Context", category: "MediaPreview")
   let data: Data
   let mimeType: String
   @State private var player: AVPlayer?
@@ -312,7 +315,7 @@ struct MediaPreview: View {
       self.tempURL = tempURL
       self.player = AVPlayer(url: tempURL)
     } catch {
-      print("Failed to create temporary media file: \(error)")
+      MediaPreview.logger.error("Failed to create temporary media file: \(error)")
     }
   }
 

@@ -3,8 +3,10 @@
 import AppKit
 import ContextCore
 import UniformTypeIdentifiers
+import os
 
 struct ResourceOperations {
+  private static let logger = Logger(subsystem: "com.indragie.Context", category: "ResourceOperations")
 
   // MARK: - Title Generation
 
@@ -77,7 +79,7 @@ struct ResourceOperations {
       try textContent.text.write(to: tempURL, atomically: true, encoding: .utf8)
       return tempURL
     } catch {
-      print("Failed to create share URL for text: \(error)")
+      logger.error("Failed to create share URL for text: \(error)")
       return nil
     }
   }
@@ -106,7 +108,7 @@ struct ResourceOperations {
       try blobContent.blob.write(to: tempURL)
       return tempURL
     } catch {
-      print("Failed to create share URL: \(error)")
+      logger.error("Failed to create share URL: \(error)")
       return nil
     }
   }
@@ -150,7 +152,7 @@ struct ResourceOperations {
             try blobContent.blob.write(to: url)
           }
         } catch {
-          print("Failed to save resource: \(error)")
+          logger.error("Failed to save resource: \(error)")
         }
       }
     }

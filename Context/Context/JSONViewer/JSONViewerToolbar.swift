@@ -4,8 +4,10 @@ import ContextCore
 import QuickLook
 import SwiftUI
 import UniformTypeIdentifiers
+import os
 
 struct JSONViewerToolbar: View {
+  private static let logger = Logger(subsystem: "com.indragie.Context", category: "JSONViewerToolbar")
   @Binding var selectedTab: JSONValueView.Tab
   @Binding var searchText: String
   @Binding var showCopiedMessage: Bool
@@ -220,7 +222,7 @@ struct JSONViewerToolbar: View {
             try data.write(to: url)
           }
         } catch {
-          print("Failed to save JSON: \(error)")
+          JSONViewerToolbar.logger.error("Failed to save JSON: \(error)")
         }
       }
     }
@@ -238,7 +240,7 @@ struct JSONViewerToolbar: View {
         shareURL = tempURL
       }
     } catch {
-      print("Failed to create share URL: \(error)")
+      JSONViewerToolbar.logger.error("Failed to create share URL: \(error)")
     }
   }
 

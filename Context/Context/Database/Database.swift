@@ -1,5 +1,8 @@
 import Foundation
 import SharingGRDB
+import os
+
+private let logger = Logger(subsystem: "com.indragie.Context", category: "Database")
 
 func appDatabase() throws -> any DatabaseWriter {
   let databaseURL = try FileManager.default
@@ -12,7 +15,7 @@ func appDatabase() throws -> any DatabaseWriter {
     .appendingPathComponent("Context", isDirectory: true)
   try FileManager.default.createDirectory(at: databaseURL, withIntermediateDirectories: true)
   let databasePath = databaseURL.appendingPathComponent("context.db").path
-  print("Database path: \(databasePath)")
+  logger.info("Database path: \(databasePath)")
 
   var configuration = Configuration()
   let configureDatabase: @Sendable (Database) -> Void = { db in
@@ -25,7 +28,7 @@ func appDatabase() throws -> any DatabaseWriter {
   }
   #if DEBUG
     configuration.prepareDatabase { db in
-      db.trace { print("SQL: \($0)") }
+      db.trace { logger.debug("SQL: \($0)") }
       configureDatabase(db)
     }
   #else

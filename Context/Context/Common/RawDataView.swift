@@ -3,10 +3,12 @@
 import AppKit
 import ContextCore
 import SwiftUI
+import os
 
 /// A common view for displaying raw JSON data, errors, and empty states
 /// Used by both ToolDetailView and PromptDetailView
 struct RawDataView: View {
+  private static let logger = Logger(subsystem: "com.indragie.Context", category: "RawDataView")
   let responseJSON: JSONValue?
   let responseError: (any Error)?
 
@@ -109,7 +111,7 @@ extension RawDataView {
           NSPasteboard.general.setString(jsonString, forType: .string)
         }
       } catch {
-        print("Failed to encode JSON for clipboard: \(error)")
+        logger.error("Failed to encode JSON for clipboard: \(error)")
       }
       return
     }
@@ -129,7 +131,7 @@ extension RawDataView {
               NSPasteboard.general.setString(jsonString, forType: .string)
             }
           } catch {
-            print("Failed to encode error JSON for clipboard: \(error)")
+            logger.error("Failed to encode error JSON for clipboard: \(error)")
           }
 
         case .requestInvalidResponse(_, _, let data):
