@@ -347,7 +347,7 @@ struct SchemaValueEditor: View {
         return step
       }
     }
-    return 0.1
+    return 1.0
   }
 
   private func extractItems(from schema: JSONValue) -> JSONValue? {
