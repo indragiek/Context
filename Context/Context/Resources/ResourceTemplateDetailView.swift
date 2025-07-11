@@ -93,7 +93,7 @@ struct ResourceTemplateDetailView: View {
               }
               .frame(width: 100, alignment: .leading)
 
-              uriTemplateWithBoldedParameters
+              createBoldedParameterText(for: template.uriTemplate)
                 .font(.system(.caption, design: .monospaced))
                 .textSelection(.enabled)
                 .foregroundColor(.primary)
@@ -368,31 +368,20 @@ struct ResourceTemplateDetailView: View {
     }
   }
 
-  private var uriTemplateWithBoldedParameters: Text {
-    let matches = template.uriTemplate.matches(of: Self.templateParameterRegex)
+  private func createBoldedParameterText(for uriTemplate: String) -> Text {
+    let matches = uriTemplate.matches(of: Self.templateParameterRegex)
 
-    var result = Text("")
-    var lastIndex = template.uriTemplate.startIndex
+    var attributedString = AttributedString(uriTemplate)
 
     for match in matches {
-      // Add text before the parameter
-      let beforeText = String(template.uriTemplate[lastIndex..<match.range.lowerBound])
-      result = result + Text(beforeText)
-
-      // Add the parameter with bold
-      let parameterText = String(template.uriTemplate[match.range])
-      result = result + Text(parameterText).fontWeight(.semibold)
-
-      lastIndex = match.range.upperBound
+      if let lowerBound = AttributedString.Index(match.range.lowerBound, within: attributedString),
+        let upperBound = AttributedString.Index(match.range.upperBound, within: attributedString)
+      {
+        attributedString[lowerBound..<upperBound].font = .body.weight(.semibold)
+      }
     }
 
-    // Add any remaining text after the last parameter
-    if lastIndex < template.uriTemplate.endIndex {
-      let remainingText = String(template.uriTemplate[lastIndex...])
-      result = result + Text(remainingText)
-    }
-
-    return result
+    return Text(attributedString)
   }
 
   private func loadCachedState() {
@@ -535,7 +524,7 @@ struct ResourceTemplateDetailView: View {
               }
               .frame(width: 100, alignment: .leading)
 
-              uriTemplateWithBoldedParameters
+              createBoldedParameterText(for: template.uriTemplate)
                 .font(.system(.caption, design: .monospaced))
                 .textSelection(.enabled)
                 .foregroundColor(.primary)
