@@ -1,5 +1,7 @@
 ## Unreleased
 
+## Version 1.0.8 (108)
+
 * Show formatted error responses when calling tools, getting prompts, and getting resources fails (#31)
 * Add missing copy buttons for copying responses and errors as JSON (#31)
 * Fix stepper control in tool input incrementing by 0.1 instead of 1 (#31)

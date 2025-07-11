@@ -5,21 +5,41 @@
     <description>Most recent changes with links to updates.</description>
     <language>en</language>
     <item>
+      <title>Version 1.0.8 (108)</title>
+      <link>https://www.contextmcp.app/</link>
+      <sparkle:version>108</sparkle:version>
+      <sparkle:shortVersionString>1.0.8</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[<ul>
+<li>Show formatted error responses when calling tools, getting prompts, and getting resources fails (#31)</li>
+<li>Add missing copy buttons for copying responses and errors as JSON (#31)</li>
+<li>Fix stepper control in tool input incrementing by 0.1 instead of 1 (#31)</li>
+<li>Fix dropdown menus in tool input not persisting initial value (#31)</li>
+<li>Fix commands being invoked using a non-interactive shell (#32)</li>
+<li>Fix client not handling a roots/list request from the server (#33)</li>
+<li>Add settings for configuring global environment variables and shell path (#36)</li>
+<li>Fix some crashes (#34)</li>
+</ul>
+]]></description>
+      <pubDate>Fri, 11 Jul 2025 07:03:31 +0000</pubDate>
+      <enclosure url="https://github.com/indragiek/Context/releases/download/v1.0.8/Context_v1.0.8.dmg" sparkle:edSignature="s586HGay+M4TBege6zHa1gODigqzu7HBlehsPSrmGpQD/gYWrVT2aDgAqRWQOjgBYuktWpfOZUCcZwh06oAgDw==" length="13325557" type="application/octet-stream"/>
+    </item>
+    <item>
       <title>Version 1.0.7 (107)</title>
       <link>https://www.contextmcp.app/</link>
       <sparkle:version>107</sparkle:version>
       <sparkle:shortVersionString>1.0.7</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
-      <description><![CDATA[<ul>
-<li>Update OAuth callback URL scheme to app.contextmcp (#9)</li>
-<li>Support MCP Pagination (#10))</li>
-<li>Support MCP Roots (#11)</li>
-<li>Handle pings sent by server to client (#12)</li>
-<li>Handle "Connection: keep-alive" HTTP header (#17)</li>
-<li>Fix numerous bugs in the OAuth authentication flow (#7, #24)</li>
-<li>Handle requests where <code>params</code> is not specified (#25)</li>
-</ul>
-]]></description>
+      <description>&lt;ul&gt;
+&lt;li&gt;Update OAuth callback URL scheme to app.contextmcp (#9)&lt;/li&gt;
+&lt;li&gt;Support MCP Pagination (#10))&lt;/li&gt;
+&lt;li&gt;Support MCP Roots (#11)&lt;/li&gt;
+&lt;li&gt;Handle pings sent by server to client (#12)&lt;/li&gt;
+&lt;li&gt;Handle "Connection: keep-alive" HTTP header (#17)&lt;/li&gt;
+&lt;li&gt;Fix numerous bugs in the OAuth authentication flow (#7, #24)&lt;/li&gt;
+&lt;li&gt;Handle requests where &lt;code&gt;params&lt;/code&gt; is not specified (#25)&lt;/li&gt;
+&lt;/ul&gt;
+</description>
       <pubDate>Tue, 08 Jul 2025 18:12:08 +0000</pubDate>
       <enclosure url="https://github.com/indragiek/Context/releases/download/v1.0.7/Context_v1.0.7.dmg" sparkle:edSignature="7/T2TEN6QHwfIOHxo+MUsMToJ8jCVFKnrJQys2oSNmaFGXm2+5+JLIYXTKv4cYLHtdBXUAgWUkrxDHEKzdY7Bg==" length="13138759" type="application/octet-stream"/>
     </item>
