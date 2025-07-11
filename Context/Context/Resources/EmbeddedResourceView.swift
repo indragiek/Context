@@ -7,7 +7,9 @@ import SwiftUI
 struct EmbeddedResourceView: View {
   let resources: [EmbeddedResource]
   @Binding var viewMode: ResourceViewMode
-  let rawJSON: String?
+  let rawJSON: JSONValue?
+  let rawResponseError: String?
+  let underlyingError: (any Error)?
   @State private var selectedResource: EmbeddedResource?
   @State private var shareURL: URL?
   @State private var quickLookURL: URL?
@@ -142,20 +144,12 @@ struct EmbeddedResourceView: View {
               .transition(.opacity)
           } else {
             // Raw view
-            if let rawJSON = rawJSON,
-              let jsonData = rawJSON.data(using: .utf8),
-              let jsonValue = try? JSONDecoder().decode(JSONValue.self, from: jsonData)
-            {
-              JSONRawView(jsonValue: jsonValue, searchText: "", isSearchActive: false)
-                .transition(.opacity)
-            } else {
-              ContentUnavailableView(
-                "No Raw Data",
-                systemImage: "doc.text",
-                description: Text("No raw JSON data available")
-              )
-              .transition(.opacity)
-            }
+            RawDataView(
+              rawResponseJSON: rawJSON,
+              rawResponseError: rawResponseError,
+              underlyingError: underlyingError
+            )
+            .transition(.opacity)
           }
         } else {
           ContentUnavailableView(
@@ -233,10 +227,10 @@ struct EmbeddedResourceView: View {
   }
 
   private func copyRawJSONToClipboard() {
-    let jsonString = rawJSON ?? "null"
-    let unescapedJson = jsonString.replacingOccurrences(of: "\\/", with: "/")
-    NSPasteboard.general.clearContents()
-    NSPasteboard.general.setString(unescapedJson, forType: .string)
+    RawDataView.copyRawDataToClipboard(
+      rawResponseJSON: rawJSON,
+      underlyingError: underlyingError
+    )
   }
 }
 

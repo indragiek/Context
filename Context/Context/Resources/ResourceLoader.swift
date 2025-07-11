@@ -7,20 +7,20 @@ import Foundation
 
 struct LoadedResource: Equatable {
   let embeddedResources: [EmbeddedResource]
-  let rawResponseJSON: String
+  let rawResponseJSON: JSONValue?
   let requestError: (any Error)?
 
   static func == (lhs: LoadedResource, rhs: LoadedResource) -> Bool {
     lhs.embeddedResources == rhs.embeddedResources
-      && lhs.rawResponseJSON == rhs.rawResponseJSON
       && (lhs.requestError != nil) == (rhs.requestError != nil)
+    // Note: rawResponseJSON is not compared because JSONValue is not Equatable
   }
 }
 
 @DependencyClient
 struct ResourceLoader {
   var loadResource: @Sendable (String, MCPServer) async -> LoadedResource = { _, _ in
-    LoadedResource(embeddedResources: [], rawResponseJSON: "null", requestError: nil)
+    LoadedResource(embeddedResources: [], rawResponseJSON: nil, requestError: nil)
   }
 }
 
@@ -41,13 +41,13 @@ extension ResourceLoader: DependencyKey {
         // Encode contents directly as the Result would contain just this
         let responseToEncode = ["contents": contents]
 
-        // Encode the raw response
+        // Encode the raw response and then decode to JSONValue
         let jsonData = try encoder.encode(responseToEncode)
-        let jsonString = String(data: jsonData, encoding: .utf8) ?? "null"
+        let jsonValue = try JSONDecoder().decode(JSONValue.self, from: jsonData)
 
         return LoadedResource(
           embeddedResources: contents,
-          rawResponseJSON: jsonString,
+          rawResponseJSON: jsonValue,
           requestError: nil
         )
       } catch {
@@ -60,19 +60,38 @@ extension ResourceLoader: DependencyKey {
           let error: ErrorInfo
         }
 
-        let errorResponse = ErrorResponse(
-          error: ErrorResponse.ErrorInfo(
-            code: -32603,
-            message: error.localizedDescription
+        // Try to create JSON representation of the error
+        var jsonValue: JSONValue? = nil
+        
+        if let clientError = error as? ClientError {
+          switch clientError {
+          case .requestFailed(_, let jsonRPCError):
+            // Encode the JSON-RPC error
+            if let jsonData = try? encoder.encode(jsonRPCError) {
+              jsonValue = try? JSONDecoder().decode(JSONValue.self, from: jsonData)
+            }
+          default:
+            break
+          }
+        }
+        
+        // If we couldn't create a specific error JSON, create a generic one
+        if jsonValue == nil {
+          let errorResponse = ErrorResponse(
+            error: ErrorResponse.ErrorInfo(
+              code: -32603,
+              message: error.localizedDescription
+            )
           )
-        )
-
-        let jsonData = try? encoder.encode(errorResponse)
-        let jsonString = jsonData.flatMap { String(data: $0, encoding: .utf8) } ?? "null"
+          
+          if let jsonData = try? encoder.encode(errorResponse) {
+            jsonValue = try? JSONDecoder().decode(JSONValue.self, from: jsonData)
+          }
+        }
 
         return LoadedResource(
           embeddedResources: [],
-          rawResponseJSON: jsonString,
+          rawResponseJSON: jsonValue,
           requestError: error
         )
       }

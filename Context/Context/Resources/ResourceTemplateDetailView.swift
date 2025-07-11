@@ -22,7 +22,8 @@ struct ResourceTemplateDetailView: View {
   @State private var hasLoadedOnce = false
   @State private var lastFetchedURI: String? = nil
   @State private var showingFullDescription = false
-  @State private var rawResponseJSON: String? = nil
+  @State private var rawResponseJSON: JSONValue? = nil
+  @State private var rawResponseError: String? = nil
   @State private var requestError: (any Error)? = nil
 
   // Cached regex for template parameters
@@ -232,8 +233,8 @@ struct ResourceTemplateDetailView: View {
           Spacer()
 
           HStack(spacing: 8) {
-            // Copy button when in Raw mode with error
-            if requestError != nil && viewMode == .raw && rawResponseJSON != nil {
+            // Copy button when in Raw mode with error or data
+            if viewMode == .raw && (rawResponseJSON != nil || requestError != nil) {
               CopyButton {
                 copyRawJSONToClipboard()
               }
@@ -308,20 +309,12 @@ struct ResourceTemplateDetailView: View {
           // Error content based on view mode - handle this BEFORE checking loadingFailed
           if viewMode == .raw {
             // Show raw error data in raw mode
-            if let rawJSON = rawResponseJSON,
-              let jsonData = rawJSON.data(using: .utf8),
-              let jsonValue = try? JSONDecoder().decode(JSONValue.self, from: jsonData)
-            {
-              JSONRawView(jsonValue: jsonValue, searchText: "", isSearchActive: false)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-              ContentUnavailableView(
-                "No Raw Data",
-                systemImage: "doc.text",
-                description: Text("No raw JSON data available")
-              )
-              .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
+            RawDataView(
+              rawResponseJSON: rawResponseJSON,
+              rawResponseError: rawResponseError,
+              underlyingError: requestError
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
           } else {
             if let error = requestError {
               JSONRPCErrorView(error: error)
@@ -349,7 +342,9 @@ struct ResourceTemplateDetailView: View {
           EmbeddedResourceView(
             resources: embeddedResources,
             viewMode: $viewMode,
-            rawJSON: rawResponseJSON
+            rawJSON: rawResponseJSON,
+            rawResponseError: rawResponseError,
+            underlyingError: requestError
           )
           .id(template.uriTemplate)  // Force view to recreate when template changes
         }
@@ -412,6 +407,7 @@ struct ResourceTemplateDetailView: View {
         hasLoadedOnce = state.hasLoadedOnce
         lastFetchedURI = state.lastFetchedURI
         rawResponseJSON = state.rawResponseJSON
+        rawResponseError = state.rawResponseError
         requestError = state.requestError
         loadingFailed = state.requestError != nil
       }
@@ -425,6 +421,7 @@ struct ResourceTemplateDetailView: View {
       hasLoadedOnce: hasLoadedOnce,
       lastFetchedURI: lastFetchedURI,
       rawResponseJSON: rawResponseJSON,
+      rawResponseError: rawResponseError,
       requestError: requestError
     )
     await resourceCache.set(state, for: templateURI)
@@ -468,6 +465,7 @@ struct ResourceTemplateDetailView: View {
         loadingFailed = loadedResource.requestError != nil
         lastFetchedURI = uri
         rawResponseJSON = loadedResource.rawResponseJSON
+        rawResponseError = nil // Clear any previous error
         requestError = loadedResource.requestError
       }
 
@@ -567,9 +565,9 @@ struct ResourceTemplateDetailView: View {
   }
 
   private func copyRawJSONToClipboard() {
-    guard let jsonString = rawResponseJSON else { return }
-    let unescapedJson = jsonString.replacingOccurrences(of: "\\/", with: "/")
-    NSPasteboard.general.clearContents()
-    NSPasteboard.general.setString(unescapedJson, forType: .string)
+    RawDataView.copyRawDataToClipboard(
+      rawResponseJSON: rawResponseJSON,
+      underlyingError: requestError
+    )
   }
 }

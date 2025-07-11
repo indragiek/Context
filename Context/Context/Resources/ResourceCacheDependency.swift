@@ -10,7 +10,8 @@ struct ResourceCacheState: Sendable {
   var embeddedResources: [EmbeddedResource] = []
   var hasLoadedOnce: Bool = false
   var lastFetchedURI: String? = nil
-  var rawResponseJSON: String? = nil
+  var rawResponseJSON: JSONValue? = nil
+  var rawResponseError: String? = nil
   var requestError: (any Error)? = nil
 }
 
@@ -21,7 +22,7 @@ extension ResourceCacheState: Equatable {
     guard
       lhs.variableValues == rhs.variableValues && lhs.embeddedResources == rhs.embeddedResources
         && lhs.hasLoadedOnce == rhs.hasLoadedOnce && lhs.lastFetchedURI == rhs.lastFetchedURI
-        && lhs.rawResponseJSON == rhs.rawResponseJSON
+        && lhs.rawResponseError == rhs.rawResponseError
     else {
       return false
     }
@@ -33,6 +34,7 @@ extension ResourceCacheState: Equatable {
     let rhsErrorMessage = rhs.requestError?.localizedDescription
 
     return lhsErrorType == rhsErrorType && lhsErrorMessage == rhsErrorMessage
+    // Note: rawResponseJSON is not compared because JSONValue is not Equatable
   }
 }
 

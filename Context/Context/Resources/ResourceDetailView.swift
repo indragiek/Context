@@ -17,7 +17,8 @@ struct ResourceDetailView: View {
   @State private var loadingFailed = false
   @State private var hasLoadedOnce = false
   @State private var showingFullDescription = false
-  @State private var rawResponseJSON: String? = nil
+  @State private var rawResponseJSON: JSONValue? = nil
+  @State private var rawResponseError: String? = nil
   @State private var requestError: (any Error)? = nil
 
   var body: some View {
@@ -177,20 +178,12 @@ struct ResourceDetailView: View {
           // Error content based on view mode
           if viewMode == .raw {
             // Show raw error data in raw mode
-            if let rawJSON = rawResponseJSON,
-              let jsonData = rawJSON.data(using: .utf8),
-              let jsonValue = try? JSONDecoder().decode(JSONValue.self, from: jsonData)
-            {
-              JSONRawView(jsonValue: jsonValue, searchText: "", isSearchActive: false)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-              ContentUnavailableView(
-                "No Raw Data",
-                systemImage: "doc.text",
-                description: Text("No raw JSON data available")
-              )
-              .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
+            RawDataView(
+              rawResponseJSON: rawResponseJSON,
+              rawResponseError: rawResponseError,
+              underlyingError: requestError
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
           } else {
             if let error = requestError {
               JSONRPCErrorView(error: error)
@@ -202,7 +195,9 @@ struct ResourceDetailView: View {
         EmbeddedResourceView(
           resources: embeddedResources,
           viewMode: $viewMode,
-          rawJSON: rawResponseJSON
+          rawJSON: rawResponseJSON,
+          rawResponseError: rawResponseError,
+          underlyingError: requestError
         )
         .id(resource.uri)  // Force view to recreate when resource changes
       }
@@ -227,6 +222,7 @@ struct ResourceDetailView: View {
           embeddedResources = cachedState.embeddedResources
           hasLoadedOnce = true
           rawResponseJSON = cachedState.rawResponseJSON
+          rawResponseError = cachedState.rawResponseError
           requestError = cachedState.requestError
           loadingFailed = cachedState.requestError != nil
         }
@@ -246,6 +242,7 @@ struct ResourceDetailView: View {
         isLoadingResources = false
         loadingFailed = loadedResource.requestError != nil
         rawResponseJSON = loadedResource.rawResponseJSON
+        rawResponseError = nil // Clear any previous error
         requestError = loadedResource.requestError
       }
 
@@ -256,6 +253,7 @@ struct ResourceDetailView: View {
         hasLoadedOnce: true,
         lastFetchedURI: resource.uri,
         rawResponseJSON: loadedResource.rawResponseJSON,
+        rawResponseError: nil,
         requestError: loadedResource.requestError
       )
       await resourceCache.set(state, for: resource.uri)
@@ -320,9 +318,9 @@ struct ResourceDetailView: View {
   }
 
   private func copyRawJSONToClipboard() {
-    guard let jsonString = rawResponseJSON else { return }
-    let unescapedJson = jsonString.replacingOccurrences(of: "\\/", with: "/")
-    NSPasteboard.general.clearContents()
-    NSPasteboard.general.setString(unescapedJson, forType: .string)
+    RawDataView.copyRawDataToClipboard(
+      rawResponseJSON: rawResponseJSON,
+      underlyingError: requestError
+    )
   }
 }
