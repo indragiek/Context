@@ -1,5 +1,6 @@
 // Copyright © 2025 Indragie Karunaratne. All rights reserved.
 
+import AppKit
 import ContextCore
 import SwiftUI
 
@@ -20,7 +21,8 @@ struct PromptMessagesView: View {
         viewMode: $viewMode,
         isLoading: isLoading,
         allRequiredArgumentsFilled: allRequiredArgumentsFilled,
-        onFetchMessages: onFetchMessages
+        onFetchMessages: onFetchMessages,
+        promptState: promptState
       )
       
       Divider()
@@ -137,24 +139,27 @@ private struct MessagesHeader: View {
   let isLoading: Bool
   let allRequiredArgumentsFilled: Bool
   let onFetchMessages: () -> Void
+  let promptState: PromptState
   
   var body: some View {
-    HStack {
+    HStack(spacing: 12) {
       Text("Messages")
         .font(.headline)
       
       Spacer()
       
-      ToggleButton(selection: $viewMode)
+      // Copy button when in Raw mode
+      if viewMode == .raw && shouldShowCopyButton {
+        CopyButton {
+          copyRawJSONToClipboard()
+        }
+        .help("Copy raw JSON to clipboard")
+      }
       
-      Spacer()
-      
-      ZStack {
+      if isLoading {
         ProgressView()
           .controlSize(.small)
-          .opacity(isLoading ? 1 : 0)
       }
-      .frame(width: 20)
       
       Button(action: onFetchMessages) {
         Image(systemName: "square.and.arrow.down")
@@ -169,7 +174,71 @@ private struct MessagesHeader: View {
       )
     }
     .padding(.horizontal, 20)
-    .padding(.vertical, 8)
+    .frame(height: 50)
     .background(Color(NSColor.controlBackgroundColor))
+    .overlay(
+      // Centered toggle buttons
+      ToggleButton(selection: $viewMode)
+    )
+  }
+  
+  private var shouldShowCopyButton: Bool {
+    // Show copy button if we have raw JSON or if there's an error
+    promptState.rawResponseJSON != nil || promptState.loadingState.underlyingError != nil
+  }
+  
+  private func copyRawJSONToClipboard() {
+    // Try to copy raw response JSON first
+    if let jsonValue = promptState.rawResponseJSON {
+      do {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+        let jsonData = try encoder.encode(jsonValue)
+        if let jsonString = String(data: jsonData, encoding: .utf8) {
+          NSPasteboard.general.clearContents()
+          NSPasteboard.general.setString(jsonString, forType: .string)
+        }
+      } catch {
+        print("Failed to encode JSON for clipboard: \(error)")
+      }
+      return
+    }
+    
+    // If no raw response, try to copy error data
+    if let error = promptState.loadingState.underlyingError {
+      if let clientError = error as? ClientError {
+        switch clientError {
+        case .requestFailed(_, let jsonRPCError):
+          // Copy the JSON-RPC error
+          do {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+            let jsonData = try encoder.encode(jsonRPCError)
+            if let jsonString = String(data: jsonData, encoding: .utf8) {
+              NSPasteboard.general.clearContents()
+              NSPasteboard.general.setString(jsonString, forType: .string)
+            }
+          } catch {
+            print("Failed to encode error JSON for clipboard: \(error)")
+          }
+          
+        case .requestInvalidResponse(_, _, let data):
+          // Copy the raw response data
+          if let stringData = String(data: data, encoding: .utf8) {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(stringData, forType: .string)
+          }
+          
+        default:
+          // Copy error description as fallback
+          NSPasteboard.general.clearContents()
+          NSPasteboard.general.setString(error.localizedDescription, forType: .string)
+        }
+      } else {
+        // Copy error description for non-ClientError
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(error.localizedDescription, forType: .string)
+      }
+    }
   }
 }

@@ -103,7 +103,7 @@ struct PromptRawDataView: View {
   }
 }
 
-private extension PromptLoadingState {
+extension PromptLoadingState {
   var underlyingError: (any Error)? {
     switch self {
     case .failed(_, let error):
