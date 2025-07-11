@@ -397,7 +397,7 @@ struct ToolDetailView: View {
   }
   
   private func copyRawDataToClipboard() {
-    ToolRawDataView.copyRawDataToClipboard(
+    RawDataView.copyRawDataToClipboard(
       rawResponseJSON: rawResponseJSON,
       underlyingError: underlyingError
     )

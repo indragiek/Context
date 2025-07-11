@@ -188,57 +188,9 @@ private struct MessagesHeader: View {
   }
   
   private func copyRawJSONToClipboard() {
-    // Try to copy raw response JSON first
-    if let jsonValue = promptState.rawResponseJSON {
-      do {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
-        let jsonData = try encoder.encode(jsonValue)
-        if let jsonString = String(data: jsonData, encoding: .utf8) {
-          NSPasteboard.general.clearContents()
-          NSPasteboard.general.setString(jsonString, forType: .string)
-        }
-      } catch {
-        print("Failed to encode JSON for clipboard: \(error)")
-      }
-      return
-    }
-    
-    // If no raw response, try to copy error data
-    if let error = promptState.loadingState.underlyingError {
-      if let clientError = error as? ClientError {
-        switch clientError {
-        case .requestFailed(_, let jsonRPCError):
-          // Copy the JSON-RPC error
-          do {
-            let encoder = JSONEncoder()
-            encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
-            let jsonData = try encoder.encode(jsonRPCError)
-            if let jsonString = String(data: jsonData, encoding: .utf8) {
-              NSPasteboard.general.clearContents()
-              NSPasteboard.general.setString(jsonString, forType: .string)
-            }
-          } catch {
-            print("Failed to encode error JSON for clipboard: \(error)")
-          }
-          
-        case .requestInvalidResponse(_, _, let data):
-          // Copy the raw response data
-          if let stringData = String(data: data, encoding: .utf8) {
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(stringData, forType: .string)
-          }
-          
-        default:
-          // Copy error description as fallback
-          NSPasteboard.general.clearContents()
-          NSPasteboard.general.setString(error.localizedDescription, forType: .string)
-        }
-      } else {
-        // Copy error description for non-ClientError
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(error.localizedDescription, forType: .string)
-      }
-    }
+    RawDataView.copyRawDataToClipboard(
+      rawResponseJSON: promptState.rawResponseJSON,
+      underlyingError: promptState.loadingState.underlyingError
+    )
   }
 }
