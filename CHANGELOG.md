@@ -6,6 +6,8 @@
 * Fix dropdown menus in tool input not persisting initial value (#31)
 * Fix commands being invoked using a non-interactive shell (#32)
 * Fix client not handling a roots/list request from the server (#33)
+* Add settings for configuring global environment variables and shell path (#36)
+* Fix some crashes (#34)
 
 ## Version 1.0.7 (107)
 
