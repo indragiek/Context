@@ -37,15 +37,14 @@ struct CopyButton: View {
     }
     
     // Hide indicator after delay
-    copiedIndicatorTask = Task {
+    copiedIndicatorTask = Task { @MainActor in
       try? await Task.sleep(nanoseconds: 1_500_000_000)  // 1.5 seconds
       
-      if !Task.isCancelled {
-        await MainActor.run {
-          withAnimation(.easeOut(duration: 0.2)) {
-            showCopiedIndicator = false
-          }
-        }
+      // Check cancellation and update UI state atomically on MainActor
+      guard !Task.isCancelled else { return }
+      
+      withAnimation(.easeOut(duration: 0.2)) {
+        showCopiedIndicator = false
       }
     }
   }

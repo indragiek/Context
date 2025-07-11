@@ -81,9 +81,9 @@ struct SchemaValueEditor: View {
             if case .string(let str) = value, stringEnums.contains(str) {
               // Current value is valid, keep it
               return
-            } else if !stringEnums.isEmpty {
+            } else if let firstEnum = stringEnums.first {
               // Current value is invalid or missing, set to first enum option
-              value = .string(stringEnums.first!)
+              value = .string(firstEnum)
             }
           }
         } else {
