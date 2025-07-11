@@ -482,7 +482,7 @@ public actor DXTTransport: Transport {
     
     // Use the user's shell to run commands
     let shellPath = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
-    var shellArgs = ["-l", "-c"]
+    var shellArgs = ["-i", "-c"]
     
     // Build command string with escaped arguments
     var commandString = command

@@ -220,7 +220,7 @@ actor MCPClientManager {
       }
 
       let shellPath = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
-      var shellArgs = ["-l", "-c"]
+      var shellArgs = ["-i", "-c"]
 
       var commandString = command
       if let args = server.args, !args.isEmpty {
