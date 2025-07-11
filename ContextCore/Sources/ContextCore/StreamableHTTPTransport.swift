@@ -122,12 +122,10 @@ public actor StreamableHTTPTransport: Transport {
       let result = try await tryInitialize(idGenerator: idGenerator)
       
       // Try to open SSE stream in the background
-      Task {
-        do {
-          try await openSSEStreamIfSupported()
-        } catch {
-          logger.error("Failed to open SSE stream: \(error)")
-        }
+      do {
+        try await openSSEStreamIfSupported()
+      } catch {
+        logger.error("Failed to open SSE stream: \(error)")
       }
       
       return result
