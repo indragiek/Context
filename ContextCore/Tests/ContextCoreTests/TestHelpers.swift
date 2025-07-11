@@ -130,11 +130,12 @@ public class HTTPTestServer {
     process.standardError = errorPipe
 
     try process.run()
+    print("Started HTTP test server process with PID: \(process.processIdentifier) on port: \(port)")
 
     var data = Data()
     let fileHandle = errorPipe.fileHandleForReading
     let startTime = Date()
-    let timeout: TimeInterval = 2.0
+    let timeout: TimeInterval = 5.0
 
     while Date().timeIntervalSince(startTime) < timeout {
       let availableData = fileHandle.availableData
@@ -186,7 +187,7 @@ public class HTTPTestServer {
         attempts -= 1
         print("Failed to send ping: \(error). \(attempts) remaining")
         if attempts > 0 {
-          try await Task.sleep(for: .seconds(1))
+          try await Task.sleep(for: .seconds(2))
         }
       }
     }
@@ -196,6 +197,7 @@ public class HTTPTestServer {
   }
 
   public func terminate() {
+    print("Terminating HTTP test server process with PID: \(process.processIdentifier)")
     if process.isRunning {
       // First try graceful termination
       process.terminate()

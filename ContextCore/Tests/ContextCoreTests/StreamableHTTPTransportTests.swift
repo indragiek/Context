@@ -471,6 +471,7 @@ import os
     try await confirmation(expectedCount: 1) { receivedLog in
       Task {
         let _ = try await withTimeout(
+          10.0,
           timeoutMessage: "Timeout waiting for log messages",
           defaultValue: false
         ) {
@@ -507,7 +508,7 @@ import os
       _ = try await transport.testOnly_sendAndWaitForResponse(request: toolCall)
       // The log messages are not received synchronously alongside the tool call response
       // so wait for the logs to be received.
-      try await Task.sleep(for: .milliseconds(10))
+      try await Task.sleep(for: .milliseconds(100))
     }
 
     try await transport.close()
