@@ -553,26 +553,7 @@ struct ToolDetailView: View {
         
         // Clear the tool response - we'll show error view instead
         toolResponse = nil
-        
-        // Try to create JSON representation of the error
-        do {
-          if let clientError = error as? ClientError {
-            switch clientError {
-            case .requestFailed(_, let jsonRPCError):
-              // Encode the JSON-RPC error
-              let encoder = JSONEncoder()
-              encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
-              let jsonData = try encoder.encode(jsonRPCError)
-              responseJSON = try JSONDecoder().decode(JSONValue.self, from: jsonData)
-            default:
-              responseJSON = nil
-            }
-          } else {
-            responseJSON = nil
-          }
-        } catch {
-          responseJSON = nil
-        }
+        responseJSON = nil
         
         hasLoadedOnce = true
         isLoading = false

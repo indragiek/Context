@@ -61,24 +61,9 @@ extension ResourceLoader: DependencyKey {
           responseError: nil
         )
       } catch {
-        // Try to create JSON representation of the error for specific error types
-        var jsonValue: JSONValue? = nil
-        
-        if let clientError = error as? ClientError {
-          switch clientError {
-          case .requestFailed(_, let jsonRPCError):
-            // Encode the JSON-RPC error
-            if let jsonData = try? encoder.encode(jsonRPCError) {
-              jsonValue = try? JSONDecoder().decode(JSONValue.self, from: jsonData)
-            }
-          default:
-            break
-          }
-        }
-
         return LoadedResource(
           embeddedResources: [],
-          responseJSON: jsonValue,
+          responseJSON: nil,
           responseError: error
         )
       }
