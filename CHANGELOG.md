@@ -4,6 +4,7 @@
 * Add missing copy buttons for copying responses and errors as JSON (#31)
 * Fix stepper control in tool input incrementing by 0.1 instead of 1 (#31)
 * Fix dropdown menus in tool input not persisting initial value (#31)
+* Fix commands being invoked using a non-interactive shell (#32)
 * Fix client not handling a roots/list request from the server (#33)
 
 ## Version 1.0.7 (107)
