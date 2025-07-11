@@ -99,7 +99,7 @@ struct GlobalEnvironmentHelper {
 
     let process = Process()
     process.executableURL = URL(fileURLWithPath: shellPath)
-    process.arguments = ["-l", "-c", script]
+    process.arguments = ["-l", "-i", "-c", script]
 
     let pipe = Pipe()
     process.standardOutput = pipe
