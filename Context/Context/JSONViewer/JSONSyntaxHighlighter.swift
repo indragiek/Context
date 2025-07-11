@@ -34,17 +34,14 @@ struct JSONSyntaxHighlighter {
   )
 
   static func highlight(_ text: String, colorScheme: ColorScheme, searchText: String = "") -> Text {
-    var result = Text("")
-    let lines = text.components(separatedBy: .newlines)
-
-    for (lineIndex, line) in lines.enumerated() {
-      if lineIndex > 0 {
-        result = result + Text("\n")
-      }
-      result = result + highlightLine(line, colorScheme: colorScheme, searchText: searchText)
+    if searchText.isEmpty {
+      let attributedString = highlightToAttributedString(text, colorScheme: colorScheme)
+      return Text(attributedString)
+    } else {
+      var attributedString = highlightToAttributedString(text, colorScheme: colorScheme)
+      attributedString = applySearchHighlighting(to: attributedString, searchText: searchText)
+      return Text(attributedString)
     }
-
-    return result
   }
 
   static func highlightToAttributedString(_ text: String, colorScheme: ColorScheme)
@@ -154,122 +151,6 @@ struct JSONSyntaxHighlighter {
     }
 
     return matchRanges
-  }
-
-  private static func highlightLine(
-    _ line: String, colorScheme: ColorScheme, searchText: String = ""
-  ) -> Text {
-    if searchText.isEmpty {
-      return highlightLineWithoutSearch(line, colorScheme: colorScheme)
-    } else {
-      return highlightLineWithSearch(line, colorScheme: colorScheme, searchText: searchText)
-    }
-  }
-
-  private static func highlightLineWithoutSearch(_ line: String, colorScheme: ColorScheme) -> Text {
-    var result = Text("")
-    var currentIndex = line.startIndex
-
-    while currentIndex < line.endIndex {
-      let remainingText = String(line[currentIndex...])
-
-      if let match = findNextToken(in: remainingText) {
-        if match.range.lowerBound > remainingText.startIndex {
-          let beforeText = String(remainingText[remainingText.startIndex..<match.range.lowerBound])
-          result = result + Text(beforeText).foregroundColor(colorScheme.text)
-        }
-
-        let tokenText = String(remainingText[match.range])
-        let color = colorForTokenType(match.type, colorScheme: colorScheme)
-        result = result + Text(tokenText).foregroundColor(color)
-
-        let advanceDistance = line.distance(
-          from: currentIndex,
-          to: line.index(
-            currentIndex,
-            offsetBy: remainingText.distance(
-              from: remainingText.startIndex, to: match.range.upperBound)))
-        currentIndex = line.index(currentIndex, offsetBy: advanceDistance)
-      } else {
-        result = result + Text(remainingText).foregroundColor(colorScheme.text)
-        break
-      }
-    }
-
-    return result
-  }
-
-  private static func highlightLineWithSearch(
-    _ line: String, colorScheme: ColorScheme, searchText: String
-  ) -> Text {
-    var result = Text("")
-    var currentIndex = line.startIndex
-
-    while currentIndex < line.endIndex {
-      let remainingText = String(line[currentIndex...])
-
-      if let match = findNextToken(in: remainingText) {
-        if match.range.lowerBound > remainingText.startIndex {
-          let beforeText = String(remainingText[remainingText.startIndex..<match.range.lowerBound])
-          result =
-            result
-            + applySearchHighlight(beforeText, searchText: searchText, baseColor: colorScheme.text)
-        }
-
-        let tokenText = String(remainingText[match.range])
-        let color = colorForTokenType(match.type, colorScheme: colorScheme)
-        result = result + applySearchHighlight(tokenText, searchText: searchText, baseColor: color)
-
-        let advanceDistance = line.distance(
-          from: currentIndex,
-          to: line.index(
-            currentIndex,
-            offsetBy: remainingText.distance(
-              from: remainingText.startIndex, to: match.range.upperBound)))
-        currentIndex = line.index(currentIndex, offsetBy: advanceDistance)
-      } else {
-        result =
-          result
-          + applySearchHighlight(remainingText, searchText: searchText, baseColor: colorScheme.text)
-        break
-      }
-    }
-
-    return result
-  }
-
-  private static func applySearchHighlight(_ text: String, searchText: String, baseColor: Color)
-    -> Text
-  {
-    if searchText.isEmpty {
-      return Text(text).foregroundColor(baseColor)
-    }
-
-    var attributedString = AttributedString(text)
-    let searchLower = searchText.lowercased()
-    let textLower = text.lowercased()
-
-    attributedString.foregroundColor = baseColor
-
-    var searchStartIndex = textLower.startIndex
-    while searchStartIndex < textLower.endIndex {
-      if let range = textLower.range(of: searchLower, range: searchStartIndex..<textLower.endIndex)
-      {
-        if let lowerBound = AttributedString.Index(range.lowerBound, within: attributedString),
-          let upperBound = AttributedString.Index(range.upperBound, within: attributedString)
-        {
-          let attributedRange = lowerBound..<upperBound
-
-          attributedString[attributedRange].backgroundColor = .yellow.opacity(0.6)
-        }
-
-        searchStartIndex = range.upperBound
-      } else {
-        break
-      }
-    }
-
-    return Text(attributedString)
   }
 
   private enum TokenType {
