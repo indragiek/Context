@@ -121,7 +121,9 @@ public actor StreamableHTTPTransport: Transport {
       // HTTP transport.
       let result = try await tryInitialize(idGenerator: idGenerator)
       
-      // Try to open SSE stream in the background
+      // Try to open SSE stream so that the server can immediately
+      // start sending messages to the client. It's OK if the server
+      // does not support SSE -- this is best effort.
       do {
         try await openSSEStreamIfSupported()
       } catch {
