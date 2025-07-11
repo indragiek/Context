@@ -63,12 +63,7 @@ struct JSONRawView: View {
   }
 
   private var formattedJSON: String {
-    let encoder = JSONEncoder()
-    encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
-
-    guard let data = try? encoder.encode(jsonValue),
-      let jsonString = String(data: data, encoding: .utf8)
-    else {
+    guard let jsonString = JSONUtility.prettyString(from: jsonValue) else {
       return "Unable to encode JSON"
     }
 

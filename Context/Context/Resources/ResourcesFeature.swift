@@ -28,6 +28,7 @@ struct ResourcesFeature {
     var hasLoadedOnce = false
     var hasRequestedInitialLoad = false
     var selectedSegment: ResourceSegment = .resources
+    var viewMode: ResourceViewMode = .preview  // Shared view mode for all resource views
 
     // Pagination state
     var resourcesNextCursor: String?
@@ -86,6 +87,7 @@ struct ResourcesFeature {
     case moreTemplatesLoaded(templates: [ResourceTemplate], nextCursor: String?)
     case loadMoreTemplatesFailed(any Error)
     case loadIfNeeded
+    case viewModeChanged(ResourceViewMode)
   }
 
   @Dependency(\.mcpClientManager) var mcpClientManager
@@ -346,6 +348,10 @@ struct ResourcesFeature {
         state.error = nil
 
         return .send(.onConnected)
+
+      case let .viewModeChanged(mode):
+        state.viewMode = mode
+        return .none
       }
     }
   }

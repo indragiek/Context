@@ -63,12 +63,8 @@ struct SchemaValueEditor: View {
                 if case .string(let str) = value, stringEnums.contains(str) {
                   return str
                 }
-                // For required fields, always return first enum value
-                // For optional fields, check if we have a valid default
-                if node.isRequired || !stringEnums.isEmpty {
-                  return stringEnums.first!
-                }
-                return ""
+                // Return first enum value as fallback for display only
+                return stringEnums.first ?? ""
               },
               set: { newValue in
                 value = .string(newValue)
@@ -80,6 +76,17 @@ struct SchemaValueEditor: View {
             }
           }
           .labelsHidden()
+          .onAppear {
+            // Always ensure we have a valid enum value selected
+            if case .string(let str) = value, stringEnums.contains(str) {
+              // Current value is valid, keep it
+              return
+            }
+            // Current value is invalid, missing, or not a string - set to first enum option
+            if let firstEnum = stringEnums.first {
+              value = .string(firstEnum)
+            }
+          }
         } else {
           // Fallback to text field if enum values are empty
           textFieldEditor
@@ -347,7 +354,7 @@ struct SchemaValueEditor: View {
         return step
       }
     }
-    return 0.1
+    return 1.0
   }
 
   private func extractItems(from schema: JSONValue) -> JSONValue? {

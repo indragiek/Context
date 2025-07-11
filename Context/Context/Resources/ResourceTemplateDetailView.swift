@@ -1,20 +1,17 @@
 // Copyright © 2025 Indragie Karunaratne. All rights reserved.
 
-import Combine
 import ComposableArchitecture
 import ContextCore
 import Dependencies
-import GRDB
 import MarkdownUI
-import SharingGRDB
 import SwiftUI
 
-struct ResourceTemplateDetailContent: View {
+struct ResourceTemplateDetailView: View {
   let template: ResourceTemplate
   let server: MCPServer
+  @Binding var viewMode: ResourceViewMode
   @Dependency(\.resourceCache) private var resourceCache
-  @Dependency(\.mcpClientManager) private var mcpClientManager
-  @Dependency(\.defaultDatabase) private var database
+  @Dependency(\.resourceLoader) private var resourceLoader
   @State private var isLoadingResources = false
   @State private var loadingFailed = false
   @FocusState private var focusedVariable: String?
@@ -25,6 +22,8 @@ struct ResourceTemplateDetailContent: View {
   @State private var hasLoadedOnce = false
   @State private var lastFetchedURI: String? = nil
   @State private var showingFullDescription = false
+  @State private var responseJSON: JSONValue? = nil
+  @State private var responseError: (any Error)? = nil
 
   // Cached regex for template parameters
   private static let templateParameterRegex = /\{[^}]+\}/
@@ -58,15 +57,6 @@ struct ResourceTemplateDetailContent: View {
                   }
                   .buttonStyle(.plain)
                 }
-              } else {
-                Button(action: {
-                  showingFullDescription = true
-                }) {
-                  Text("Show more")
-                    .font(.caption)
-                    .foregroundColor(.accentColor)
-                }
-                .buttonStyle(.plain)
               }
             }
 
@@ -241,30 +231,51 @@ struct ResourceTemplateDetailContent: View {
 
           Spacer()
 
-          if isLoadingResources {
-            ProgressView()
-              .controlSize(.small)
-          }
-
-          // Only show button if there are template variables
-          let variables = extractTemplateVariables(from: template.uriTemplate)
-          if !variables.isEmpty {
-            Button(action: {
-              fetchEmbeddedResources()
-            }) {
-              Image(systemName: "square.and.arrow.down")
-                .font(.system(size: 14))
-                .foregroundColor(.accentColor)
+          HStack(spacing: 8) {
+            // Copy button when in Raw mode with error or data
+            if viewMode == .raw && (responseJSON != nil || responseError != nil) {
+              CopyButton {
+                copyRawJSONToClipboard()
+              }
             }
-            .buttonStyle(.plain)
-            .disabled(isLoadingResources || !allVariablesFilled)
-            .help(
-              allVariablesFilled ? "Fetch embedded resources" : "Fill in all variables to continue")
+
+            if isLoadingResources {
+              ProgressView()
+                .controlSize(.small)
+            }
+
+            // Only show button if there are template variables
+            let variables = extractTemplateVariables(from: template.uriTemplate)
+            if !variables.isEmpty {
+              Button(action: {
+                fetchEmbeddedResources()
+              }) {
+                Image(systemName: "square.and.arrow.down")
+                  .font(.system(size: 14))
+                  .foregroundColor(.accentColor)
+              }
+              .buttonStyle(.plain)
+              .disabled(isLoadingResources || !allVariablesFilled)
+              .help(
+                allVariablesFilled
+                  ? "Fetch embedded resources" : "Fill in all variables to continue")
+            }
           }
         }
         .padding(.horizontal, 20)
-        .padding(.vertical, 12)
+        .frame(height: 50)
         .background(Color(NSColor.controlBackgroundColor))
+        .overlay(
+          // Show toggle ONLY when there's an error
+          Group {
+            if responseError != nil {
+              ToggleButton(
+                items: [("Preview", ResourceViewMode.preview), ("Raw", ResourceViewMode.raw)],
+                selection: $viewMode
+              )
+            }
+          }
+        )
 
         Divider()
 
@@ -293,8 +304,22 @@ struct ResourceTemplateDetailContent: View {
               .frame(minWidth: 200, idealWidth: 400)
               .frame(maxWidth: .infinity, maxHeight: .infinity)
           }
+        } else if responseError != nil {
+          // Error content based on view mode - handle this BEFORE checking loadingFailed
+          if viewMode == .raw {
+            // Show raw error data in raw mode
+            RawDataView(
+              responseJSON: responseJSON,
+              responseError: responseError
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+          } else {
+            if let error = responseError {
+              JSONRPCErrorView(error: error)
+            }
+          }
         } else if loadingFailed {
-          // Show error state
+          // Show generic loading failure (fallback)
           ContentUnavailableView(
             "Failed to Load Resources",
             systemImage: "exclamationmark.triangle",
@@ -311,9 +336,14 @@ struct ResourceTemplateDetailContent: View {
           )
           .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
-          // Show the actual content
-          EmbeddedResourceView(resources: embeddedResources)
-            .id(template.uriTemplate)  // Force view to recreate when template changes
+          // Show the actual content - EmbeddedResourceView now handles view mode switching
+          EmbeddedResourceView(
+            resources: embeddedResources,
+            viewMode: $viewMode,
+            responseJSON: responseJSON,
+            responseError: responseError
+          )
+          .id(template.uriTemplate)  // Force view to recreate when template changes
         }
       }
       .frame(minHeight: 300)
@@ -373,6 +403,9 @@ struct ResourceTemplateDetailContent: View {
         embeddedResources = state.embeddedResources
         hasLoadedOnce = state.hasLoadedOnce
         lastFetchedURI = state.lastFetchedURI
+        responseJSON = state.responseJSON
+        responseError = state.responseError
+        loadingFailed = state.responseError != nil
       }
     }
   }
@@ -382,7 +415,9 @@ struct ResourceTemplateDetailContent: View {
       variableValues: variableValues,
       embeddedResources: embeddedResources,
       hasLoadedOnce: hasLoadedOnce,
-      lastFetchedURI: lastFetchedURI
+      lastFetchedURI: lastFetchedURI,
+      responseJSON: responseJSON,
+      responseError: responseError
     )
     await resourceCache.set(state, for: templateURI)
   }
@@ -417,35 +452,19 @@ struct ResourceTemplateDetailContent: View {
     hasLoadedOnce = true
 
     Task {
-      do {
-        // Get the client and read the resource
-        let client = try await mcpClientManager.client(for: server)
-        let contents = try await client.readResource(uri: uri)
+      let loadedResource = await resourceLoader.loadResource(uri, server)
 
-        await MainActor.run {
-          embeddedResources = contents
-          isLoadingResources = false
-          loadingFailed = false
-          lastFetchedURI = uri
-
-          // Save the fetched resources to cache
-          Task {
-            await saveToCacheForTemplate(template.uriTemplate)
-          }
-        }
-      } catch {
-        await MainActor.run {
-          embeddedResources = []
-          isLoadingResources = false
-          loadingFailed = true
-          lastFetchedURI = uri
-
-          // Still save to cache to avoid repeated failed attempts
-          Task {
-            await saveToCacheForTemplate(template.uriTemplate)
-          }
-        }
+      await MainActor.run {
+        embeddedResources = loadedResource.embeddedResources
+        isLoadingResources = false
+        loadingFailed = loadedResource.responseError != nil
+        lastFetchedURI = uri
+        responseJSON = loadedResource.responseJSON
+        responseError = loadedResource.responseError
       }
+
+      // Save the fetched resources to cache
+      await saveToCacheForTemplate(template.uriTemplate)
     }
   }
 
@@ -458,14 +477,13 @@ struct ResourceTemplateDetailContent: View {
   }
 
   private func extractTemplateVariables(from template: String) -> [String] {
-    let pattern = #"\{([^}]+)\}"#
-    let regex = try? NSRegularExpression(pattern: pattern)
-    let matches =
-      regex?.matches(in: template, range: NSRange(template.startIndex..., in: template)) ?? []
+    let matches = template.matches(of: Self.templateParameterRegex)
 
     return matches.compactMap { match in
-      guard let range = Range(match.range(at: 1), in: template) else { return nil }
-      return String(template[range])
+      let matchedString = String(template[match.range])
+      // Remove the curly braces to get just the variable name
+      let variable = matchedString.trimmingCharacters(in: CharacterSet(charactersIn: "{}"))
+      return variable.isEmpty ? nil : variable
     }
   }
 
@@ -538,5 +556,12 @@ struct ResourceTemplateDetailContent: View {
     }
     .padding(20)
     .frame(width: 600, height: 400)
+  }
+
+  private func copyRawJSONToClipboard() {
+    RawDataView.copyRawDataToClipboard(
+      responseJSON: responseJSON,
+      responseError: responseError
+    )
   }
 }

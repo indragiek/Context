@@ -459,12 +459,7 @@ struct JSONOutlineView: View {
   }
 
   private func copyJSON(for value: JSONValue) {
-    let encoder = JSONEncoder()
-    encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-
-    if let data = try? encoder.encode(value),
-      let jsonString = String(data: data, encoding: .utf8)
-    {
+    if let jsonString = JSONUtility.prettyString(from: value, escapeSlashes: true) {
       NSPasteboard.general.clearContents()
       NSPasteboard.general.setString(jsonString, forType: .string)
     }

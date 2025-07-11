@@ -4,6 +4,9 @@ import ContextCore
 import Quartz
 import QuickLook
 import SwiftUI
+import os
+
+private let logger = Logger(subsystem: "com.indragie.Context", category: "QuickLookPreview")
 
 struct QuickLookPreview: NSViewRepresentable {
   let url: URL
@@ -42,7 +45,7 @@ extension QuickLookPreview {
     }
 
     guard let data = data else {
-      print("QuickLookPreview: No data available for resource")
+      logger.error("QuickLookPreview: No data available for resource")
       return nil
     }
 
@@ -50,10 +53,10 @@ extension QuickLookPreview {
 
     do {
       try data.write(to: url)
-      print("QuickLookPreview: Created temp file at \(url.path)")
+      logger.debug("QuickLookPreview: Created temp file at \(url.path)")
       return url
     } catch {
-      print("QuickLookPreview: Failed to create temporary file: \(error)")
+      logger.error("QuickLookPreview: Failed to create temporary file: \(error)")
       return nil
     }
   }

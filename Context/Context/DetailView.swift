@@ -2,6 +2,7 @@
 
 import ComposableArchitecture
 import ContextCore
+import Dependencies
 import SwiftUI
 
 struct DetailView: View {
@@ -67,7 +68,7 @@ struct DetailView: View {
           $0.name == selectedToolName
         })
       {
-        ToolDetailWrapper(
+        ToolDetailViewContainer(
           tool: selectedTool,
           store: serverStore.scope(state: \.toolsFeature, action: \.toolsFeature)
         )
@@ -110,24 +111,42 @@ struct DetailView: View {
 
   @ViewBuilder
   private func resourcesTabContent(_ selectedServer: ServerFeature.State) -> some View {
-    if let selectedResourceID = selectedServer.resourcesFeature.selectedResourceID,
-      let selectedResource = selectedServer.resourcesFeature.resources.first(where: {
-        $0.id == selectedResourceID
-      })
-    {
-      ResourceDetailView(resource: selectedResource, server: selectedServer.server)
-    } else if let selectedTemplateID = selectedServer.resourcesFeature.selectedResourceTemplateID,
-      let selectedTemplate = selectedServer.resourcesFeature.resourceTemplates.first(where: {
-        $0.id == selectedTemplateID
-      })
-    {
-      ResourceTemplateDetailView(template: selectedTemplate, server: selectedServer.server)
-    } else {
-      ContentUnavailableView(
-        "No Resource Selected",
-        systemImage: "folder",
-        description: Text("Select a resource or template to view details")
+    IfLetStore(
+      store.scope(
+        state: \.serverLifecycleFeature.servers[id: selectedServer.id],
+        action: \.serverLifecycleFeature.serverFeature[id: selectedServer.id]
       )
+    ) { serverStore in
+      WithViewStore(serverStore, observe: \.resourcesFeature.viewMode) { viewStore in
+        if let selectedResourceID = selectedServer.resourcesFeature.selectedResourceID,
+          let selectedResource = selectedServer.resourcesFeature.resources.first(where: {
+            $0.id == selectedResourceID
+          })
+        {
+          ResourceDetailView(
+            resource: selectedResource,
+            server: selectedServer.server,
+            viewMode: viewStore.binding(send: { .resourcesFeature(.viewModeChanged($0)) })
+          )
+        } else if let selectedTemplateID = selectedServer.resourcesFeature
+          .selectedResourceTemplateID,
+          let selectedTemplate = selectedServer.resourcesFeature.resourceTemplates.first(where: {
+            $0.id == selectedTemplateID
+          })
+        {
+          ResourceTemplateDetailView(
+            template: selectedTemplate,
+            server: selectedServer.server,
+            viewMode: viewStore.binding(send: { .resourcesFeature(.viewModeChanged($0)) })
+          )
+        } else {
+          ContentUnavailableView(
+            "No Resource Selected",
+            systemImage: "folder",
+            description: Text("Select a resource or template to view details")
+          )
+        }
+      }
     }
   }
 
@@ -137,6 +156,39 @@ struct DetailView: View {
       systemImage: "sidebar.right",
       description: Text("Select a server from the sidebar")
     )
+  }
+}
+
+// MARK: - ToolDetailViewContainer
+
+struct ToolDetailViewContainer: View {
+  let tool: Tool
+  let store: StoreOf<ToolsFeature>
+  @Dependency(\.toolCache) var toolCache
+  @State private var toolState = ToolState()
+
+  var body: some View {
+    WithViewStore(store, observe: { $0 }) { viewStore in
+      ToolDetailView(
+        tool: tool,
+        toolState: $toolState,
+        server: viewStore.server,
+        onStateUpdate: { newState in
+          toolState = newState
+          viewStore.send(.updateToolState(toolName: tool.name, toolState: newState))
+        }
+      )
+      .task {
+        // Load cached state whenever the view appears
+        toolState = await toolCache.get(for: tool.name) ?? ToolState()
+      }
+      .onChange(of: tool.name) { _, newToolName in
+        // When tool changes, load the new tool's cached state
+        Task { @MainActor in
+          toolState = await toolCache.get(for: newToolName) ?? ToolState()
+        }
+      }
+    }
   }
 }
 

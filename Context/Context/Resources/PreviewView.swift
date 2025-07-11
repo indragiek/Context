@@ -5,8 +5,10 @@ import ContextCore
 import HighlightSwift
 import SwiftUI
 import WebKit
+import os
 
 struct PreviewView: View {
+  private static let logger = Logger(subsystem: "com.indragie.Context", category: "PreviewView")
   let resource: EmbeddedResource
 
   var body: some View {
@@ -91,7 +93,7 @@ struct HighPerformanceTextView: NSViewRepresentable {
 
       // Start async highlighting
       context.coordinator.startHighlighting(
-        text: text, colorScheme: colorScheme, textView: textView)
+        text: text, colorScheme: colorScheme, textView: textView, mimeType: mimeType)
     }
 
     return scrollView
@@ -114,7 +116,7 @@ struct HighPerformanceTextView: NSViewRepresentable {
       }
 
       context.coordinator.startHighlighting(
-        text: text, colorScheme: colorScheme, textView: textView)
+        text: text, colorScheme: colorScheme, textView: textView, mimeType: mimeType)
     }
   }
 
@@ -152,12 +154,15 @@ struct HighPerformanceTextView: NSViewRepresentable {
   class Coordinator {
     private var highlightingTask: Task<Void, Never>?
 
-    func startHighlighting(text: String, colorScheme: ColorScheme, textView: NSTextView) {
+    func startHighlighting(text: String, colorScheme: ColorScheme, textView: NSTextView, mimeType: String?) {
       // Cancel any existing highlighting task
       highlightingTask?.cancel()
 
       // Don't highlight very large files (> 1MB) for performance
       guard text.utf8.count < 1_000_000 else { return }
+      
+      // Skip highlighting for text/plain content
+      guard mimeType != "text/plain" else { return }
 
       highlightingTask = Task.detached(priority: .userInitiated) {
         do {
@@ -268,6 +273,7 @@ struct ImagePreview: View {
 // MARK: - Media Preview (Audio/Video)
 
 struct MediaPreview: View {
+  private static let logger = Logger(subsystem: "com.indragie.Context", category: "MediaPreview")
   let data: Data
   let mimeType: String
   @State private var player: AVPlayer?
@@ -309,7 +315,7 @@ struct MediaPreview: View {
       self.tempURL = tempURL
       self.player = AVPlayer(url: tempURL)
     } catch {
-      print("Failed to create temporary media file: \(error)")
+      MediaPreview.logger.error("Failed to create temporary media file: \(error)")
     }
   }
 
