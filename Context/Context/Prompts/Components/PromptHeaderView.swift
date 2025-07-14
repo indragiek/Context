@@ -16,7 +16,7 @@ struct PromptHeaderView: View {
         
         if let description = prompt.description {
           VStack(alignment: .leading, spacing: 4) {
-            Text(description)
+            Text(LocalizedStringKey(description))
               .font(.callout)
               .foregroundColor(.secondary)
               .textSelection(.enabled)

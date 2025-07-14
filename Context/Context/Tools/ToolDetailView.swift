@@ -21,12 +21,16 @@ struct ToolDetailView: View {
   @State private var hasLoadedOnce = false
   @State private var debounceTask: Task<Void, Never>?
   @State private var focusedField: String?
+  @State private var dynamicPropertyTypes: [String: String] = [:]  // Persists type selections
+  @State private var expandedNodes: Set<String> = []  // Persists expansion state
+  @State private var dynamicPropertyOrder: [String: [String]] = [:]  // Persists property order
   @State private var showingFullDescription = false
 
   @Dependency(\.mcpClientManager) private var mcpClientManager
   @Dependency(\.defaultDatabase) private var database
 
-  @State private var viewMode: ToolViewMode = .preview
+  @State private var responseViewMode: ToolViewMode = .preview
+  @State private var argumentsViewMode: ArgumentsViewMode = .editor
 
   var body: some View {
     GeometryReader { geometry in
@@ -97,16 +101,50 @@ struct ToolDetailView: View {
   private var topPane: some View {
     VStack(spacing: 0) {
       ToolHeaderView(tool: tool, showingFullDescription: $showingFullDescription)
+      Divider()
+      argumentsHeader
+      Divider()
       argumentsSection
     }
   }
 
   @ViewBuilder
+  private var argumentsHeader: some View {
+    HStack(spacing: 12) {
+      Text("Arguments")
+        .font(.headline)
+      
+      Spacer()
+    }
+    .padding(.horizontal, 20)
+    .frame(height: 50)
+    .background(Color(NSColor.controlBackgroundColor))
+    .overlay(
+      // Centered toggle buttons
+      ToggleButton(
+        items: [("Editor", ArgumentsViewMode.editor), ("Raw", ArgumentsViewMode.raw)],
+        selection: $argumentsViewMode
+      )
+    )
+  }
+  
+  @ViewBuilder
   private var argumentsSection: some View {
-    if let properties = tool.inputSchema.properties, !properties.isEmpty {
-      argumentsEditor(properties: properties)
-    } else {
-      noArgumentsView
+    switch argumentsViewMode {
+    case .editor:
+      if let properties = tool.inputSchema.properties, !properties.isEmpty {
+        argumentsEditor(properties: properties)
+      } else {
+        noArgumentsView
+      }
+    case .raw:
+      JSONRawView(
+        jsonValue: .object(filteredParameterValues),
+        searchText: "",
+        isSearchActive: false
+      )
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
+      .background(Color(NSColor.textBackgroundColor))
     }
   }
 
@@ -124,9 +162,17 @@ struct ToolDetailView: View {
     JSONSchemaEditor(
       properties: properties,
       required: requiredSet,
+      rootSchema: .object([
+        "type": .string(tool.inputSchema.type),
+        "properties": tool.inputSchema.properties.map { .object($0) } ?? .null,
+        "required": tool.inputSchema.required.map { .array($0.map { .string($0) }) } ?? .null
+      ]),
       values: $parameterValues,
       errors: $validationErrors,
-      focusedField: $focusedField
+      focusedField: $focusedField,
+      dynamicPropertyTypes: $dynamicPropertyTypes,
+      expandedNodes: $expandedNodes,
+      dynamicPropertyOrder: $dynamicPropertyOrder
     )
     .id(tool.id)  // Stable ID to prevent view recreation
     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -155,7 +201,7 @@ struct ToolDetailView: View {
       toolResponse: toolResponse,
       responseJSON: responseJSON,
       responseError: responseError,
-      viewMode: $viewMode,
+      viewMode: $responseViewMode,
       canCallTool: canCallTool,
       isLoading: isLoading,
       onRunTool: callTool
@@ -190,80 +236,33 @@ struct ToolDetailView: View {
     if let properties = tool.inputSchema.properties {
       let requiredSet = Set(tool.inputSchema.required ?? [])
       for (key, schema) in properties {
-        if parameterValues[key] == nil {
-          parameterValues[key] = defaultValueForSchema(
+        // Initialize if the key doesn't exist OR if the value is null
+        if parameterValues[key] == nil || (parameterValues[key] != nil && parameterValues[key]!.isNull) {
+          let defaultValue = SchemaValueHelpers.defaultValueForSchema(
             schema, isRequired: requiredSet.contains(key))
+          parameterValues[key] = defaultValue
         } else if let currentValue = parameterValues[key] {
           // Validate existing values for enum types
-          if case .string = currentValue,
-            let enumValues = extractEnum(from: schema),
-            !enumValues.isEmpty
-          {
-            let stringEnums = enumValues.compactMap {
-              if case .string(let str) = $0 { return str }
-              return nil
+          if let enumValues = SchemaValueHelpers.extractEnum(from: schema),
+             !enumValues.isEmpty {
+            // Check if current value is in the enum list
+            var found = false
+            for enumValue in enumValues {
+              if JSONValueUtilities.jsonValuesEqual(currentValue, enumValue) {
+                found = true
+                break
+              }
             }
-            if case .string(let currentStr) = currentValue,
-              !stringEnums.contains(currentStr)
-            {
+            if !found {
               // Current value is not in enum list, reset to first enum value
-              if let firstEnum = stringEnums.first {
-                parameterValues[key] = .string(firstEnum)
+              if let firstEnum = enumValues.first {
+                parameterValues[key] = firstEnum
               }
             }
           }
         }
       }
     }
-  }
-
-  private func defaultValueForSchema(_ schema: JSONValue, isRequired: Bool = false) -> JSONValue {
-    guard let type = extractType(from: schema) else { return .null }
-
-    switch type {
-    case "string":
-      // Check if this is an enum type
-      if let enumValues = extractEnum(from: schema),
-        let firstEnum = enumValues.first,
-        case .string(let enumStr) = firstEnum
-      {
-        return .string(enumStr)
-      }
-      // For required fields, use empty string; for optional, use null
-      return isRequired ? .string("") : .null
-    case "number":
-      return .number(0.0)
-    case "integer":
-      return .integer(0)
-    case "boolean":
-      return .boolean(false)
-    case "array":
-      return .array([])
-    case "object":
-      return .object([:])
-    case "null":
-      return .null
-    default:
-      return .null
-    }
-  }
-
-  private func extractEnum(from schema: JSONValue) -> [JSONValue]? {
-    if case .object(let obj) = schema,
-      case .array(let enumValues) = obj["enum"]
-    {
-      return enumValues
-    }
-    return nil
-  }
-
-  private func extractType(from schema: JSONValue) -> String? {
-    if case .object(let obj) = schema,
-      case .string(let typeStr) = obj["type"]
-    {
-      return typeStr
-    }
-    return nil
   }
 
   private func loadFromToolState() {
@@ -289,9 +288,19 @@ struct ToolDetailView: View {
     }
   }
 
+
+  private var filteredParameterValues: [String: JSONValue] {
+    parameterValues.compactMapValues { value -> JSONValue? in
+      if case .null = value {
+        return nil
+      }
+      return value
+    }
+  }
+
   private func callTool() {
-    // Generate arguments for CallToolRequest
-    let arguments: [String: JSONValue]? = parameterValues.isEmpty ? nil : parameterValues
+    // Generate arguments for CallToolRequest, excluding null values
+    let arguments: [String: JSONValue]? = filteredParameterValues.isEmpty ? nil : filteredParameterValues
 
     // Save the currently focused field
     let savedFocusedField = focusedField
