@@ -43,13 +43,11 @@ jobs:
           # Direct prompt for automated review (no @claude mention needed)
           direct_prompt: |
             Please review this pull request and provide feedback on:
-            - Code quality and best practices
-            - Potential bugs or issues
+            - Critical bugs or issues
             - Performance considerations
             - Security concerns
-            - Test coverage
             
-            Be constructive and helpful in your feedback.
+            Be concise and direct in your feedback and render a single bullet point list of issues to address. For each issue, include a code diff of the change you would make to fix the issue. Do not focus on low priority issues that do not have a functional impact. Only provide feedback on test coverage if there is a significant lack of test coverage. Do not suggest future improvements to the codebase - focus on reviewing what's in the PR. 
           
           # Optional: Customize review based on file types
           # direct_prompt: |
