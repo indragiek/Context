@@ -36,7 +36,7 @@ public struct JSONSchemaTypeValidator {
       return true
     case (.integer, "integer"):
       return true
-    case (.integer(let i), "number"):
+    case (.integer(_), "number"):
       // Integers are also valid numbers
       return true
     case (.number(let n), "integer"):
@@ -351,7 +351,7 @@ public struct JSONSchemaTypeValidator {
     }
     
     // propertyNames - validate that all property names match the schema
-    if let propertyNamesSchema = schema["propertyNames"] {
+    if schema["propertyNames"] != nil {
       for key in value.keys {
         // This would need string validation from the main validator
         logger.debug("propertyNames validation deferred to main validator for key: \(key)")
