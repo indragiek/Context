@@ -109,7 +109,7 @@ struct DXTConfigView: View {
 
       _ = provider.loadObject(ofClass: URL.self) { url, _ in
         if let url = url, url.pathExtension.lowercased() == "dxt" {
-          DispatchQueue.main.async {
+          Task { @MainActor in
             store.send(.fileSelected(url))
           }
         }

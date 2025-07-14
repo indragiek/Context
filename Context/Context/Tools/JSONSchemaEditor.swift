@@ -386,7 +386,8 @@ struct JSONSchemaEditor: View {
 
   private func handleNewPropertyAdded(_ newNodeId: String) {
     updateFlattenedNodes()
-    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+    Task { @MainActor in
+      try? await Task.sleep(for: .milliseconds(100))
       internalFocusedField = newNodeId
     }
   }
@@ -1133,7 +1134,8 @@ struct JSONSchemaEditor: View {
       if !expandedNodes.contains(node.id) {
         toggleExpansion(for: node.id)
       }
-      DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+      Task { @MainActor in
+        try? await Task.sleep(for: .milliseconds(100))
         internalFocusedField = "\(node.id).\(newPropName)-key"
       }
     }

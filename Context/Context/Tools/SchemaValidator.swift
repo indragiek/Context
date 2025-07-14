@@ -6,8 +6,8 @@ import Foundation
 /// Provides JSON Schema validation using ContextCore validators
 @MainActor
 final class SchemaValidator {
-  nonisolated private let validator = JSONSchemaValidator()
-  nonisolated private let resolver = JSONSchemaReferenceResolver()
+  nonisolated(unsafe) private let validator = JSONSchemaValidator()
+  private let resolver = JSONSchemaReferenceResolver()
 
   /// Validates a value against a schema
   func validate(
@@ -19,7 +19,7 @@ final class SchemaValidator {
   }
   
   /// Resolves a schema that may contain references
-  nonisolated func resolveSchema(_ schema: JSONValue) -> JSONValue {
+  func resolveSchema(_ schema: JSONValue) -> JSONValue {
     let context = JSONSchemaValidationContext()
     do {
       return try resolver.resolveSchema(schema, in: context)
@@ -30,7 +30,7 @@ final class SchemaValidator {
   }
   
   /// Sets the root schema for reference resolution
-  nonisolated func setRootSchema(_ schema: JSONValue?) {
+  func setRootSchema(_ schema: JSONValue?) {
     resolver.setRootSchema(schema)
   }
 }

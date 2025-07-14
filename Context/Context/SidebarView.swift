@@ -224,7 +224,8 @@ struct ServerNavigationLink: View {
             .onAppear {
               editedName = server.name
               // Delay focus to ensure TextField is ready
-              DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+              Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(100))
                 isTextFieldFocused = true
               }
             }

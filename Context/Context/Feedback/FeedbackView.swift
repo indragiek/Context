@@ -413,7 +413,7 @@ struct MultilineTextField: NSViewRepresentable {
 
     // Focus only once on initial load
     if shouldFocus && !context.coordinator.hasSetInitialFocus {
-      DispatchQueue.main.async {
+      Task { @MainActor in
         textView.window?.makeFirstResponder(textView)
         context.coordinator.hasSetInitialFocus = true
       }

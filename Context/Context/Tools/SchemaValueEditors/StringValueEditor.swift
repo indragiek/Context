@@ -125,7 +125,7 @@ struct StringValueEditor: View {
     if newIndex != currentIndex {
       value = enumValues[newIndex]
       // Delay validation slightly to ensure the value is properly set
-      DispatchQueue.main.async {
+      Task { @MainActor in
         self.onValidate()
       }
     }
