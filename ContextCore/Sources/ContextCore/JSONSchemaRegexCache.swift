@@ -98,12 +98,16 @@ extension String {
 // Add extension to JSONSchemaRegexCache
 extension JSONSchemaRegexCache {
   /// Check if a string matches a pattern with timeout protection
-  public func matches(_ string: String, pattern: String, timeout: TimeInterval = 2.0) -> Bool {
+  public func matches(_ string: String, pattern: String, timeout: TimeInterval = 2.0) async -> Bool {
+    // Implement timeout protection using Swift concurrency
+    return await withTimeLimit(seconds: timeout, string: string, pattern: pattern) ?? false
+  }
+  
+  /// Perform the actual regex matching
+  private func performMatching(string: String, pattern: String) -> Bool {
     do {
       let regex = try regex(for: pattern)
       
-      // For simplicity, just do direct matching without timeout protection for now
-      // The ReDoS protection is handled by isDangerousPattern check
       if pattern.hasPrefix("^") && pattern.hasSuffix("$") {
         return string.wholeMatch(of: regex) != nil
       } else if pattern.hasPrefix("^") {
@@ -128,6 +132,37 @@ extension JSONSchemaRegexCache {
     }
   }
   
+  /// Execute regex matching with a time limit using Swift concurrency
+  private func withTimeLimit(seconds: TimeInterval, string: String, pattern: String) async -> Bool? {
+    return await withTaskGroup(of: Bool?.self) { group in
+      // Add the main matching task
+      group.addTask { [self] in
+        return await self.performMatching(string: string, pattern: pattern)
+      }
+      
+      // Add the timeout task
+      group.addTask {
+        try? await Task.sleep(for: .seconds(seconds))
+        return nil
+      }
+      
+      // Wait for the first task to complete
+      for await result in group {
+        if let value = result {
+          group.cancelAll()
+          return value
+        } else {
+          // This was the timeout task completing
+          group.cancelAll()
+          logger.warning("Regex matching timed out after \(seconds) seconds")
+          return nil
+        }
+      }
+      
+      return nil
+    }
+  }
+  
   /// Check for potentially dangerous regex patterns
   public func isDangerousPattern(_ pattern: String) -> Bool {
     // Check for common ReDoS patterns
@@ -136,10 +171,23 @@ extension JSONSchemaRegexCache {
       // Check if this is actually a nested quantifier by looking for preceding quantifier
       var inGroup = false
       var hasQuantifierInGroup = false
+      var escapeNext = false
       var i = pattern.startIndex
       
       while i < pattern.endIndex {
         let char = pattern[i]
+        
+        if escapeNext {
+          escapeNext = false
+          i = pattern.index(after: i)
+          continue
+        }
+        
+        if char == "\\" {
+          escapeNext = true
+          i = pattern.index(after: i)
+          continue
+        }
         
         if char == "(" {
           inGroup = true

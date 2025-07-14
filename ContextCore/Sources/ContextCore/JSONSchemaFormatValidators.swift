@@ -11,7 +11,7 @@ public struct JSONSchemaFormatValidator {
   public init() {}
   
   /// Validate a string value against a format constraint
-  public func validate(_ value: String, format: String) -> Bool {
+  public func validate(_ value: String, format: String) async -> Bool {
     switch format {
     case "email":
       return validateEmail(value)
@@ -46,7 +46,7 @@ public struct JSONSchemaFormatValidator {
     case "uuid":
       return validateUUID(value)
     case "regex":
-      return validateRegex(value)
+      return await validateRegex(value)
     case "json-pointer":
       return validateJSONPointer(value)
     case "relative-json-pointer":
@@ -272,7 +272,12 @@ public struct JSONSchemaFormatValidator {
     value.wholeMatch(of: JSONSchemaFormatRegexes.uuid) != nil
   }
   
-  private func validateRegex(_ value: String) -> Bool {
+  private func validateRegex(_ value: String) async -> Bool {
+    // Check for dangerous patterns before compilation
+    if await JSONSchemaRegexCache.shared.isDangerousPattern(value) {
+      return false
+    }
+    
     // Try to compile as a regex
     do {
       _ = try Regex(value)

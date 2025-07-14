@@ -182,8 +182,11 @@ public struct JSONSchemaTypeValidator {
     // format - only validate if enabled
     if case .string(let format) = schema["format"] {
       let shouldValidateFormat = context?.options.validateFormats ?? true
-      if shouldValidateFormat && !formatValidator.validate(value, format: format) {
-        errors.append(.invalidFormat(value: value, format: format))
+      if shouldValidateFormat {
+        let isValid = await formatValidator.validate(value, format: format)
+        if !isValid {
+          errors.append(.invalidFormat(value: value, format: format))
+        }
       } else if context?.options.collectAnnotations == true {
         // Collect format as annotation when not validating
         context?.collectAnnotation(keyword: "format", value: .string(format))

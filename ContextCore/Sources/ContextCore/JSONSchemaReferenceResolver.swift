@@ -9,6 +9,8 @@ public final class JSONSchemaReferenceResolver {
   
   /// Cache of resolved schemas by URI
   private var schemaCache: [String: JSONValue] = [:]
+  private let maxCacheSize = 1000
+  private var cacheAccessOrder: [String] = []
   
   /// Root schema for resolving internal references
   private var rootSchema: JSONValue?
@@ -25,12 +27,28 @@ public final class JSONSchemaReferenceResolver {
   public func setRootSchema(_ schema: JSONValue?) {
     self.rootSchema = schema
     self.schemaCache.removeAll()
+    self.cacheAccessOrder.removeAll()
     self.anchors.removeAll()
     self.dynamicAnchors.removeAll()
     
     if let schema = schema {
       extractAnchors(from: schema, at: "")
     }
+  }
+  
+  /// Add a schema to the cache with size limiting
+  private func addToCache(_ key: String, _ value: JSONValue) {
+    // If key already exists, remove it from the access order and add to end
+    if schemaCache[key] != nil {
+      cacheAccessOrder.removeAll { $0 == key }
+    } else if schemaCache.count >= maxCacheSize {
+      // Remove oldest entry
+      let oldestKey = cacheAccessOrder.removeFirst()
+      schemaCache.removeValue(forKey: oldestKey)
+    }
+    
+    schemaCache[key] = value
+    cacheAccessOrder.append(key)
   }
   
   /// Resolve a schema that may contain references
@@ -157,6 +175,9 @@ public final class JSONSchemaReferenceResolver {
   private func resolveReference(_ ref: String, baseURI: URL?) throws -> JSONValue {
     // Check cache first
     if let cached = schemaCache[ref] {
+      // Update access order (move to end for LRU)
+      cacheAccessOrder.removeAll { $0 == ref }
+      cacheAccessOrder.append(ref)
       return cached
     }
     
@@ -165,7 +186,7 @@ public final class JSONSchemaReferenceResolver {
       guard let resolved = resolveInternalReference(ref) else {
         throw JSONSchemaValidationError.referenceResolutionFailed(reference: ref)
       }
-      schemaCache[ref] = resolved
+      addToCache(ref, resolved)
       return resolved
     } else {
       // External reference - not supported
