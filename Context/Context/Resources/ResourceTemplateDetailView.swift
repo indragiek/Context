@@ -42,7 +42,7 @@ struct ResourceTemplateDetailView: View {
 
               if let description = template.description {
                 VStack(alignment: .leading, spacing: 4) {
-                  Text(description)
+                  Text(LocalizedStringKey(description))
                     .font(.callout)
                     .foregroundColor(.secondary)
                     .textSelection(.enabled)

@@ -331,3 +331,13 @@ extension Dictionary: JSONRepresentable where Key == String, Value: JSONRepresen
     return .object(self.mapValues { $0.jsonValue })
   }
 }
+
+// MARK: - Convenience Properties
+
+extension JSONValue {
+  /// Returns true if this value is null
+  public var isNull: Bool {
+    if case .null = self { return true }
+    return false
+  }
+}

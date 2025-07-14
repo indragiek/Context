@@ -29,7 +29,7 @@ struct ToolHeaderView: View {
 
       if let description = tool.description {
         VStack(alignment: .leading, spacing: 4) {
-          Text(description)
+          Text(LocalizedStringKey(description))
             .font(.callout)
             .foregroundColor(.secondary)
             .textSelection(.enabled)

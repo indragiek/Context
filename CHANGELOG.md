@@ -1,5 +1,7 @@
 ## Unreleased
 
+* New JSON schema editor for tool inputs (#41)
+
 ## Version 1.0.9 (109)
 
 * Fix regression (initialization delay when using Streamable HTTP) introduced in v1.0.8 (#38)
