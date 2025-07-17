@@ -16,8 +16,8 @@ struct JSONEditor: View {
   
   private var configuration: SourceEditorConfiguration {
     let theme = makeTheme(for: colorScheme)
-    let font = NSFont.monospacedSystemFont(ofSize: NSFont.smallSystemFontSize, weight: .regular)
-    
+    let font = NSFont.monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
+
     return SourceEditorConfiguration(
       appearance: .init(
         theme: theme,
@@ -43,44 +43,44 @@ struct JSONEditor: View {
   
   private func makeTheme(for colorScheme: ColorScheme) -> EditorTheme {
     if colorScheme == .dark {
-      // Dark theme colors similar to Xcode
+      // VS Code Dark Modern theme
       return EditorTheme(
-        text: .init(color: .init(hex: 0xD6D6D6)),
+        text: .init(color: .init(hex: 0xCCCCCC)),
         insertionPoint: .init(hex: 0xFFFFFF),
         invisibles: .init(color: .init(hex: 0x424242)),
-        background: .init(hex: 0x1F1F24),
+        background: .init(hex: 0x1F1F1F),
         lineHighlight: .init(hex: 0x2F3239),
-        selection: .init(hex: 0x646F83),
-        keywords: .init(color: .init(hex: 0xFC5FA3)),
-        commands: .init(color: .init(hex: 0x67B7A4)),
-        types: .init(color: .init(hex: 0x5DD8FF)),
-        attributes: .init(color: .init(hex: 0xFC6A5D)),
-        variables: .init(color: .init(hex: 0x41A1C0)),
-        values: .init(color: .init(hex: 0xFC6A5D)),
-        numbers: .init(color: .init(hex: 0xD0BF69)),
-        strings: .init(color: .init(hex: 0xFC6A5D)),
-        characters: .init(color: .init(hex: 0xD0BF69)),
-        comments: .init(color: .init(hex: 0x6C7986))
+        selection: .init(hex: 0x264F78),
+        keywords: .init(color: .init(hex: 0x569CD6)),
+        commands: .init(color: .init(hex: 0x4EC9B0)),
+        types: .init(color: .init(hex: 0x4EC9B0)),
+        attributes: .init(color: .init(hex: 0x9CDCFE)),
+        variables: .init(color: .init(hex: 0x9CDCFE)),
+        values: .init(color: .init(hex: 0xB5CEA8)),
+        numbers: .init(color: .init(hex: 0xB5CEA8)),
+        strings: .init(color: .init(hex: 0xCE9178)),
+        characters: .init(color: .init(hex: 0xCE9178)),
+        comments: .init(color: .init(hex: 0x6A9955))
       )
     } else {
-      // Light theme colors similar to Xcode
+      // VS Code Light Modern theme
       return EditorTheme(
-        text: .init(color: .init(hex: 0x000000)),
+        text: .init(color: .init(hex: 0x3B3B3B)),
         insertionPoint: .init(hex: 0x000000),
         invisibles: .init(color: .init(hex: 0xD4D4D4)),
-        background: .init(hex: 0xFFFFFF),
-        lineHighlight: .init(hex: 0xECF5FF),
-        selection: .init(hex: 0xB3D7FF),
-        keywords: .init(color: .init(hex: 0xAD3DA4)),
-        commands: .init(color: .init(hex: 0x4B23A0)),
-        types: .init(color: .init(hex: 0x0B4F79)),
-        attributes: .init(color: .init(hex: 0x78492A)),
-        variables: .init(color: .init(hex: 0x326D74)),
-        values: .init(color: .init(hex: 0x78492A)),
-        numbers: .init(color: .init(hex: 0x272AD8)),
-        strings: .init(color: .init(hex: 0xD12F1B)),
-        characters: .init(color: .init(hex: 0x272AD8)),
-        comments: .init(color: .init(hex: 0x5D6C79))
+        background: .init(hex: 0xFBFBFB),
+        lineHighlight: .init(hex: 0xF5F5F5),
+        selection: .init(hex: 0xADD6FF),
+        keywords: .init(color: .init(hex: 0x0000FF)),
+        commands: .init(color: .init(hex: 0x267F99)),
+        types: .init(color: .init(hex: 0x267F99)),
+        attributes: .init(color: .init(hex: 0x001080)),
+        variables: .init(color: .init(hex: 0x001080)),
+        values: .init(color: .init(hex: 0x098658)),
+        numbers: .init(color: .init(hex: 0x098658)),
+        strings: .init(color: .init(hex: 0xA31515)),
+        characters: .init(color: .init(hex: 0xA31515)),
+        comments: .init(color: .init(hex: 0x008000))
       )
     }
   }
@@ -92,6 +92,7 @@ struct JSONEditor: View {
       configuration: configuration,
       state: $state
     )
+    .zIndex(-1)
     .onChange(of: text) { _, newText in
       if isEditable {
         validateJSON(newText)
