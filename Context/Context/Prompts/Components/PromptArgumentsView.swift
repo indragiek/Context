@@ -1,6 +1,7 @@
 // Copyright © 2025 Indragie Karunaratne. All rights reserved.
 
 import ContextCore
+import Dependencies
 import SwiftUI
 
 struct PromptArgumentsView: View {
@@ -11,6 +12,8 @@ struct PromptArgumentsView: View {
   let isLoadingMessages: Bool
   let onSubmit: () -> Void
   let onArgumentChange: () -> Void
+  let server: MCPServer
+  let promptName: String
   
   var body: some View {
     if let arguments = arguments, !arguments.isEmpty {
@@ -32,7 +35,9 @@ struct PromptArgumentsView: View {
               focusedArgument: $focusedArgument,
               allRequiredArgumentsFilled: allRequiredArgumentsFilled,
               isLoadingMessages: isLoadingMessages,
-              onSubmit: onSubmit
+              onSubmit: onSubmit,
+              server: server,
+              promptName: promptName
             )
           }
         }
@@ -52,6 +57,12 @@ private struct ArgumentRow: View {
   let allRequiredArgumentsFilled: Bool
   let isLoadingMessages: Bool
   let onSubmit: () -> Void
+  let server: MCPServer
+  let promptName: String
+  
+  @State private var completions: [String] = []
+  @State private var isLoadingCompletions = false
+  @State private var hasSelectedCompletion = false
   
   private var isRequired: Bool {
     argument.required == true
@@ -90,6 +101,72 @@ private struct ArgumentRow: View {
       .onSubmit {
         if allRequiredArgumentsFilled && !isLoadingMessages {
           onSubmit()
+        }
+      }
+      .textInputSuggestions {
+        if !hasSelectedCompletion {
+          ForEach(completions, id: \.self) { completion in
+            Text(completion)
+              .foregroundColor(.primary)
+              .textInputCompletion(completion)
+          }
+        }
+      }
+      .onChange(of: value) { oldValue, newValue in
+        // Only fetch completions if the user actually typed (not from selection)
+        if focusedArgument == argument.name && oldValue != newValue {
+          hasSelectedCompletion = false
+          fetchCompletions(for: newValue)
+        }
+        // If the new value matches a completion, mark as selected
+        if completions.contains(newValue) {
+          hasSelectedCompletion = true
+        }
+      }
+      .onChange(of: focusedArgument) { _, focused in
+        if focused == argument.name {
+          // Fetch completions when field is focused, even with empty value
+          hasSelectedCompletion = false
+          fetchCompletions(for: value)
+        } else if focused != argument.name {
+          completions = []
+          hasSelectedCompletion = false
+        }
+      }
+    }
+  }
+  
+  private func fetchCompletions(for currentValue: String) {
+    @Dependency(\.mcpClientManager) var mcpClientManager
+    
+    Task {
+      isLoadingCompletions = true
+      defer { isLoadingCompletions = false }
+      
+      do {
+        guard let client = await mcpClientManager.existingClient(for: server) else {
+          return
+        }
+        
+        // Check if server supports completions
+        guard await client.serverCapabilities?.completions != nil else {
+          return
+        }
+        
+        let reference = Reference.prompt(name: promptName)
+        let (values, _, _) = try await client.complete(
+          ref: reference,
+          argumentName: argument.name,
+          argumentValue: currentValue
+        )
+        
+        await MainActor.run {
+          completions = values
+        }
+      } catch {
+        // Silently fail - completions are optional
+        await MainActor.run {
+          completions = []
         }
       }
     }

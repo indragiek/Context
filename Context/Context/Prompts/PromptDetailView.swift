@@ -52,7 +52,9 @@ struct PromptDetailView: View {
             allRequiredArgumentsFilled: allRequiredArgumentsFilled,
             isLoadingMessages: isLoadingMessages,
             onSubmit: fetchPromptMessages,
-            onArgumentChange: updatePromptState
+            onArgumentChange: updatePromptState,
+            server: server,
+            promptName: prompt.name
           )
           
           Spacer()

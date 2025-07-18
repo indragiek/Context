@@ -24,6 +24,10 @@ struct ResourceTemplateDetailView: View {
   @State private var showingFullDescription = false
   @State private var responseJSON: JSONValue? = nil
   @State private var responseError: (any Error)? = nil
+  @State private var variableCompletions: [String: [String]] = [:]
+  @State private var loadingCompletions: [String: Bool] = [:]
+  @State private var hasSelectedCompletion: [String: Bool] = [:]
+  @Dependency(\.mcpClientManager) private var mcpClientManager
 
   // Cached regex for template parameters
   private static let templateParameterRegex = /\{[^}]+\}/
@@ -207,6 +211,39 @@ struct ResourceTemplateDetailView: View {
                     .onSubmit {
                       if allVariablesFilled && !isLoadingResources {
                         fetchEmbeddedResources()
+                      }
+                    }
+                    .textInputSuggestions {
+                      if let completions = variableCompletions[variable], 
+                         !(hasSelectedCompletion[variable] ?? false) {
+                        ForEach(completions, id: \.self) { completion in
+                          Text(completion)
+                            .foregroundColor(.primary)
+                            .textInputCompletion(completion)
+                        }
+                      }
+                    }
+                    .onChange(of: variableValues[variable] ?? "") { oldValue, newValue in
+                      // Only fetch completions if the user actually typed (not from selection)
+                      if focusedVariable == variable && oldValue != newValue {
+                        hasSelectedCompletion[variable] = false
+                        fetchCompletions(for: variable, value: newValue)
+                        
+                        // If the new value matches a completion, mark as selected
+                        if let completions = variableCompletions[variable],
+                           completions.contains(newValue) {
+                          hasSelectedCompletion[variable] = true
+                        }
+                      }
+                    }
+                    .onChange(of: focusedVariable) { _, focused in
+                      if focused == variable {
+                        // Fetch completions when field is focused, even with empty value
+                        hasSelectedCompletion[variable] = false
+                        fetchCompletions(for: variable, value: variableValues[variable] ?? "")
+                      } else if focused != variable {
+                        variableCompletions[variable] = []
+                        hasSelectedCompletion[variable] = false
                       }
                     }
                   }
@@ -552,5 +589,39 @@ struct ResourceTemplateDetailView: View {
       responseJSON: responseJSON,
       responseError: responseError
     )
+  }
+  
+  private func fetchCompletions(for variable: String, value: String) {
+    Task {
+      loadingCompletions[variable] = true
+      defer { loadingCompletions[variable] = false }
+      
+      do {
+        guard let client = await mcpClientManager.existingClient(for: server) else {
+          return
+        }
+        
+        // Check if server supports completions
+        guard await client.serverCapabilities?.completions != nil else {
+          return
+        }
+        
+        let reference = Reference.resource(uri: template.uriTemplate)
+        let (values, _, _) = try await client.complete(
+          ref: reference,
+          argumentName: variable,
+          argumentValue: value
+        )
+        
+        await MainActor.run {
+          variableCompletions[variable] = values
+        }
+      } catch {
+        // Silently fail - completions are optional
+        await MainActor.run {
+          variableCompletions[variable] = []
+        }
+      }
+    }
   }
 }
