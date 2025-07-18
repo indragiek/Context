@@ -39,6 +39,9 @@ struct MCPServer: Equatable, Identifiable {
 
   @Column("dxt_user_config", as: DXTUserConfigurationValues?.JSONRepresentation.self)
   var dxtUserConfig: DXTUserConfigurationValues?
+
+  @Column("mcp_metadata_url")
+  var mcpMetadataUrl: String?
 }
 
 @Table("mcp_roots")

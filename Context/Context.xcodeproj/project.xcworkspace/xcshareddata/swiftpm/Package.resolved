@@ -1,5 +1,5 @@
 {
-  "originHash" : "f5a0ddf502a99a0fbca915371465206c7da0e4e04d7681e964462252c93fc0bb",
+  "originHash" : "3e17435b2de291a5e27c7c178824ac36b9548fcb26f5e7b73757606f0255713d",
   "pins" : [
     {
       "identity" : "codeeditlanguages",
@@ -107,6 +107,15 @@
       "state" : {
         "revision" : "df074165274afaa39539c05d57b0832620775b11",
         "version" : "2.7.1"
+      }
+    },
+    {
+      "identity" : "svgview",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/exyte/SVGView",
+      "state" : {
+        "revision" : "6465962facdd25cb96eaebc35603afa2f15d2c0d",
+        "version" : "1.0.6"
       }
     },
     {
@@ -283,7 +292,7 @@
     {
       "identity" : "swifttreesitter",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/ChimeHQ/SwiftTreeSitter.git",
+      "location" : "https://github.com/ChimeHQ/SwiftTreeSitter",
       "state" : {
         "revision" : "08ef81eb8620617b55b08868126707ad72bf754f",
         "version" : "0.25.0"
