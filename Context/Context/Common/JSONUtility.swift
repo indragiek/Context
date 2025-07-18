@@ -61,4 +61,13 @@ struct JSONUtility {
     encoder.outputFormatting = .sortedKeys
     return try encoder.encode(value)
   }
+
+  /// Checks if a string is likely JSON by examining its structure
+  /// - Parameter string: The string to check
+  /// - Returns: true if the string appears to be JSON (starts with { or [ and ends with } or ])
+  static func isLikelyJSON(_ string: String) -> Bool {
+    let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
+    return (trimmed.hasPrefix("{") && trimmed.hasSuffix("}"))
+      || (trimmed.hasPrefix("[") && trimmed.hasSuffix("]"))
+  }
 }

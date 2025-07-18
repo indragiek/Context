@@ -39,7 +39,7 @@ struct RawDataView: View {
       case .requestInvalidResponse(_, _, let data):
         // For invalid response, check if the data is valid JSON
         if let stringData = String(data: data, encoding: .utf8) {
-          if JSONRPCErrorFormatter.isLikelyJSON(stringData) {
+          if JSONUtility.isLikelyJSON(stringData) {
             // Try to parse as JSON
             if let jsonData = stringData.data(using: .utf8),
               let jsonValue = try? JSONDecoder().decode(JSONValue.self, from: jsonData)
@@ -74,7 +74,6 @@ struct RawDataView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
   }
-
 
   private var errorPlaceholder: some View {
     ContentUnavailableView(
