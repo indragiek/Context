@@ -576,7 +576,17 @@ struct JSONSchemaEditor: View {
                 dynamicPropertyTypes[nodeId] = "array"
               case .object:
                 dynamicPropertyTypes[nodeId] = "object"
-              default:
+              case .string:
+                dynamicPropertyTypes[nodeId] = "string"
+              case .number:
+                dynamicPropertyTypes[nodeId] = "number"
+              case .integer:
+                dynamicPropertyTypes[nodeId] = "integer"
+              case .boolean:
+                dynamicPropertyTypes[nodeId] = "boolean"
+              case .null:
+                // For null, we could default to string or leave it untyped
+                // Let's not store a type for null so user can choose
                 break
               }
             }
@@ -1244,8 +1254,16 @@ struct JSONSchemaEditor: View {
           dynamicPropertyTypes[nodeId] = "array"
         case .object:
           dynamicPropertyTypes[nodeId] = "object"
-        default:
-          // Don't infer type for null or other values - let user choose
+        case .string:
+          dynamicPropertyTypes[nodeId] = "string"
+        case .number:
+          dynamicPropertyTypes[nodeId] = "number"
+        case .integer:
+          dynamicPropertyTypes[nodeId] = "integer"
+        case .boolean:
+          dynamicPropertyTypes[nodeId] = "boolean"
+        case .null:
+          // Don't infer type for null - let user choose
           break
         }
       }

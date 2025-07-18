@@ -14,6 +14,8 @@ struct ToolDetailView: View {
 
   @State private var parameterValues: [String: JSONValue] = [:]
   @State private var validationErrors: [String: String] = [:]
+  @State private var rawJSONText: String = "{}"
+  @State private var jsonParseError: (any Error)?
   @State private var toolResponse: CallToolResponse.Result?
   @State private var isLoading = false
   @State private var responseJSON: JSONValue?
@@ -25,6 +27,7 @@ struct ToolDetailView: View {
   @State private var expandedNodes: Set<String> = []  // Persists expansion state
   @State private var dynamicPropertyOrder: [String: [String]] = [:]  // Persists property order
   @State private var showingFullDescription = false
+  @State private var showingJSONErrorPopover = false
 
   @Dependency(\.mcpClientManager) private var mcpClientManager
   @Dependency(\.defaultDatabase) private var database
@@ -54,6 +57,7 @@ struct ToolDetailView: View {
       // Reset state when tool changes
       parameterValues.removeAll()
       validationErrors.removeAll()
+      rawJSONText = "{}"
       toolResponse = nil
       responseJSON = nil
       responseError = nil
@@ -64,7 +68,20 @@ struct ToolDetailView: View {
       // Update local state when toolState binding changes (e.g., when loading from cache)
       loadFromToolState()
     }
-    .onChange(of: parameterValues) { _, _ in
+    .onChange(of: parameterValues) { _, newValues in
+      // Update rawJSONText to keep it in sync
+      do {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+        let jsonValue = JSONValue.object(newValues)
+        rawJSONText = try jsonValue.encodeString(encoder: encoder)
+        // Clear any JSON parse error since we just generated valid JSON
+        jsonParseError = nil
+      } catch {
+        // This should never happen
+        print("Failed to encode parameter values: \(error)")
+      }
+      
       // Cancel any existing debounce task
       debounceTask?.cancel()
 
@@ -126,6 +143,23 @@ struct ToolDetailView: View {
         selection: $argumentsViewMode
       )
     )
+    .overlay(alignment: .trailing) {
+      if jsonParseError != nil {
+        Button(action: {
+          showingJSONErrorPopover.toggle()
+        }) {
+          Image(systemName: "exclamationmark.triangle.fill")
+            .foregroundColor(.red)
+        }
+        .buttonStyle(.plain)
+        .padding(.trailing, 20)
+        .popover(isPresented: $showingJSONErrorPopover) {
+          if let error = jsonParseError {
+            ErrorDetailView(error: error)
+          }
+        }
+      }
+    }
   }
   
   @ViewBuilder
@@ -138,10 +172,36 @@ struct ToolDetailView: View {
         noArgumentsView
       }
     case .raw:
-      JSONRawView(
-        jsonValue: .object(filteredParameterValues),
-        searchText: "",
-        isSearchActive: false
+      JSONEditor(
+        text: $rawJSONText,
+        isEditable: true,
+        onValidate: { result in
+          switch result {
+          case .success(let jsonValue):
+            // Clear any previous parse error
+            jsonParseError = nil
+            
+            // Update parameter values from the validated JSON
+            switch jsonValue {
+            case .object(let dict):
+              if parameterValues != dict {
+                parameterValues = dict
+              }
+            case .null:
+              // Clear all parameters if null is set
+              if !parameterValues.isEmpty {
+                parameterValues = [:]
+              }
+            default:
+              // Don't accept non-object JSON for tool parameters
+              jsonParseError = JSONEditorError.invalidStructure("Tool parameters must be a JSON object")
+              return
+            }
+          case .failure(let error):
+            // JSON is invalid, store the error
+            jsonParseError = error
+          }
+        }
       )
       .frame(maxWidth: .infinity, maxHeight: .infinity)
       .background(Color(NSColor.textBackgroundColor))
@@ -209,6 +269,11 @@ struct ToolDetailView: View {
   }
 
   private var canCallTool: Bool {
+    // Check for JSON parse errors first
+    if jsonParseError != nil {
+      return false
+    }
+    
     // Check if all required arguments have values
     guard let required = tool.inputSchema.required else { return true }
 
@@ -263,10 +328,28 @@ struct ToolDetailView: View {
         }
       }
     }
+    // Keep rawJSONText in sync
+    do {
+      let encoder = JSONEncoder()
+      encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+      let jsonValue = JSONValue.object(parameterValues)
+      rawJSONText = try jsonValue.encodeString(encoder: encoder)
+    } catch {
+      rawJSONText = "{}"
+    }
   }
 
   private func loadFromToolState() {
     parameterValues = toolState.parameterValues
+    // Update rawJSONText from parameterValues
+    do {
+      let encoder = JSONEncoder()
+      encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+      let jsonValue = JSONValue.object(toolState.parameterValues)
+      rawJSONText = try jsonValue.encodeString(encoder: encoder)
+    } catch {
+      rawJSONText = "{}"
+    }
     toolResponse = toolState.toolResponse
     hasLoadedOnce = toolState.hasLoadedOnce
     responseJSON = toolState.responseJSON
