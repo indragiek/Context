@@ -11,6 +11,7 @@
 		033742732E0E7555000CB545 /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = 033742722E0E7555000CB545 /* ZIPFoundation */; };
 		033C2B3C2DF009CE00759652 /* MarkdownUI in Frameworks */ = {isa = PBXBuildFile; productRef = 033C2B3B2DF009CE00759652 /* MarkdownUI */; };
 		033FB0C72E261C2E001DE211 /* CodeEditSourceEditor in Frameworks */ = {isa = PBXBuildFile; productRef = 033FB0C62E261C2E001DE211 /* CodeEditSourceEditor */; };
+		033FC73D2E2AFC2F001C38E9 /* SVGView in Frameworks */ = {isa = PBXBuildFile; productRef = 033FC73C2E2AFC2F001C38E9 /* SVGView */; };
 		0382543D2DEA3B890096CC9D /* HighlightSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 0382543C2DEA3B890096CC9D /* HighlightSwift */; };
 		0382544C2DEA6B8F0096CC9D /* SharingGRDB in Frameworks */ = {isa = PBXBuildFile; productRef = 0382544B2DEA6B8F0096CC9D /* SharingGRDB */; };
 		039334FE2DE7C90500ABB09C /* ContextCore in Frameworks */ = {isa = PBXBuildFile; productRef = 039334FD2DE7C90500ABB09C /* ContextCore */; };
@@ -85,6 +86,7 @@
 				0382544C2DEA6B8F0096CC9D /* SharingGRDB in Frameworks */,
 				033C2B3C2DF009CE00759652 /* MarkdownUI in Frameworks */,
 				039335012DE7C97500ABB09C /* ComposableArchitecture in Frameworks */,
+				033FC73D2E2AFC2F001C38E9 /* SVGView in Frameworks */,
 				03C8520B2E0337AB00869408 /* SentrySwiftUI in Frameworks */,
 				03C852092E0337AB00869408 /* Sentry in Frameworks */,
 				0382543D2DEA3B890096CC9D /* HighlightSwift in Frameworks */,
@@ -161,6 +163,7 @@
 				03DE6A832E0BB6F1004A32EE /* Sparkle */,
 				033742722E0E7555000CB545 /* ZIPFoundation */,
 				033FB0C62E261C2E001DE211 /* CodeEditSourceEditor */,
+				033FC73C2E2AFC2F001C38E9 /* SVGView */,
 			);
 			productName = Context;
 			productReference = 03170A0F2DD121420037EE9A /* Context.app */;
@@ -254,6 +257,7 @@
 				03DE6A822E0BB6F1004A32EE /* XCRemoteSwiftPackageReference "Sparkle" */,
 				033742712E0E7555000CB545 /* XCRemoteSwiftPackageReference "ZIPFoundation" */,
 				033FB0C52E261C2E001DE211 /* XCRemoteSwiftPackageReference "CodeEditSourceEditor" */,
+				033FC73B2E2AFC2F001C38E9 /* XCRemoteSwiftPackageReference "SVGView" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 03170A102DD121420037EE9A /* Products */;
@@ -698,6 +702,14 @@
 				minimumVersion = 0.14.1;
 			};
 		};
+		033FC73B2E2AFC2F001C38E9 /* XCRemoteSwiftPackageReference "SVGView" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/exyte/SVGView";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.0.6;
+			};
+		};
 		0382543B2DEA3B890096CC9D /* XCRemoteSwiftPackageReference "HighlightSwift" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/appstefan/HighlightSwift";
@@ -759,6 +771,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 033FB0C52E261C2E001DE211 /* XCRemoteSwiftPackageReference "CodeEditSourceEditor" */;
 			productName = CodeEditSourceEditor;
+		};
+		033FC73C2E2AFC2F001C38E9 /* SVGView */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 033FC73B2E2AFC2F001C38E9 /* XCRemoteSwiftPackageReference "SVGView" */;
+			productName = SVGView;
 		};
 		0382543C2DEA3B890096CC9D /* HighlightSwift */ = {
 			isa = XCSwiftPackageProductDependency;

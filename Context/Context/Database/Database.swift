@@ -92,6 +92,12 @@ func appDatabase() throws -> any DatabaseWriter {
     .execute(db)
   }
 
+  migrator.registerMigration("Add 'mcp_metadata_url' column to 'mcp_servers'") { db in
+    try db.alter(table: "mcp_servers") { t in
+      t.add(column: "mcp_metadata_url", .text)
+    }
+  }
+
   try migrator.migrate(dbWriter)
   return dbWriter
 }

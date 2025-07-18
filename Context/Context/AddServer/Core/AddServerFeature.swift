@@ -338,8 +338,19 @@ struct AddServerFeature {
           }
           return .send(.validateState)
 
-        case .headers, .setURLAutoUpdate:
+        case .headers, .setURLAutoUpdate, .fetchMetadata, .debouncedFetchMetadata, .clearMetadata:
           return .none
+          
+        case let .metadataFetched(result, _):
+          if case let .success(metadata) = result {
+            // Update server name if not manually edited and metadata has a name
+            if !state.serverNameManuallyEdited || state.serverName.isEmpty,
+               let metadataName = metadata.name {
+              state.serverName = metadataName
+              state.serverNameManuallyEdited = false
+            }
+          }
+          return .send(.validateState)
         }
 
       case let .dxtConfig(action):
@@ -429,6 +440,8 @@ struct AddServerFeature {
         serverName = state.serverName,
         transport = state.transport,
         transportConfig = state.transportConfig,
+        httpResolvedEndpointUrl = state.httpConfig.resolvedEndpointUrl,
+        httpMcpMetadataUrl = state.httpConfig.mcpMetadataUrl,
         dxtTempDirectory = state.dxtConfig.tempDirectory,
         hasDxtManifest = state.dxtConfig.manifest != nil,
         dxtUserConfigValues = state.dxtConfig.userConfig.values,
@@ -445,6 +458,13 @@ struct AddServerFeature {
           transport: transport,
           config: transportConfig
         )
+        
+        // If we have a resolved endpoint URL for HTTP transport, use it
+        if transport == .streamableHTTP,
+           let resolvedUrl = httpResolvedEndpointUrl {
+          server.url = resolvedUrl
+          server.mcpMetadataUrl = httpMcpMetadataUrl
+        }
 
         // For DXT, install the server first
         if transport == .dxt,
