@@ -126,26 +126,51 @@ struct ThreadMessageBubble<Message: ThreadMessage>: View {
   }
 
   private func textBubble(text: String) -> some View {
-    Markdown(text)
-      .markdownTextStyle {
-        ForegroundColor(message.role == .user ? .white : .primary)
-      }
-      .padding(.horizontal, 16)
-      .padding(.vertical, 10)
-      .background(
-        RoundedRectangle(cornerRadius: 18)
-          .fill(message.role == .user ? Color.blue : Color(NSColor.controlBackgroundColor))
-      )
-      .textSelection(.enabled)
-      .help(annotationTooltip ?? "")
-      .contextMenu {
-        Button(action: {
-          NSPasteboard.general.clearContents()
-          NSPasteboard.general.setString(text, forType: .string)
-        }) {
-          Text("Copy Message")
+    Group {
+      if JSONUtility.isLikelyJSON(text) {
+        JSONContentView(
+          contentLines: text.components(separatedBy: .newlines),
+          searchText: "",
+          isSearchActive: false
+        )
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(
+          RoundedRectangle(cornerRadius: 18)
+            .fill(message.role == .user ? Color.blue : Color(NSColor.controlBackgroundColor))
+        )
+        .help(annotationTooltip ?? "")
+        .contextMenu {
+          Button(action: {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(text, forType: .string)
+          }) {
+            Text("Copy Message")
+          }
         }
+      } else {
+        Markdown(text)
+          .markdownTextStyle {
+            ForegroundColor(message.role == .user ? .white : .primary)
+          }
+          .padding(.horizontal, 16)
+          .padding(.vertical, 10)
+          .background(
+            RoundedRectangle(cornerRadius: 18)
+              .fill(message.role == .user ? Color.blue : Color(NSColor.controlBackgroundColor))
+          )
+          .textSelection(.enabled)
+          .help(annotationTooltip ?? "")
+          .contextMenu {
+            Button(action: {
+              NSPasteboard.general.clearContents()
+              NSPasteboard.general.setString(text, forType: .string)
+            }) {
+              Text("Copy Message")
+            }
+          }
       }
+    }
   }
 
   private func imageBubble(data: Data) -> some View {
