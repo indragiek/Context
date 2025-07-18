@@ -43,7 +43,7 @@ struct JSONEditor: View {
   
   private func makeTheme(for colorScheme: ColorScheme) -> EditorTheme {
     if colorScheme == .dark {
-      // VS Code Dark Modern theme
+      // Match JSONSyntaxHighlighter dark scheme colors
       return EditorTheme(
         text: .init(color: .init(hex: 0xCCCCCC)),
         insertionPoint: .init(hex: 0xFFFFFF),
@@ -51,19 +51,19 @@ struct JSONEditor: View {
         background: .init(hex: 0x1F1F1F),
         lineHighlight: .init(hex: 0x2F3239),
         selection: .init(hex: 0x264F78),
-        keywords: .init(color: .init(hex: 0x569CD6)),
-        commands: .init(color: .init(hex: 0x4EC9B0)),
-        types: .init(color: .init(hex: 0x4EC9B0)),
-        attributes: .init(color: .init(hex: 0x9CDCFE)),
-        variables: .init(color: .init(hex: 0x9CDCFE)),
-        values: .init(color: .init(hex: 0xB5CEA8)),
-        numbers: .init(color: .init(hex: 0xB5CEA8)),
-        strings: .init(color: .init(hex: 0xCE9178)),
-        characters: .init(color: .init(hex: 0xCE9178)),
+        keywords: .init(color: .init(hex: 0xE3ABFF)), // boolean/null color
+        commands: .init(color: .init(hex: 0x66D9D9)), // key color
+        types: .init(color: .init(hex: 0x66D9D9)), // key color
+        attributes: .init(color: .init(hex: 0x66D9D9)), // key color
+        variables: .init(color: .init(hex: 0x66D9D9)), // key color
+        values: .init(color: .init(hex: 0xE3ABFF)), // boolean/null color
+        numbers: .init(color: .init(hex: 0xABD9FF)), // number color
+        strings: .init(color: .init(hex: 0xFF5454)), // string color
+        characters: .init(color: .init(hex: 0xFF5454)), // string color
         comments: .init(color: .init(hex: 0x6A9955))
       )
     } else {
-      // VS Code Light Modern theme
+      // Match JSONSyntaxHighlighter light scheme colors
       return EditorTheme(
         text: .init(color: .init(hex: 0x3B3B3B)),
         insertionPoint: .init(hex: 0x000000),
@@ -71,15 +71,15 @@ struct JSONEditor: View {
         background: .init(hex: 0xFBFBFB),
         lineHighlight: .init(hex: 0xF5F5F5),
         selection: .init(hex: 0xADD6FF),
-        keywords: .init(color: .init(hex: 0x0000FF)),
-        commands: .init(color: .init(hex: 0x267F99)),
-        types: .init(color: .init(hex: 0x267F99)),
-        attributes: .init(color: .init(hex: 0x001080)),
-        variables: .init(color: .init(hex: 0x001080)),
-        values: .init(color: .init(hex: 0x098658)),
-        numbers: .init(color: .init(hex: 0x098658)),
-        strings: .init(color: .init(hex: 0xA31515)),
-        characters: .init(color: .init(hex: 0xA31515)),
+        keywords: .init(color: .init(hex: 0xA31CAE)), // boolean/null color
+        commands: .init(color: .init(hex: 0x007373)), // key color
+        types: .init(color: .init(hex: 0x007373)), // key color
+        attributes: .init(color: .init(hex: 0x007373)), // key color
+        variables: .init(color: .init(hex: 0x007373)), // key color
+        values: .init(color: .init(hex: 0xA31CAE)), // boolean/null color
+        numbers: .init(color: .init(hex: 0x1C00CF)), // number color
+        strings: .init(color: .init(hex: 0xC41A16)), // string color
+        characters: .init(color: .init(hex: 0xC41A16)), // string color
         comments: .init(color: .init(hex: 0x008000))
       )
     }
