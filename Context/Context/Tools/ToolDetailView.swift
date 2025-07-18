@@ -193,11 +193,9 @@ struct ToolDetailView: View {
                 parameterValues = [:]
               }
             default:
-              // For other types, wrap in an object with a single "value" key
-              let newParams = ["value": jsonValue]
-              if parameterValues != newParams {
-                parameterValues = newParams
-              }
+              // Don't accept non-object JSON for tool parameters
+              jsonParseError = JSONEditorError.invalidStructure("Tool parameters must be a JSON object")
+              return
             }
           case .failure(let error):
             // JSON is invalid, store the error

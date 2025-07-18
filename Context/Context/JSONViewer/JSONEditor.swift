@@ -6,12 +6,27 @@ import CodeEditLanguages
 import ContextCore
 import AppKit
 
+enum JSONEditorError: LocalizedError {
+  case emptyInput
+  case invalidStructure(String)
+  
+  var errorDescription: String? {
+    switch self {
+    case .emptyInput:
+      return "Empty input is not valid JSON"
+    case .invalidStructure(let message):
+      return message
+    }
+  }
+}
+
 struct JSONEditor: View {
   @Binding var text: String
   let isEditable: Bool
   let onValidate: ((Result<JSONValue, any Error>) -> Void)?
   
   @State private var state = SourceEditorState()
+  @State private var validationTask: Task<Void, Never>?
   @Environment(\.colorScheme) var colorScheme
   
   private var configuration: SourceEditorConfiguration {
@@ -95,8 +110,24 @@ struct JSONEditor: View {
     .zIndex(-1)
     .onChange(of: text) { _, newText in
       if isEditable {
-        validateJSON(newText)
+        // Cancel previous validation task
+        validationTask?.cancel()
+        
+        // Create new task with 0.3 second delay
+        validationTask = Task {
+          do {
+            try await Task.sleep(nanoseconds: 300_000_000) // 0.3 seconds
+            if !Task.isCancelled {
+              validateJSON(newText)
+            }
+          } catch {
+            // Task was cancelled
+          }
+        }
       }
+    }
+    .onDisappear {
+      validationTask?.cancel()
     }
   }
   
@@ -104,8 +135,8 @@ struct JSONEditor: View {
     let trimmed = newText.trimmingCharacters(in: .whitespacesAndNewlines)
     
     guard !trimmed.isEmpty else {
-      // Empty text is valid - empty object
-      onValidate?(.success(.object([:])))
+      // Empty text is invalid JSON
+      onValidate?(.failure(JSONEditorError.emptyInput))
       return
     }
     
