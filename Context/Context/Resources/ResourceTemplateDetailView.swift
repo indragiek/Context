@@ -173,14 +173,16 @@ struct ResourceTemplateDetailView: View {
               Text("Template Variables")
                 .font(.headline)
 
-              WithViewStore(store, observe: { $0.templateCompletions[template.uriTemplate] }) { viewStore in
+              WithViewStore(store, observe: { $0.templateCompletions[template.uriTemplate] }) {
+                viewStore in
                 let completionState = viewStore.state ?? ResourceTemplateCompletionState()
-                
+
                 VStack(alignment: .leading, spacing: 8) {
                   ForEach(variables, id: \.self) { variable in
                     let completions = completionState.variableCompletions[variable] ?? []
-                    let hasSelectedCompletion = completionState.hasSelectedCompletion[variable] ?? false
-                    
+                    let hasSelectedCompletion =
+                      completionState.hasSelectedCompletion[variable] ?? false
+
                     HStack(alignment: .center, spacing: 8) {
                       HStack(spacing: 6) {
                         Image(systemName: "curlybraces")
@@ -206,12 +208,13 @@ struct ResourceTemplateDetailView: View {
                             Task {
                               await saveToCacheForTemplate(template.uriTemplate)
                             }
-                            store.send(.variableValueChanged(
-                              templateURI: template.uriTemplate,
-                              variableName: variable,
-                              oldValue: oldValue,
-                              newValue: newValue
-                            ))
+                            store.send(
+                              .variableValueChanged(
+                                templateURI: template.uriTemplate,
+                                variableName: variable,
+                                oldValue: oldValue,
+                                newValue: newValue
+                              ))
                           }
                         )
                       )
@@ -233,11 +236,12 @@ struct ResourceTemplateDetailView: View {
                         }
                       }
                       .onChange(of: focusedVariable) { _, focused in
-                        store.send(.variableFocusChanged(
-                          templateURI: template.uriTemplate,
-                          variableName: focused == variable ? variable : nil,
-                          value: variableValues[variable] ?? ""
-                        ))
+                        store.send(
+                          .variableFocusChanged(
+                            templateURI: template.uriTemplate,
+                            variableName: focused == variable ? variable : nil,
+                            value: variableValues[variable] ?? ""
+                          ))
                       }
                     }
                   }
@@ -408,7 +412,9 @@ struct ResourceTemplateDetailView: View {
       if let lowerBound = AttributedString.Index(match.range.lowerBound, within: attributedString),
         let upperBound = AttributedString.Index(match.range.upperBound, within: attributedString)
       {
-        attributedString[lowerBound..<upperBound].font = .body.weight(.semibold)
+        // Use the same monospace font as applied later, but with medium weight
+        attributedString[lowerBound..<upperBound].font = .system(.caption, design: .monospaced)
+          .weight(.medium)
       }
     }
 

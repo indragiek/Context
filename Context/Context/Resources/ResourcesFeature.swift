@@ -43,7 +43,7 @@ struct ResourcesFeature {
     var isLoadingMoreTemplates = false
     var hasMoreResources = true  // Assume there might be more until proven otherwise
     var hasMoreTemplates = true  // Assume there might be more until proven otherwise
-    
+
     // Completion state (not cached)
     var templateCompletions: [String: ResourceTemplateCompletionState] = [:]
 
@@ -101,7 +101,8 @@ struct ResourcesFeature {
     case completionsLoaded(templateURI: String, variableName: String, completions: [String])
     case completionsFailed(templateURI: String, variableName: String)
     case variableFocusChanged(templateURI: String, variableName: String?, value: String)
-    case variableValueChanged(templateURI: String, variableName: String, oldValue: String, newValue: String)
+    case variableValueChanged(
+      templateURI: String, variableName: String, oldValue: String, newValue: String)
   }
 
   @Dependency(\.mcpClientManager) var mcpClientManager
@@ -366,15 +367,16 @@ struct ResourcesFeature {
       case let .viewModeChanged(mode):
         state.viewMode = mode
         return .none
-        
+
       case let .fetchCompletions(templateURI, variableName, variableValue):
         // Check if server supports completions
         return .run { [server = state.server] send in
           guard let client = await mcpClientManager.existingClient(for: server),
-                await client.serverCapabilities?.completions != nil else {
+            await client.serverCapabilities?.completions != nil
+          else {
             return
           }
-          
+
           do {
             let reference = Reference.resource(uri: templateURI)
             let (values, _, _) = try await client.complete(
@@ -382,34 +384,41 @@ struct ResourcesFeature {
               argumentName: variableName,
               argumentValue: variableValue
             )
-            await send(.completionsLoaded(templateURI: templateURI, variableName: variableName, completions: values))
+            await send(
+              .completionsLoaded(
+                templateURI: templateURI, variableName: variableName, completions: values))
           } catch {
             await send(.completionsFailed(templateURI: templateURI, variableName: variableName))
           }
         }
-        
+
       case let .completionsLoaded(templateURI, variableName, completions):
-        var completionState = state.templateCompletions[templateURI] ?? ResourceTemplateCompletionState()
+        var completionState =
+          state.templateCompletions[templateURI] ?? ResourceTemplateCompletionState()
         completionState.variableCompletions[variableName] = completions
         completionState.loadingCompletions[variableName] = false
         state.templateCompletions[templateURI] = completionState
         return .none
-        
+
       case let .completionsFailed(templateURI, variableName):
-        var completionState = state.templateCompletions[templateURI] ?? ResourceTemplateCompletionState()
+        var completionState =
+          state.templateCompletions[templateURI] ?? ResourceTemplateCompletionState()
         completionState.variableCompletions[variableName] = []
         completionState.loadingCompletions[variableName] = false
         state.templateCompletions[templateURI] = completionState
         return .none
-        
+
       case let .variableFocusChanged(templateURI, variableName, value):
         if let variableName = variableName {
           // Field is focused - fetch completions
-          var completionState = state.templateCompletions[templateURI] ?? ResourceTemplateCompletionState()
+          var completionState =
+            state.templateCompletions[templateURI] ?? ResourceTemplateCompletionState()
           completionState.hasSelectedCompletion[variableName] = false
           completionState.loadingCompletions[variableName] = true
           state.templateCompletions[templateURI] = completionState
-          return .send(.fetchCompletions(templateURI: templateURI, variableName: variableName, variableValue: value))
+          return .send(
+            .fetchCompletions(
+              templateURI: templateURI, variableName: variableName, variableValue: value))
         } else {
           // Field lost focus - clear completions
           if var completionState = state.templateCompletions[templateURI] {
@@ -421,23 +430,27 @@ struct ResourcesFeature {
           }
           return .none
         }
-        
+
       case let .variableValueChanged(templateURI, variableName, oldValue, newValue):
         // Only fetch completions if the user actually typed
         if oldValue != newValue {
-          var completionState = state.templateCompletions[templateURI] ?? ResourceTemplateCompletionState()
+          var completionState =
+            state.templateCompletions[templateURI] ?? ResourceTemplateCompletionState()
           completionState.hasSelectedCompletion[variableName] = false
-          
+
           // Check if new value matches a completion
           if let completions = completionState.variableCompletions[variableName],
-             completions.contains(newValue) {
+            completions.contains(newValue)
+          {
             completionState.hasSelectedCompletion[variableName] = true
           }
-          
+
           state.templateCompletions[templateURI] = completionState
-          
+
           // Fetch new completions
-          return .send(.fetchCompletions(templateURI: templateURI, variableName: variableName, variableValue: newValue))
+          return .send(
+            .fetchCompletions(
+              templateURI: templateURI, variableName: variableName, variableValue: newValue))
         }
         return .none
       }
