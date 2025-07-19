@@ -13,6 +13,12 @@ enum PromptLoadingState: Sendable, Equatable {
   case failed
 }
 
+struct PromptCompletionState: Sendable, Equatable {
+  var argumentCompletions: [String: [String]] = [:]
+  var loadingCompletions: [String: Bool] = [:]
+  var hasSelectedCompletion: [String: Bool] = [:]
+}
+
 struct PromptState: Sendable {
   var argumentValues: [String: String] = [:]
   var messages: [PromptMessage] = []
@@ -27,24 +33,24 @@ struct PromptState: Sendable {
 extension PromptState: Equatable {
   static func == (lhs: PromptState, rhs: PromptState) -> Bool {
     // Compare properties that are Equatable
-    guard lhs.argumentValues == rhs.argumentValues &&
-          lhs.hasLoadedOnce == rhs.hasLoadedOnce &&
-          lhs.loadingState == rhs.loadingState &&
-          lhs.viewMode == rhs.viewMode &&
-          lhs.responseJSON == rhs.responseJSON else {
+    guard
+      lhs.argumentValues == rhs.argumentValues && lhs.hasLoadedOnce == rhs.hasLoadedOnce
+        && lhs.loadingState == rhs.loadingState && lhs.viewMode == rhs.viewMode
+        && lhs.responseJSON == rhs.responseJSON
+    else {
       return false
     }
-    
+
     // Compare errors by their existence and type
     let lhsErrorType = lhs.responseError.map { type(of: $0) }
     let rhsErrorType = rhs.responseError.map { type(of: $0) }
     let lhsErrorMessage = lhs.responseError?.localizedDescription
     let rhsErrorMessage = rhs.responseError?.localizedDescription
-    
+
     guard lhsErrorType == rhsErrorType && lhsErrorMessage == rhsErrorMessage else {
       return false
     }
-    
+
     // For non-Equatable types, compare counts as a proxy
     // This isn't perfect but better than always returning false
     return lhs.messages.count == rhs.messages.count
@@ -69,6 +75,10 @@ struct PromptsFeature {
     var nextCursor: String?
     var isLoadingMore = false
     var hasMore = true  // Assume there might be more until proven otherwise
+
+    // Completion state (not cached)
+    var promptCompletions: [String: PromptCompletionState] = [:]
+    var completionTasks: [String: Task<Void, Never>] = [:]
 
     init(server: MCPServer) {
       self.server = server
@@ -121,6 +131,14 @@ struct PromptsFeature {
     case morePromptsLoaded(prompts: [Prompt], nextCursor: String?)
     case loadMorePromptsFailed(any Error)
     case loadIfNeeded
+    case fetchCompletions(promptName: String, argumentName: String, argumentValue: String)
+    case completionsLoaded(promptName: String, argumentName: String, completions: [String])
+    case completionsFailed(promptName: String, argumentName: String)
+    case argumentFocusChanged(promptName: String, argumentName: String?, value: String)
+    case argumentValueChanged(
+      promptName: String, argumentName: String, oldValue: String, newValue: String)
+    case storeCompletionTask(promptName: String, argumentName: String, task: Task<Void, Never>)
+    case clearCompletionState(promptName: String)
   }
 
   @Dependency(\.promptCache) var promptCache
@@ -212,6 +230,13 @@ struct PromptsFeature {
         state.isLoadingMore = false
         state.hasMore = true
 
+        // Clear completion state and cancel all tasks
+        state.promptCompletions = [:]
+        for task in state.completionTasks.values {
+          task.cancel()
+        }
+        state.completionTasks = [:]
+
         return .none
 
       case let .connectionStateChanged(connectionState):
@@ -278,6 +303,127 @@ struct PromptsFeature {
         state.error = nil
 
         return .send(.onConnected)
+
+      case let .fetchCompletions(promptName, argumentName, argumentValue):
+        // Cancel any existing completion request for this argument
+        let taskKey = "\(promptName):\(argumentName)"
+        if let existingTask = state.completionTasks[taskKey] {
+          existingTask.cancel()
+        }
+
+        // Check if server supports completions
+        return .run { [server = state.server] send in
+          guard let client = await mcpClientManager.existingClient(for: server),
+            await client.serverCapabilities?.completions != nil
+          else {
+            return
+          }
+
+          let task = Task {
+            do {
+              let reference = Reference.prompt(name: promptName)
+              let (values, _, _) = try await client.complete(
+                ref: reference,
+                argumentName: argumentName,
+                argumentValue: argumentValue
+              )
+
+              // Check if task was cancelled before sending results
+              if !Task.isCancelled {
+                await send(
+                  .completionsLoaded(
+                    promptName: promptName, argumentName: argumentName, completions: values))
+              }
+            } catch {
+              // Only send failure if not cancelled
+              if !Task.isCancelled {
+                await send(.completionsFailed(promptName: promptName, argumentName: argumentName))
+              }
+            }
+          }
+
+          // Store task for potential cancellation
+          await send(
+            .storeCompletionTask(promptName: promptName, argumentName: argumentName, task: task))
+
+          // Await task completion
+          await task.value
+        }
+
+      case let .completionsLoaded(promptName, argumentName, completions):
+        var completionState = state.promptCompletions[promptName] ?? PromptCompletionState()
+        completionState.argumentCompletions[argumentName] = completions
+        completionState.loadingCompletions[argumentName] = false
+        state.promptCompletions[promptName] = completionState
+        return .none
+
+      case let .completionsFailed(promptName, argumentName):
+        var completionState = state.promptCompletions[promptName] ?? PromptCompletionState()
+        completionState.argumentCompletions[argumentName] = []
+        completionState.loadingCompletions[argumentName] = false
+        state.promptCompletions[promptName] = completionState
+        return .none
+
+      case let .argumentFocusChanged(promptName, argumentName, value):
+        if let argumentName = argumentName {
+          // Field is focused - fetch completions
+          var completionState = state.promptCompletions[promptName] ?? PromptCompletionState()
+          completionState.hasSelectedCompletion[argumentName] = false
+          completionState.loadingCompletions[argumentName] = true
+          state.promptCompletions[promptName] = completionState
+          return .send(
+            .fetchCompletions(
+              promptName: promptName, argumentName: argumentName, argumentValue: value))
+        } else {
+          // Field lost focus - clear completions
+          if var completionState = state.promptCompletions[promptName] {
+            for arg in completionState.argumentCompletions.keys {
+              completionState.argumentCompletions[arg] = []
+              completionState.hasSelectedCompletion[arg] = false
+            }
+            state.promptCompletions[promptName] = completionState
+          }
+          return .none
+        }
+
+      case let .argumentValueChanged(promptName, argumentName, oldValue, newValue):
+        // Only fetch completions if the user actually typed
+        if oldValue != newValue {
+          var completionState = state.promptCompletions[promptName] ?? PromptCompletionState()
+          completionState.hasSelectedCompletion[argumentName] = false
+
+          // Check if new value matches a completion
+          if let completions = completionState.argumentCompletions[argumentName],
+            completions.contains(newValue)
+          {
+            completionState.hasSelectedCompletion[argumentName] = true
+          }
+
+          state.promptCompletions[promptName] = completionState
+
+          // Fetch new completions
+          return .send(
+            .fetchCompletions(
+              promptName: promptName, argumentName: argumentName, argumentValue: newValue))
+        }
+        return .none
+
+      case let .storeCompletionTask(promptName, argumentName, task):
+        let taskKey = "\(promptName):\(argumentName)"
+        state.completionTasks[taskKey] = task
+        return .none
+
+      case let .clearCompletionState(promptName):
+        // Clear completion state for this prompt
+        state.promptCompletions[promptName] = nil
+
+        // Cancel all tasks for this prompt
+        for (key, task) in state.completionTasks where key.hasPrefix("\(promptName):") {
+          task.cancel()
+          state.completionTasks[key] = nil
+        }
+
+        return .none
       }
     }
   }

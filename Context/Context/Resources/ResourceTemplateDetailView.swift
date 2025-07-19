@@ -10,6 +10,7 @@ struct ResourceTemplateDetailView: View {
   let template: ResourceTemplate
   let server: MCPServer
   @Binding var viewMode: ResourceViewMode
+  let store: StoreOf<ResourcesFeature>
   @Dependency(\.resourceCache) private var resourceCache
   @Dependency(\.resourceLoader) private var resourceLoader
   @State private var isLoadingResources = false
@@ -172,41 +173,75 @@ struct ResourceTemplateDetailView: View {
               Text("Template Variables")
                 .font(.headline)
 
-              VStack(alignment: .leading, spacing: 8) {
-                ForEach(variables, id: \.self) { variable in
-                  HStack(alignment: .center, spacing: 8) {
-                    HStack(spacing: 6) {
-                      Image(systemName: "curlybraces")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .frame(width: 16)
+              WithViewStore(store, observe: { $0.templateCompletions[template.uriTemplate] }) {
+                viewStore in
+                let completionState = viewStore.state ?? ResourceTemplateCompletionState()
 
-                      Text(variable)
-                        .font(.caption)
-                        .fontWeight(.medium)
-                        .foregroundColor(.secondary)
-                    }
-                    .frame(width: 100, alignment: .leading)
+                VStack(alignment: .leading, spacing: 8) {
+                  ForEach(variables, id: \.self) { variable in
+                    let completions = completionState.variableCompletions[variable] ?? []
+                    let hasSelectedCompletion =
+                      completionState.hasSelectedCompletion[variable] ?? false
 
-                    TextField(
-                      "Enter value",
-                      text: Binding(
-                        get: { variableValues[variable] ?? "" },
-                        set: { newValue in
-                          variableValues[variable] = newValue
-                          // Save the updated state to cache
-                          Task {
-                            await saveToCacheForTemplate(template.uriTemplate)
+                    HStack(alignment: .center, spacing: 8) {
+                      HStack(spacing: 6) {
+                        Image(systemName: "curlybraces")
+                          .font(.caption)
+                          .foregroundColor(.secondary)
+                          .frame(width: 16)
+
+                        Text(variable)
+                          .font(.caption)
+                          .fontWeight(.medium)
+                          .foregroundColor(.secondary)
+                      }
+                      .frame(width: 100, alignment: .leading)
+
+                      TextField(
+                        "Enter value",
+                        text: Binding(
+                          get: { variableValues[variable] ?? "" },
+                          set: { newValue in
+                            let oldValue = variableValues[variable] ?? ""
+                            variableValues[variable] = newValue
+                            // Save the updated state to cache
+                            Task {
+                              await saveToCacheForTemplate(template.uriTemplate)
+                            }
+                            store.send(
+                              .variableValueChanged(
+                                templateURI: template.uriTemplate,
+                                variableName: variable,
+                                oldValue: oldValue,
+                                newValue: newValue
+                              ))
+                          }
+                        )
+                      )
+                      .textFieldStyle(.roundedBorder)
+                      .font(.system(.caption, design: .monospaced))
+                      .focused($focusedVariable, equals: variable)
+                      .onSubmit {
+                        if allVariablesFilled && !isLoadingResources {
+                          fetchEmbeddedResources()
+                        }
+                      }
+                      .textInputSuggestions {
+                        if !hasSelectedCompletion {
+                          ForEach(completions, id: \.self) { completion in
+                            Text(completion)
+                              .foregroundColor(.primary)
+                              .textInputCompletion(completion)
                           }
                         }
-                      )
-                    )
-                    .textFieldStyle(.roundedBorder)
-                    .font(.system(.caption, design: .monospaced))
-                    .focused($focusedVariable, equals: variable)
-                    .onSubmit {
-                      if allVariablesFilled && !isLoadingResources {
-                        fetchEmbeddedResources()
+                      }
+                      .onChange(of: focusedVariable) { _, focused in
+                        store.send(
+                          .variableFocusChanged(
+                            templateURI: template.uriTemplate,
+                            variableName: focused == variable ? variable : nil,
+                            value: variableValues[variable] ?? ""
+                          ))
                       }
                     }
                   }
@@ -355,6 +390,10 @@ struct ResourceTemplateDetailView: View {
       // Load cached state for this template
       loadCachedState()
     }
+    .onDisappear {
+      // Clear completion state when view disappears
+      store.send(.clearCompletionState(templateURI: template.uriTemplate))
+    }
     .onChange(of: template.uriTemplate) { oldValue, newValue in
       Task {
         // Save current state to cache before switching
@@ -377,7 +416,9 @@ struct ResourceTemplateDetailView: View {
       if let lowerBound = AttributedString.Index(match.range.lowerBound, within: attributedString),
         let upperBound = AttributedString.Index(match.range.upperBound, within: attributedString)
       {
-        attributedString[lowerBound..<upperBound].font = .body.weight(.semibold)
+        // Use the same monospace font as applied later, but with medium weight
+        attributedString[lowerBound..<upperBound].font = .system(.caption, design: .monospaced)
+          .weight(.medium)
       }
     }
 

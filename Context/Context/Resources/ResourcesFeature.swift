@@ -5,6 +5,12 @@ import ContextCore
 import GRDB
 import SharingGRDB
 
+struct ResourceTemplateCompletionState: Sendable, Equatable {
+  var variableCompletions: [String: [String]] = [:]
+  var loadingCompletions: [String: Bool] = [:]
+  var hasSelectedCompletion: [String: Bool] = [:]
+}
+
 @Reducer
 struct ResourcesFeature {
   enum ResourceSegment: String, CaseIterable {
@@ -37,6 +43,10 @@ struct ResourcesFeature {
     var isLoadingMoreTemplates = false
     var hasMoreResources = true  // Assume there might be more until proven otherwise
     var hasMoreTemplates = true  // Assume there might be more until proven otherwise
+
+    // Completion state (not cached)
+    var templateCompletions: [String: ResourceTemplateCompletionState] = [:]
+    var completionTasks: [String: Task<Void, Never>] = [:]
 
     var filteredResources: [Resource] {
       if searchQuery.isEmpty {
@@ -88,6 +98,14 @@ struct ResourcesFeature {
     case loadMoreTemplatesFailed(any Error)
     case loadIfNeeded
     case viewModeChanged(ResourceViewMode)
+    case fetchCompletions(templateURI: String, variableName: String, variableValue: String)
+    case completionsLoaded(templateURI: String, variableName: String, completions: [String])
+    case completionsFailed(templateURI: String, variableName: String)
+    case variableFocusChanged(templateURI: String, variableName: String?, value: String)
+    case variableValueChanged(
+      templateURI: String, variableName: String, oldValue: String, newValue: String)
+    case storeCompletionTask(templateURI: String, variableName: String, task: Task<Void, Never>)
+    case clearCompletionState(templateURI: String)
   }
 
   @Dependency(\.mcpClientManager) var mcpClientManager
@@ -245,6 +263,13 @@ struct ResourcesFeature {
         state.hasMoreResources = true
         state.hasMoreTemplates = true
 
+        // Clear completion state and cancel all tasks
+        state.templateCompletions = [:]
+        for task in state.completionTasks.values {
+          task.cancel()
+        }
+        state.completionTasks = [:]
+
         return .none
 
       case let .connectionStateChanged(connectionState):
@@ -351,6 +376,131 @@ struct ResourcesFeature {
 
       case let .viewModeChanged(mode):
         state.viewMode = mode
+        return .none
+
+      case let .fetchCompletions(templateURI, variableName, variableValue):
+        // Cancel any existing completion request for this variable
+        let taskKey = "\(templateURI):\(variableName)"
+        if let existingTask = state.completionTasks[taskKey] {
+          existingTask.cancel()
+        }
+
+        // Check if server supports completions
+        return .run { [server = state.server] send in
+          guard let client = await mcpClientManager.existingClient(for: server),
+            await client.serverCapabilities?.completions != nil
+          else {
+            return
+          }
+
+          let task = Task {
+            do {
+              let reference = Reference.resource(uri: templateURI)
+              let (values, _, _) = try await client.complete(
+                ref: reference,
+                argumentName: variableName,
+                argumentValue: variableValue
+              )
+
+              // Check if task was cancelled before sending results
+              if !Task.isCancelled {
+                await send(
+                  .completionsLoaded(
+                    templateURI: templateURI, variableName: variableName, completions: values))
+              }
+            } catch {
+              // Only send failure if not cancelled
+              if !Task.isCancelled {
+                await send(.completionsFailed(templateURI: templateURI, variableName: variableName))
+              }
+            }
+          }
+
+          // Store task for potential cancellation
+          await send(
+            .storeCompletionTask(templateURI: templateURI, variableName: variableName, task: task))
+
+          // Await task completion
+          await task.value
+        }
+
+      case let .completionsLoaded(templateURI, variableName, completions):
+        var completionState =
+          state.templateCompletions[templateURI] ?? ResourceTemplateCompletionState()
+        completionState.variableCompletions[variableName] = completions
+        completionState.loadingCompletions[variableName] = false
+        state.templateCompletions[templateURI] = completionState
+        return .none
+
+      case let .completionsFailed(templateURI, variableName):
+        var completionState =
+          state.templateCompletions[templateURI] ?? ResourceTemplateCompletionState()
+        completionState.variableCompletions[variableName] = []
+        completionState.loadingCompletions[variableName] = false
+        state.templateCompletions[templateURI] = completionState
+        return .none
+
+      case let .variableFocusChanged(templateURI, variableName, value):
+        if let variableName = variableName {
+          // Field is focused - fetch completions
+          var completionState =
+            state.templateCompletions[templateURI] ?? ResourceTemplateCompletionState()
+          completionState.hasSelectedCompletion[variableName] = false
+          completionState.loadingCompletions[variableName] = true
+          state.templateCompletions[templateURI] = completionState
+          return .send(
+            .fetchCompletions(
+              templateURI: templateURI, variableName: variableName, variableValue: value))
+        } else {
+          // Field lost focus - clear completions
+          if var completionState = state.templateCompletions[templateURI] {
+            for variable in completionState.variableCompletions.keys {
+              completionState.variableCompletions[variable] = []
+              completionState.hasSelectedCompletion[variable] = false
+            }
+            state.templateCompletions[templateURI] = completionState
+          }
+          return .none
+        }
+
+      case let .variableValueChanged(templateURI, variableName, oldValue, newValue):
+        // Only fetch completions if the user actually typed
+        if oldValue != newValue {
+          var completionState =
+            state.templateCompletions[templateURI] ?? ResourceTemplateCompletionState()
+          completionState.hasSelectedCompletion[variableName] = false
+
+          // Check if new value matches a completion
+          if let completions = completionState.variableCompletions[variableName],
+            completions.contains(newValue)
+          {
+            completionState.hasSelectedCompletion[variableName] = true
+          }
+
+          state.templateCompletions[templateURI] = completionState
+
+          // Fetch new completions
+          return .send(
+            .fetchCompletions(
+              templateURI: templateURI, variableName: variableName, variableValue: newValue))
+        }
+        return .none
+
+      case let .storeCompletionTask(templateURI, variableName, task):
+        let taskKey = "\(templateURI):\(variableName)"
+        state.completionTasks[taskKey] = task
+        return .none
+
+      case let .clearCompletionState(templateURI):
+        // Clear completion state for this template
+        state.templateCompletions[templateURI] = nil
+
+        // Cancel all tasks for this template
+        for (key, task) in state.completionTasks where key.hasPrefix("\(templateURI):") {
+          task.cancel()
+          state.completionTasks[key] = nil
+        }
+
         return .none
       }
     }

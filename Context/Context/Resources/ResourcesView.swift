@@ -285,7 +285,9 @@ struct ResourceRow: View {
       if let lowerBound = AttributedString.Index(match.range.lowerBound, within: attributedString),
         let upperBound = AttributedString.Index(match.range.upperBound, within: attributedString)
       {
-        attributedString[lowerBound..<upperBound].font = .body.weight(.semibold)
+        // Use the same monospace font as applied later, but with medium weight
+        attributedString[lowerBound..<upperBound].font = .system(.caption, design: .monospaced)
+          .weight(.medium)
       }
     }
 
