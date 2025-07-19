@@ -46,6 +46,7 @@ struct ResourcesFeature {
 
     // Completion state (not cached)
     var templateCompletions: [String: ResourceTemplateCompletionState] = [:]
+    var completionTasks: [String: Task<Void, Never>] = [:]
 
     var filteredResources: [Resource] {
       if searchQuery.isEmpty {
@@ -103,6 +104,8 @@ struct ResourcesFeature {
     case variableFocusChanged(templateURI: String, variableName: String?, value: String)
     case variableValueChanged(
       templateURI: String, variableName: String, oldValue: String, newValue: String)
+    case storeCompletionTask(templateURI: String, variableName: String, task: Task<Void, Never>)
+    case clearCompletionState(templateURI: String)
   }
 
   @Dependency(\.mcpClientManager) var mcpClientManager
@@ -260,6 +263,13 @@ struct ResourcesFeature {
         state.hasMoreResources = true
         state.hasMoreTemplates = true
 
+        // Clear completion state and cancel all tasks
+        state.templateCompletions = [:]
+        for task in state.completionTasks.values {
+          task.cancel()
+        }
+        state.completionTasks = [:]
+
         return .none
 
       case let .connectionStateChanged(connectionState):
@@ -369,6 +379,12 @@ struct ResourcesFeature {
         return .none
 
       case let .fetchCompletions(templateURI, variableName, variableValue):
+        // Cancel any existing completion request for this variable
+        let taskKey = "\(templateURI):\(variableName)"
+        if let existingTask = state.completionTasks[taskKey] {
+          existingTask.cancel()
+        }
+
         // Check if server supports completions
         return .run { [server = state.server] send in
           guard let client = await mcpClientManager.existingClient(for: server),
@@ -377,19 +393,35 @@ struct ResourcesFeature {
             return
           }
 
-          do {
-            let reference = Reference.resource(uri: templateURI)
-            let (values, _, _) = try await client.complete(
-              ref: reference,
-              argumentName: variableName,
-              argumentValue: variableValue
-            )
-            await send(
-              .completionsLoaded(
-                templateURI: templateURI, variableName: variableName, completions: values))
-          } catch {
-            await send(.completionsFailed(templateURI: templateURI, variableName: variableName))
+          let task = Task {
+            do {
+              let reference = Reference.resource(uri: templateURI)
+              let (values, _, _) = try await client.complete(
+                ref: reference,
+                argumentName: variableName,
+                argumentValue: variableValue
+              )
+
+              // Check if task was cancelled before sending results
+              if !Task.isCancelled {
+                await send(
+                  .completionsLoaded(
+                    templateURI: templateURI, variableName: variableName, completions: values))
+              }
+            } catch {
+              // Only send failure if not cancelled
+              if !Task.isCancelled {
+                await send(.completionsFailed(templateURI: templateURI, variableName: variableName))
+              }
+            }
           }
+
+          // Store task for potential cancellation
+          await send(
+            .storeCompletionTask(templateURI: templateURI, variableName: variableName, task: task))
+
+          // Await task completion
+          await task.value
         }
 
       case let .completionsLoaded(templateURI, variableName, completions):
@@ -452,6 +484,23 @@ struct ResourcesFeature {
             .fetchCompletions(
               templateURI: templateURI, variableName: variableName, variableValue: newValue))
         }
+        return .none
+
+      case let .storeCompletionTask(templateURI, variableName, task):
+        let taskKey = "\(templateURI):\(variableName)"
+        state.completionTasks[taskKey] = task
+        return .none
+
+      case let .clearCompletionState(templateURI):
+        // Clear completion state for this template
+        state.templateCompletions[templateURI] = nil
+
+        // Cancel all tasks for this template
+        for (key, task) in state.completionTasks where key.hasPrefix("\(templateURI):") {
+          task.cancel()
+          state.completionTasks[key] = nil
+        }
+
         return .none
       }
     }

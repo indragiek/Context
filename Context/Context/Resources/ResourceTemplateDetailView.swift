@@ -390,6 +390,10 @@ struct ResourceTemplateDetailView: View {
       // Load cached state for this template
       loadCachedState()
     }
+    .onDisappear {
+      // Clear completion state when view disappears
+      store.send(.clearCompletionState(templateURI: template.uriTemplate))
+    }
     .onChange(of: template.uriTemplate) { oldValue, newValue in
       Task {
         // Save current state to cache before switching

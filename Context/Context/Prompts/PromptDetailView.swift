@@ -99,6 +99,8 @@ struct PromptDetailView: View {
     .onDisappear {
       fetchTask?.cancel()
       fetchTask = nil
+      // Clear completion state when view disappears
+      store.send(.clearCompletionState(promptName: prompt.name))
     }
   }
 
