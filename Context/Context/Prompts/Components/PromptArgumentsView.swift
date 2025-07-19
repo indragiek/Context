@@ -1,5 +1,6 @@
 // Copyright © 2025 Indragie Karunaratne. All rights reserved.
 
+import ComposableArchitecture
 import ContextCore
 import Dependencies
 import SwiftUI
@@ -12,8 +13,8 @@ struct PromptArgumentsView: View {
   let isLoadingMessages: Bool
   let onSubmit: () -> Void
   let onArgumentChange: () -> Void
-  let server: MCPServer
   let promptName: String
+  let store: StoreOf<PromptsFeature>
   
   var body: some View {
     if let arguments = arguments, !arguments.isEmpty {
@@ -28,16 +29,23 @@ struct PromptArgumentsView: View {
               value: Binding(
                 get: { argumentValues[argument.name] ?? "" },
                 set: { newValue in
+                  let oldValue = argumentValues[argument.name] ?? ""
                   argumentValues[argument.name] = newValue
                   onArgumentChange()
+                  store.send(.argumentValueChanged(
+                    promptName: promptName,
+                    argumentName: argument.name,
+                    oldValue: oldValue,
+                    newValue: newValue
+                  ))
                 }
               ),
               focusedArgument: $focusedArgument,
               allRequiredArgumentsFilled: allRequiredArgumentsFilled,
               isLoadingMessages: isLoadingMessages,
               onSubmit: onSubmit,
-              server: server,
-              promptName: promptName
+              promptName: promptName,
+              store: store
             )
           }
         }
@@ -57,12 +65,8 @@ private struct ArgumentRow: View {
   let allRequiredArgumentsFilled: Bool
   let isLoadingMessages: Bool
   let onSubmit: () -> Void
-  let server: MCPServer
   let promptName: String
-  
-  @State private var completions: [String] = []
-  @State private var isLoadingCompletions = false
-  @State private var hasSelectedCompletion = false
+  let store: StoreOf<PromptsFeature>
   
   private var isRequired: Bool {
     argument.required == true
@@ -73,6 +77,11 @@ private struct ArgumentRow: View {
   }
   
   var body: some View {
+    WithViewStore(store, observe: { $0.promptCompletions[promptName] }) { viewStore in
+      let completionState = viewStore.state ?? PromptCompletionState()
+      let completions = completionState.argumentCompletions[argument.name] ?? []
+      let hasSelectedCompletion = completionState.hasSelectedCompletion[argument.name] ?? false
+      
     HStack(alignment: .center, spacing: 8) {
       HStack(spacing: 6) {
         Image(systemName: "curlybraces")
@@ -112,63 +121,14 @@ private struct ArgumentRow: View {
           }
         }
       }
-      .onChange(of: value) { oldValue, newValue in
-        // Only fetch completions if the user actually typed (not from selection)
-        if focusedArgument == argument.name && oldValue != newValue {
-          hasSelectedCompletion = false
-          fetchCompletions(for: newValue)
-        }
-        // If the new value matches a completion, mark as selected
-        if completions.contains(newValue) {
-          hasSelectedCompletion = true
-        }
-      }
       .onChange(of: focusedArgument) { _, focused in
-        if focused == argument.name {
-          // Fetch completions when field is focused, even with empty value
-          hasSelectedCompletion = false
-          fetchCompletions(for: value)
-        } else if focused != argument.name {
-          completions = []
-          hasSelectedCompletion = false
-        }
+        store.send(.argumentFocusChanged(
+          promptName: promptName,
+          argumentName: focused == argument.name ? argument.name : nil,
+          value: value
+        ))
       }
     }
-  }
-  
-  private func fetchCompletions(for currentValue: String) {
-    @Dependency(\.mcpClientManager) var mcpClientManager
-    
-    Task {
-      isLoadingCompletions = true
-      defer { isLoadingCompletions = false }
-      
-      do {
-        guard let client = await mcpClientManager.existingClient(for: server) else {
-          return
-        }
-        
-        // Check if server supports completions
-        guard await client.serverCapabilities?.completions != nil else {
-          return
-        }
-        
-        let reference = Reference.prompt(name: promptName)
-        let (values, _, _) = try await client.complete(
-          ref: reference,
-          argumentName: argument.name,
-          argumentValue: currentValue
-        )
-        
-        await MainActor.run {
-          completions = values
-        }
-      } catch {
-        // Silently fail - completions are optional
-        await MainActor.run {
-          completions = []
-        }
-      }
     }
   }
 }

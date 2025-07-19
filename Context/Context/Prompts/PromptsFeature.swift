@@ -13,6 +13,12 @@ enum PromptLoadingState: Sendable, Equatable {
   case failed
 }
 
+struct PromptCompletionState: Sendable, Equatable {
+  var argumentCompletions: [String: [String]] = [:]
+  var loadingCompletions: [String: Bool] = [:]
+  var hasSelectedCompletion: [String: Bool] = [:]
+}
+
 struct PromptState: Sendable {
   var argumentValues: [String: String] = [:]
   var messages: [PromptMessage] = []
@@ -69,6 +75,9 @@ struct PromptsFeature {
     var nextCursor: String?
     var isLoadingMore = false
     var hasMore = true  // Assume there might be more until proven otherwise
+    
+    // Completion state (not cached)
+    var promptCompletions: [String: PromptCompletionState] = [:]
 
     init(server: MCPServer) {
       self.server = server
@@ -121,6 +130,11 @@ struct PromptsFeature {
     case morePromptsLoaded(prompts: [Prompt], nextCursor: String?)
     case loadMorePromptsFailed(any Error)
     case loadIfNeeded
+    case fetchCompletions(promptName: String, argumentName: String, argumentValue: String)
+    case completionsLoaded(promptName: String, argumentName: String, completions: [String])
+    case completionsFailed(promptName: String, argumentName: String)
+    case argumentFocusChanged(promptName: String, argumentName: String?, value: String)
+    case argumentValueChanged(promptName: String, argumentName: String, oldValue: String, newValue: String)
   }
 
   @Dependency(\.promptCache) var promptCache
@@ -278,6 +292,80 @@ struct PromptsFeature {
         state.error = nil
 
         return .send(.onConnected)
+        
+      case let .fetchCompletions(promptName, argumentName, argumentValue):
+        // Check if server supports completions
+        return .run { [server = state.server] send in
+          guard let client = await mcpClientManager.existingClient(for: server),
+                await client.serverCapabilities?.completions != nil else {
+            return
+          }
+          
+          do {
+            let reference = Reference.prompt(name: promptName)
+            let (values, _, _) = try await client.complete(
+              ref: reference,
+              argumentName: argumentName,
+              argumentValue: argumentValue
+            )
+            await send(.completionsLoaded(promptName: promptName, argumentName: argumentName, completions: values))
+          } catch {
+            await send(.completionsFailed(promptName: promptName, argumentName: argumentName))
+          }
+        }
+        
+      case let .completionsLoaded(promptName, argumentName, completions):
+        var completionState = state.promptCompletions[promptName] ?? PromptCompletionState()
+        completionState.argumentCompletions[argumentName] = completions
+        completionState.loadingCompletions[argumentName] = false
+        state.promptCompletions[promptName] = completionState
+        return .none
+        
+      case let .completionsFailed(promptName, argumentName):
+        var completionState = state.promptCompletions[promptName] ?? PromptCompletionState()
+        completionState.argumentCompletions[argumentName] = []
+        completionState.loadingCompletions[argumentName] = false
+        state.promptCompletions[promptName] = completionState
+        return .none
+        
+      case let .argumentFocusChanged(promptName, argumentName, value):
+        if let argumentName = argumentName {
+          // Field is focused - fetch completions
+          var completionState = state.promptCompletions[promptName] ?? PromptCompletionState()
+          completionState.hasSelectedCompletion[argumentName] = false
+          completionState.loadingCompletions[argumentName] = true
+          state.promptCompletions[promptName] = completionState
+          return .send(.fetchCompletions(promptName: promptName, argumentName: argumentName, argumentValue: value))
+        } else {
+          // Field lost focus - clear completions
+          if var completionState = state.promptCompletions[promptName] {
+            for arg in completionState.argumentCompletions.keys {
+              completionState.argumentCompletions[arg] = []
+              completionState.hasSelectedCompletion[arg] = false
+            }
+            state.promptCompletions[promptName] = completionState
+          }
+          return .none
+        }
+        
+      case let .argumentValueChanged(promptName, argumentName, oldValue, newValue):
+        // Only fetch completions if the user actually typed
+        if oldValue != newValue {
+          var completionState = state.promptCompletions[promptName] ?? PromptCompletionState()
+          completionState.hasSelectedCompletion[argumentName] = false
+          
+          // Check if new value matches a completion
+          if let completions = completionState.argumentCompletions[argumentName],
+             completions.contains(newValue) {
+            completionState.hasSelectedCompletion[argumentName] = true
+          }
+          
+          state.promptCompletions[promptName] = completionState
+          
+          // Fetch new completions
+          return .send(.fetchCompletions(promptName: promptName, argumentName: argumentName, argumentValue: newValue))
+        }
+        return .none
       }
     }
   }

@@ -25,7 +25,8 @@ struct PromptDetailWrapper: View {
             promptState: promptState ?? PromptState(),
             onStateUpdate: { newState in
               viewStore.send(.updatePromptState(promptName: prompt.name, promptState: newState))
-            }
+            },
+            store: store
           )
           .id(prompt.name)  // Force view recreation when prompt changes
         }

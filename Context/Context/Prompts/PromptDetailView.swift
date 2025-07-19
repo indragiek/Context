@@ -13,6 +13,7 @@ struct PromptDetailView: View {
   let server: MCPServer
   let promptState: PromptState
   let onStateUpdate: (PromptState) -> Void
+  let store: StoreOf<PromptsFeature>
   
   // View-specific state only
   @FocusState private var focusedArgument: String?
@@ -24,12 +25,14 @@ struct PromptDetailView: View {
   
   init(
     prompt: Prompt, server: MCPServer, promptState: PromptState,
-    onStateUpdate: @escaping (PromptState) -> Void
+    onStateUpdate: @escaping (PromptState) -> Void,
+    store: StoreOf<PromptsFeature>
   ) {
     self.prompt = prompt
     self.server = server
     self.promptState = promptState
     self.onStateUpdate = onStateUpdate
+    self.store = store
     self._localPromptState = State(initialValue: promptState)
   }
   
@@ -53,8 +56,8 @@ struct PromptDetailView: View {
             isLoadingMessages: isLoadingMessages,
             onSubmit: fetchPromptMessages,
             onArgumentChange: updatePromptState,
-            server: server,
-            promptName: prompt.name
+            promptName: prompt.name,
+            store: store
           )
           
           Spacer()

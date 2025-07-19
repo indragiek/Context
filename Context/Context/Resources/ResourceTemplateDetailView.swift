@@ -10,6 +10,7 @@ struct ResourceTemplateDetailView: View {
   let template: ResourceTemplate
   let server: MCPServer
   @Binding var viewMode: ResourceViewMode
+  let store: StoreOf<ResourcesFeature>
   @Dependency(\.resourceCache) private var resourceCache
   @Dependency(\.resourceLoader) private var resourceLoader
   @State private var isLoadingResources = false
@@ -24,10 +25,6 @@ struct ResourceTemplateDetailView: View {
   @State private var showingFullDescription = false
   @State private var responseJSON: JSONValue? = nil
   @State private var responseError: (any Error)? = nil
-  @State private var variableCompletions: [String: [String]] = [:]
-  @State private var loadingCompletions: [String: Bool] = [:]
-  @State private var hasSelectedCompletion: [String: Bool] = [:]
-  @Dependency(\.mcpClientManager) private var mcpClientManager
 
   // Cached regex for template parameters
   private static let templateParameterRegex = /\{[^}]+\}/
@@ -176,74 +173,71 @@ struct ResourceTemplateDetailView: View {
               Text("Template Variables")
                 .font(.headline)
 
-              VStack(alignment: .leading, spacing: 8) {
-                ForEach(variables, id: \.self) { variable in
-                  HStack(alignment: .center, spacing: 8) {
-                    HStack(spacing: 6) {
-                      Image(systemName: "curlybraces")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .frame(width: 16)
+              WithViewStore(store, observe: { $0.templateCompletions[template.uriTemplate] }) { viewStore in
+                let completionState = viewStore.state ?? ResourceTemplateCompletionState()
+                
+                VStack(alignment: .leading, spacing: 8) {
+                  ForEach(variables, id: \.self) { variable in
+                    let completions = completionState.variableCompletions[variable] ?? []
+                    let hasSelectedCompletion = completionState.hasSelectedCompletion[variable] ?? false
+                    
+                    HStack(alignment: .center, spacing: 8) {
+                      HStack(spacing: 6) {
+                        Image(systemName: "curlybraces")
+                          .font(.caption)
+                          .foregroundColor(.secondary)
+                          .frame(width: 16)
 
-                      Text(variable)
-                        .font(.caption)
-                        .fontWeight(.medium)
-                        .foregroundColor(.secondary)
-                    }
-                    .frame(width: 100, alignment: .leading)
+                        Text(variable)
+                          .font(.caption)
+                          .fontWeight(.medium)
+                          .foregroundColor(.secondary)
+                      }
+                      .frame(width: 100, alignment: .leading)
 
-                    TextField(
-                      "Enter value",
-                      text: Binding(
-                        get: { variableValues[variable] ?? "" },
-                        set: { newValue in
-                          variableValues[variable] = newValue
-                          // Save the updated state to cache
-                          Task {
-                            await saveToCacheForTemplate(template.uriTemplate)
+                      TextField(
+                        "Enter value",
+                        text: Binding(
+                          get: { variableValues[variable] ?? "" },
+                          set: { newValue in
+                            let oldValue = variableValues[variable] ?? ""
+                            variableValues[variable] = newValue
+                            // Save the updated state to cache
+                            Task {
+                              await saveToCacheForTemplate(template.uriTemplate)
+                            }
+                            store.send(.variableValueChanged(
+                              templateURI: template.uriTemplate,
+                              variableName: variable,
+                              oldValue: oldValue,
+                              newValue: newValue
+                            ))
+                          }
+                        )
+                      )
+                      .textFieldStyle(.roundedBorder)
+                      .font(.system(.caption, design: .monospaced))
+                      .focused($focusedVariable, equals: variable)
+                      .onSubmit {
+                        if allVariablesFilled && !isLoadingResources {
+                          fetchEmbeddedResources()
+                        }
+                      }
+                      .textInputSuggestions {
+                        if !hasSelectedCompletion {
+                          ForEach(completions, id: \.self) { completion in
+                            Text(completion)
+                              .foregroundColor(.primary)
+                              .textInputCompletion(completion)
                           }
                         }
-                      )
-                    )
-                    .textFieldStyle(.roundedBorder)
-                    .font(.system(.caption, design: .monospaced))
-                    .focused($focusedVariable, equals: variable)
-                    .onSubmit {
-                      if allVariablesFilled && !isLoadingResources {
-                        fetchEmbeddedResources()
                       }
-                    }
-                    .textInputSuggestions {
-                      if let completions = variableCompletions[variable], 
-                         !(hasSelectedCompletion[variable] ?? false) {
-                        ForEach(completions, id: \.self) { completion in
-                          Text(completion)
-                            .foregroundColor(.primary)
-                            .textInputCompletion(completion)
-                        }
-                      }
-                    }
-                    .onChange(of: variableValues[variable] ?? "") { oldValue, newValue in
-                      // Only fetch completions if the user actually typed (not from selection)
-                      if focusedVariable == variable && oldValue != newValue {
-                        hasSelectedCompletion[variable] = false
-                        fetchCompletions(for: variable, value: newValue)
-                        
-                        // If the new value matches a completion, mark as selected
-                        if let completions = variableCompletions[variable],
-                           completions.contains(newValue) {
-                          hasSelectedCompletion[variable] = true
-                        }
-                      }
-                    }
-                    .onChange(of: focusedVariable) { _, focused in
-                      if focused == variable {
-                        // Fetch completions when field is focused, even with empty value
-                        hasSelectedCompletion[variable] = false
-                        fetchCompletions(for: variable, value: variableValues[variable] ?? "")
-                      } else if focused != variable {
-                        variableCompletions[variable] = []
-                        hasSelectedCompletion[variable] = false
+                      .onChange(of: focusedVariable) { _, focused in
+                        store.send(.variableFocusChanged(
+                          templateURI: template.uriTemplate,
+                          variableName: focused == variable ? variable : nil,
+                          value: variableValues[variable] ?? ""
+                        ))
                       }
                     }
                   }
@@ -589,39 +583,5 @@ struct ResourceTemplateDetailView: View {
       responseJSON: responseJSON,
       responseError: responseError
     )
-  }
-  
-  private func fetchCompletions(for variable: String, value: String) {
-    Task {
-      loadingCompletions[variable] = true
-      defer { loadingCompletions[variable] = false }
-      
-      do {
-        guard let client = await mcpClientManager.existingClient(for: server) else {
-          return
-        }
-        
-        // Check if server supports completions
-        guard await client.serverCapabilities?.completions != nil else {
-          return
-        }
-        
-        let reference = Reference.resource(uri: template.uriTemplate)
-        let (values, _, _) = try await client.complete(
-          ref: reference,
-          argumentName: variable,
-          argumentValue: value
-        )
-        
-        await MainActor.run {
-          variableCompletions[variable] = values
-        }
-      } catch {
-        // Silently fail - completions are optional
-        await MainActor.run {
-          variableCompletions[variable] = []
-        }
-      }
-    }
   }
 }

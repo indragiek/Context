@@ -137,7 +137,8 @@ struct DetailView: View {
           ResourceTemplateDetailView(
             template: selectedTemplate,
             server: selectedServer.server,
-            viewMode: viewStore.binding(send: { .resourcesFeature(.viewModeChanged($0)) })
+            viewMode: viewStore.binding(send: { .resourcesFeature(.viewModeChanged($0)) }),
+            store: serverStore.scope(state: \.resourcesFeature, action: \.resourcesFeature)
           )
         } else {
           ContentUnavailableView(
