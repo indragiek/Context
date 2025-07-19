@@ -51,7 +51,9 @@ extension PromptState: Equatable {
       return false
     }
 
-    return lhs.messages == rhs.messages
+    // For non-Equatable types, compare counts as a proxy
+    // This isn't perfect but better than always returning false
+    return lhs.messages.count == rhs.messages.count
   }
 }
 
@@ -119,12 +121,7 @@ struct PromptsFeature {
     }
 
     func promptState(for name: String) -> PromptState {
-      if let existing = promptStates[name] {
-        return existing
-      }
-      let newState = PromptState()
-      // Don't store here - let explicit actions handle state creation
-      return newState
+      promptStates[name] ?? PromptState()
     }
 
     func allRequiredArgumentsFilled(for prompt: Prompt) -> Bool {
@@ -467,8 +464,9 @@ struct PromptsFeature {
               promptName: promptName, argumentName: argumentName, argumentValue: newValue))
           }
         }
-        // Cache is already updated above, no need to update again
-        return .none
+        return .run { [promptState] _ in
+          await promptCache.set(promptState, for: promptName)
+        }
 
       case let .storeCompletionTask(promptName, argumentName, task):
         let taskKey = "\(promptName):\(argumentName)"
