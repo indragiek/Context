@@ -51,9 +51,7 @@ extension PromptState: Equatable {
       return false
     }
 
-    // For non-Equatable types, compare counts as a proxy
-    // This isn't perfect but better than always returning false
-    return lhs.messages.count == rhs.messages.count
+    return lhs.messages == rhs.messages
   }
 }
 

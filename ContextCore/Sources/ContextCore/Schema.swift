@@ -107,7 +107,7 @@ public enum EmbeddedResource: Codable, Sendable, Equatable {
 }
 
 /// LLM content that can be text, image, audio, or an embedded resource.
-public enum Content: Codable, Sendable {
+public enum Content: Codable, Sendable, Equatable {
   case text(String, annotations: Annotations? = nil)
   case image(data: Data, mimeType: String, annotations: Annotations? = nil)
   case audio(data: Data, mimeType: String, annotations: Annotations? = nil)
@@ -630,7 +630,7 @@ public struct ListPromptsResponse {
 }
 
 /// A message in a prompt template, containing only role and content.
-public struct PromptMessage: Codable, Sendable {
+public struct PromptMessage: Codable, Sendable, Equatable {
   public init(role: Role, content: Content) {
     self.role = role
     self.content = content
