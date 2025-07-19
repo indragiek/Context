@@ -1,139 +1,120 @@
 // Copyright © 2025 Indragie Karunaratne. All rights reserved.
 
 import AVKit
-import Combine
 import ComposableArchitecture
 import ContextCore
-import Dependencies
 import MarkdownUI
 import SwiftUI
 
 struct PromptDetailView: View {
   let prompt: Prompt
   let server: MCPServer
-  let promptState: PromptState
-  let onStateUpdate: (PromptState) -> Void
   let store: StoreOf<PromptsFeature>
 
   // View-specific state only
   @FocusState private var focusedArgument: String?
-  @State private var fetchTask: Task<Void, Never>?
   @State private var showingFullDescription = false
 
-  // State that will be synced with PromptState
-  @State private var localPromptState: PromptState
-
-  init(
-    prompt: Prompt, server: MCPServer, promptState: PromptState,
-    onStateUpdate: @escaping (PromptState) -> Void,
-    store: StoreOf<PromptsFeature>
-  ) {
-    self.prompt = prompt
-    self.server = server
-    self.promptState = promptState
-    self.onStateUpdate = onStateUpdate
-    self.store = store
-    self._localPromptState = State(initialValue: promptState)
-  }
-
   var body: some View {
-    VSplitView {
-      // Top pane - Header and arguments
-      ScrollView {
-        VStack(alignment: .leading, spacing: 16) {
-          PromptHeaderView(
-            prompt: prompt,
-            showingFullDescription: $showingFullDescription
-          )
+    WithViewStore(store, observe: { $0.promptState(for: prompt.name) }) { viewStore in
+      let promptState = viewStore.state
 
-          Divider()
+      VSplitView {
+        // Top pane - Header and arguments
+        ScrollView {
+          VStack(alignment: .leading, spacing: 16) {
+            PromptHeaderView(
+              prompt: prompt,
+              showingFullDescription: $showingFullDescription
+            )
 
-          PromptArgumentsView(
-            arguments: prompt.arguments,
-            argumentValues: $localPromptState.argumentValues,
-            focusedArgument: $focusedArgument,
-            allRequiredArgumentsFilled: allRequiredArgumentsFilled,
-            isLoadingMessages: isLoadingMessages,
-            onSubmit: fetchPromptMessages,
-            onArgumentChange: updatePromptState,
-            promptName: prompt.name,
-            store: store
-          )
+            Divider()
 
-          Spacer()
+            PromptArgumentsView(
+              arguments: prompt.arguments,
+              argumentValues: Binding(
+                get: { promptState.argumentValues },
+                set: { newValues in
+                  var updatedState = promptState
+                  updatedState.argumentValues = newValues
+                  store.send(.updatePromptState(promptName: prompt.name, promptState: updatedState))
+                }
+              ),
+              focusedArgument: $focusedArgument,
+              allRequiredArgumentsFilled: allRequiredArgumentsFilled(promptState: promptState),
+              isLoadingMessages: promptState.loadingState == .loading,
+              onSubmit: { store.send(.fetchPromptMessages(prompt: prompt)) },
+              onArgumentChange: {
+                // No-op - individual changes are handled by argumentValueChanged action
+              },
+              promptName: prompt.name,
+              store: store
+            )
+
+            Spacer()
+          }
+          .padding(20)
         }
-        .padding(20)
-      }
-      .background(Color(NSColor.controlBackgroundColor))
-      .frame(minHeight: 200, idealHeight: max(200, calculateIdealHeight()))
+        .background(Color(NSColor.controlBackgroundColor))
+        .frame(minHeight: 200, idealHeight: max(200, calculateIdealHeight()))
 
-      // Bottom pane - Messages
-      PromptMessagesView(
-        prompt: prompt,
-        promptState: localPromptState,
-        viewMode: $localPromptState.viewMode,
-        isLoading: isLoadingMessages,
-        allRequiredArgumentsFilled: allRequiredArgumentsFilled,
-        onFetchMessages: fetchPromptMessages,
-        errorView: { error in
-          AnyView(JSONRPCErrorView(error: error))
-        },
-        rawView: {
-          AnyView(PromptRawDataView(promptState: localPromptState))
+        // Bottom pane - Messages
+        PromptMessagesView(
+          prompt: prompt,
+          promptState: promptState,
+          viewMode: Binding(
+            get: { promptState.viewMode },
+            set: { newMode in
+              var updatedState = promptState
+              updatedState.viewMode = newMode
+              store.send(.updatePromptState(promptName: prompt.name, promptState: updatedState))
+            }
+          ),
+          isLoading: promptState.loadingState == .loading,
+          allRequiredArgumentsFilled: allRequiredArgumentsFilled(promptState: promptState),
+          onFetchMessages: { store.send(.fetchPromptMessages(prompt: prompt)) },
+          errorView: { error in
+            AnyView(JSONRPCErrorView(error: error))
+          },
+          rawView: {
+            AnyView(PromptRawDataView(promptState: promptState))
+          }
+        )
+      }
+      .sheet(isPresented: $showingFullDescription) {
+        fullDescriptionSheet
+      }
+      .onAppear {
+        store.send(.loadPromptState(promptName: prompt.name))
+        store.send(.initializePromptArguments(prompt: prompt))
+
+        // Auto-fetch if prompt has no arguments
+        if (prompt.arguments == nil || prompt.arguments?.isEmpty == true)
+          && !promptState.hasLoadedOnce
+        {
+          store.send(.fetchPromptMessages(prompt: prompt))
         }
-      )
-    }
-    .sheet(isPresented: $showingFullDescription) {
-      fullDescriptionSheet
-    }
-    .onAppear {
-      initializeArguments()
-
-      // Auto-fetch if prompt has no arguments
-      if (prompt.arguments == nil || prompt.arguments?.isEmpty == true)
-        && !localPromptState.hasLoadedOnce
-      {
-        fetchPromptMessages()
       }
-    }
-    .onDisappear {
-      fetchTask?.cancel()
-      fetchTask = nil
-      // Clear completion state when view disappears
-      store.send(.clearCompletionState(promptName: prompt.name))
+      .onDisappear {
+        store.send(.cancelPromptMessagesFetch(promptName: prompt.name))
+        // Clear completion state when view disappears
+        store.send(.clearCompletionState(promptName: prompt.name))
+      }
     }
   }
 
   // MARK: - Private Helpers
 
-  private func initializeArguments() {
-    if let arguments = prompt.arguments {
-      for argument in arguments {
-        if localPromptState.argumentValues[argument.name] == nil {
-          localPromptState.argumentValues[argument.name] = ""
-        }
-      }
-    }
-  }
-
-  private func updatePromptState() {
-    onStateUpdate(localPromptState)
-  }
-
-  private var allRequiredArgumentsFilled: Bool {
+  private func allRequiredArgumentsFilled(promptState: PromptState) -> Bool {
     guard let arguments = prompt.arguments else { return true }
 
     return arguments.allSatisfy { argument in
       if argument.required == true {
-        let value = localPromptState.argumentValues[argument.name] ?? ""
+        let value = promptState.argumentValues[argument.name] ?? ""
         return !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
       }
       return true
     }
-  }
-
-  private var isLoadingMessages: Bool {
-    localPromptState.loadingState == .loading
   }
 
   private func calculateIdealHeight() -> CGFloat {
@@ -141,87 +122,6 @@ struct PromptDetailView: View {
     let argumentHeight: CGFloat = 40
     let argumentsCount = min(prompt.arguments?.count ?? 0, 3)
     return baseHeight + (CGFloat(argumentsCount) * argumentHeight)
-  }
-
-  private func fetchPromptMessages() {
-    @Dependency(\.mcpClientManager) var mcpClientManager
-
-    fetchTask?.cancel()
-
-    localPromptState.loadingState = .loading
-    updatePromptState()
-
-    fetchTask = Task { @MainActor in
-      do {
-        let client = try await mcpClientManager.client(for: server)
-
-        if Task.isCancelled { return }
-
-        let (description, fetchedMessages) = try await client.getPrompt(
-          name: prompt.name, arguments: localPromptState.argumentValues)
-
-        if Task.isCancelled { return }
-
-        await MainActor.run {
-          localPromptState.rawResponse = GetPromptResponse.Result(
-            description: description, messages: fetchedMessages)
-
-          do {
-            // Create the response structure to encode
-            let responseToEncode = GetPromptResponse.Result(
-              description: description,
-              messages: fetchedMessages
-            )
-
-            // TODO: Fix this inefficient encoding/decoding. We do this because we don't have access
-            // to the raw JSON responses from the client.
-            let jsonData = try JSONUtility.prettyData(from: responseToEncode)
-            localPromptState.responseJSON = try JSONDecoder().decode(JSONValue.self, from: jsonData)
-            localPromptState.responseError = nil
-          } catch {
-            localPromptState.responseJSON = nil
-            localPromptState.responseError = error
-          }
-
-          let templateProcessor = TemplateProcessor(argumentValues: localPromptState.argumentValues)
-          localPromptState.messages = fetchedMessages.map { message in
-            PromptMessage(
-              role: message.role,
-              content: templateProcessor.process(message.content)
-            )
-          }
-
-          localPromptState.loadingState = .loaded
-          localPromptState.hasLoadedOnce = true
-
-          updatePromptState()
-        }
-      } catch {
-        if Task.isCancelled { return }
-
-        await MainActor.run {
-          localPromptState.messages = []
-          localPromptState.rawResponse = nil
-          localPromptState.responseJSON = nil
-          localPromptState.responseError = error
-          localPromptState.loadingState = .failed
-          localPromptState.hasLoadedOnce = true
-
-          updatePromptState()
-        }
-      }
-    }
-  }
-}
-
-// MARK: - PromptMessagesList
-
-struct PromptMessagesList: View {
-  let messages: [PromptMessage]
-  let argumentValues: [String: String]
-
-  var body: some View {
-    MessageThreadView(messages: messages)
   }
 }
 

@@ -95,8 +95,9 @@ struct DetailView: View {
           $0.name == selectedPromptName
         })
       {
-        PromptDetailWrapper(
+        PromptDetailView(
           prompt: selectedPrompt,
+          server: selectedServer.server,
           store: serverStore.scope(state: \.promptsFeature, action: \.promptsFeature)
         )
       } else {

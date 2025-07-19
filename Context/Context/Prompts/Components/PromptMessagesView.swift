@@ -13,7 +13,7 @@ struct PromptMessagesView: View {
   let onFetchMessages: () -> Void
   let errorView: (any Error) -> AnyView
   let rawView: () -> AnyView
-  
+
   var body: some View {
     VStack(spacing: 0) {
       // Fixed Messages Header
@@ -24,15 +24,15 @@ struct PromptMessagesView: View {
         onFetchMessages: onFetchMessages,
         promptState: promptState
       )
-      
+
       Divider()
-      
+
       // Messages Content
       messagesContent
     }
     .frame(minHeight: 350)
   }
-  
+
   @ViewBuilder
   private var messagesContent: some View {
     switch promptState.loadingState {
@@ -43,7 +43,7 @@ struct PromptMessagesView: View {
       } else {
         // Check if prompt has arguments that need to be filled
         let hasArguments = prompt.arguments != nil && !(prompt.arguments?.isEmpty ?? true)
-        
+
         if hasArguments && !allRequiredArgumentsFilled {
           // Show prompt to fill arguments
           ContentUnavailableView(
@@ -81,12 +81,12 @@ struct PromptMessagesView: View {
           }
         }
       }
-      
+
     case .loading:
       ProgressView()
         .controlSize(.regular)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-      
+
     case .loaded:
       if viewMode == .raw {
         // Always show raw view when in raw mode, regardless of messages
@@ -101,7 +101,7 @@ struct PromptMessagesView: View {
       } else {
         messageDisplayView
       }
-      
+
     case .failed:
       if viewMode == .raw {
         // Show raw error data in raw mode
@@ -118,16 +118,13 @@ struct PromptMessagesView: View {
       }
     }
   }
-  
+
   @ViewBuilder
   private var messageDisplayView: some View {
     switch viewMode {
     case .preview:
-      PromptMessagesList(
-        messages: promptState.messages,
-        argumentValues: promptState.argumentValues
-      )
-      .frame(maxWidth: .infinity, maxHeight: .infinity)
+      MessageThreadView(messages: promptState.messages)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     case .raw:
       rawView()
     }
@@ -140,14 +137,14 @@ private struct MessagesHeader: View {
   let allRequiredArgumentsFilled: Bool
   let onFetchMessages: () -> Void
   let promptState: PromptState
-  
+
   var body: some View {
     HStack(spacing: 12) {
       Text("Messages")
         .font(.headline)
-      
+
       Spacer()
-      
+
       // Copy button when in Raw mode
       if viewMode == .raw && shouldShowCopyButton {
         CopyButton {
@@ -155,12 +152,12 @@ private struct MessagesHeader: View {
         }
         .help("Copy raw JSON to clipboard")
       }
-      
+
       if isLoading {
         ProgressView()
           .controlSize(.small)
       }
-      
+
       Button(action: onFetchMessages) {
         Image(systemName: "square.and.arrow.down")
           .font(.system(size: 14))
@@ -181,12 +178,12 @@ private struct MessagesHeader: View {
       ToggleButton(selection: $viewMode)
     )
   }
-  
+
   private var shouldShowCopyButton: Bool {
     // Show copy button if we have raw JSON or if there's an error
     promptState.responseJSON != nil || promptState.responseError != nil
   }
-  
+
   private func copyRawJSONToClipboard() {
     RawDataView.copyRawDataToClipboard(
       responseJSON: promptState.responseJSON,

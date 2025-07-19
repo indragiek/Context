@@ -30,8 +30,9 @@ struct PromptArgumentsView: View {
                 get: { argumentValues[argument.name] ?? "" },
                 set: { newValue in
                   let oldValue = argumentValues[argument.name] ?? ""
-                  argumentValues[argument.name] = newValue
-                  onArgumentChange()
+                  var updatedValues = argumentValues
+                  updatedValues[argument.name] = newValue
+                  argumentValues = updatedValues
                   store.send(
                     .argumentValueChanged(
                       promptName: promptName,

@@ -7,10 +7,8 @@ import RegexBuilder
 /// Processes template variables in prompt content
 struct TemplateProcessor {
   // Cached regex for template matching
-  @MainActor
-  private static let templateVarRegex = /\{\{([^}]+)\}\}/
-  @MainActor
-  private static let conditionalRegex = /\{\{([#^])([^}]+)\}\}(.*?)\{\{\/\2\}\}/
+  nonisolated(unsafe) private static let templateVarRegex = /\{\{([^}]+)\}\}/
+  nonisolated(unsafe) private static let conditionalRegex = /\{\{([#^])([^}]+)\}\}(.*?)\{\{\/\2\}\}/
   
   private let argumentValues: [String: String]
   private let maxIterations = 10
@@ -19,7 +17,6 @@ struct TemplateProcessor {
     self.argumentValues = argumentValues
   }
   
-  @MainActor
   func process(_ content: Content) -> Content {
     switch content {
     case .text(let text, let annotations):
@@ -33,7 +30,6 @@ struct TemplateProcessor {
     }
   }
   
-  @MainActor
   private func processText(_ text: String) -> String {
     var processedText = text
     var iterationCount = 0
@@ -79,7 +75,6 @@ struct TemplateProcessor {
     return processedText
   }
   
-  @MainActor
   private func processResource(_ resource: EmbeddedResource) -> EmbeddedResource {
     switch resource {
     case .text(let textResource):
