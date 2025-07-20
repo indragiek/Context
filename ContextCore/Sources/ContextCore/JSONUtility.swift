@@ -214,6 +214,50 @@ public struct JSONUtility {
     return jsonValue
   }
 
+  /// Extracts both cleaned text and any JSONValue from a string in a single pass
+  /// - Parameter string: The string to process
+  /// - Returns: A tuple containing the text with JSON removed and an optional JSONValue if found
+  private static func extractTextAndJSON(from string: String) -> (text: String, json: JSONValue?) {
+    let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
+    
+    // Check if the string starts with JSON
+    if trimmed.hasPrefix("{") || trimmed.hasPrefix("[") {
+      if let result = extractJSONFromStart(of: trimmed) {
+        let afterJSON = String(trimmed[result.endIndex...]).trimmingCharacters(in: .whitespacesAndNewlines)
+        if !afterJSON.isEmpty {
+          return (afterJSON, result.jsonValue)
+        }
+        // If there's no text after JSON, return original string with JSON
+        return (string, result.jsonValue)
+      }
+    }
+    
+    // Check if the string ends with JSON
+    if trimmed.hasSuffix("}") || trimmed.hasSuffix("]") {
+      if let result = extractJSONFromEnd(of: trimmed) {
+        let beforeJSON = String(trimmed[..<result.startIndex]).trimmingCharacters(in: .whitespacesAndNewlines)
+        if !beforeJSON.isEmpty {
+          return (beforeJSON, result.jsonValue)
+        }
+        // If there's no text before JSON, return original string with JSON
+        return (string, result.jsonValue)
+      }
+    }
+    
+    // No JSON found
+    return (string, nil)
+  }
+
+  /// Gets the raw error description from an error, preferring errorDescription if available
+  private static func getRawErrorDescription(from error: any Error) -> String {
+    if let localizedError = error as? LocalizedError,
+       let errorDescription = localizedError.errorDescription {
+      return errorDescription
+    } else {
+      return error.localizedDescription
+    }
+  }
+
   /// Prepares content for clipboard from JSON response or error
   /// - Parameters:
   ///   - json: Optional JSONValue to convert to string
@@ -227,16 +271,16 @@ public struct JSONUtility {
     
     // If no JSON response, extract from error
     if let error = error {
-      let errorText = getErrorDescription(from: error)
+      let (_, extractedJSON) = extractErrorAndJSON(from: error)
       
-      // Try to extract and pretty-print JSON if present in error
-      if let jsonValue = extractJSON(from: errorText),
+      // Try to pretty-print extracted JSON
+      if let jsonValue = extractedJSON,
          let prettyJSON = prettyString(from: jsonValue) {
         return prettyJSON
       }
       
-      // Return error text as-is
-      return errorText
+      // Return raw error text if no JSON found
+      return getRawErrorDescription(from: error)
     }
     
     return ""
@@ -245,45 +289,24 @@ public struct JSONUtility {
   /// Gets the error description from an error, preferring errorDescription if available
   /// This function also strips any JSON payload from the beginning or end of the error text
   public static func getErrorDescription(from error: any Error) -> String {
-    let baseDescription: String
-    if let localizedError = error as? LocalizedError,
-       let errorDescription = localizedError.errorDescription {
-      baseDescription = errorDescription
-    } else {
-      baseDescription = error.localizedDescription
-    }
-    
-    // Strip JSON from the beginning or end of the error text
-    let trimmed = baseDescription.trimmingCharacters(in: .whitespacesAndNewlines)
-    
-    // Check if the error text starts with JSON
-    if trimmed.hasPrefix("{") || trimmed.hasPrefix("[") {
-      if let result = extractJSONFromStart(of: trimmed) {
-        let afterJSON = String(trimmed[result.endIndex...]).trimmingCharacters(in: .whitespacesAndNewlines)
-        if !afterJSON.isEmpty {
-          return afterJSON
-        }
-      }
-    }
-    
-    // Check if the error text ends with JSON
-    if trimmed.hasSuffix("}") || trimmed.hasSuffix("]") {
-      if let result = extractJSONFromEnd(of: trimmed) {
-        let beforeJSON = String(trimmed[..<result.startIndex]).trimmingCharacters(in: .whitespacesAndNewlines)
-        if !beforeJSON.isEmpty {
-          return beforeJSON
-        }
-      }
-    }
-    
-    return baseDescription
+    let (cleanedText, _) = extractErrorAndJSON(from: error)
+    return cleanedText
   }
 
   /// Attempts to extract a JSONValue from an error's description
   /// - Parameter error: The error to extract JSON from
   /// - Returns: A JSONValue if valid JSON is found in the error description, nil otherwise
   public static func extractJSON(from error: any Error) -> JSONValue? {
-    let errorText = getErrorDescription(from: error)
-    return extractJSON(from: errorText)
+    let (_, json) = extractErrorAndJSON(from: error)
+    return json
+  }
+
+  /// Extracts both the error description (with JSON stripped) and any JSONValue from an error
+  /// - Parameter error: The error to process
+  /// - Returns: A tuple containing the error description with JSON removed and an optional JSONValue if found
+  public static func extractErrorAndJSON(from error: any Error) -> (errorDescription: String, json: JSONValue?) {
+    let rawDescription = getRawErrorDescription(from: error)
+    let (text, json) = extractTextAndJSON(from: rawDescription)
+    return (errorDescription: text, json: json)
   }
 }

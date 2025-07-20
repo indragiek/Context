@@ -11,11 +11,13 @@ struct JSONRPCErrorView: View {
       Label("Error", systemImage: "exclamationmark.triangle")
     } description: {
       VStack(spacing: 8) {
-        Text(JSONUtility.getErrorDescription(from: error))
+        let (errorDescription, extractedJSON) = JSONUtility.extractErrorAndJSON(from: error)
+        
+        Text(errorDescription)
           .font(.callout)
           .foregroundColor(.secondary)
 
-        if let jsonValue = JSONUtility.extractJSON(from: error) {
+        if let jsonValue = extractedJSON {
           jsonErrorDetailsView(jsonValue)
         }
       }

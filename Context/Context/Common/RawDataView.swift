@@ -21,12 +21,13 @@ struct RawDataView: View {
 
   @ViewBuilder
   private func errorRawView(for error: any Error) -> some View {
-    if let jsonValue = JSONUtility.extractJSON(from: error) {
+    let (errorDescription, extractedJSON) = JSONUtility.extractErrorAndJSON(from: error)
+    
+    if let jsonValue = extractedJSON {
       JSONRawView(jsonValue: jsonValue, searchText: "", isSearchActive: false)
     } else {
-      let errorText = JSONUtility.getErrorDescription(from: error)
-      if !errorText.isEmpty {
-        plainTextView(errorText)
+      if !errorDescription.isEmpty {
+        plainTextView(errorDescription)
       } else {
         errorPlaceholder
       }
