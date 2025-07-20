@@ -7,22 +7,6 @@ import Foundation
 import SharingGRDB
 import os
 
-struct ConnectionError: Equatable, Identifiable {
-  let id = UUID()
-  let error: String
-  let timestamp: Date
-
-  init(error: any Error) {
-    self.error = error.localizedDescription
-    self.timestamp = Date()
-  }
-
-  init(message: String) {
-    self.error = message
-    self.timestamp = Date()
-  }
-}
-
 @Reducer
 struct ServerFeature {
   let logger: Logger
