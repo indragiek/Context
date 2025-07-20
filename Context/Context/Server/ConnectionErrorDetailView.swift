@@ -50,7 +50,7 @@ struct ConnectionErrorDetailView: View {
                 Spacer()
               }
 
-              Text(error.error)
+              Text(error.errorDescription)
                 .font(.system(.body, design: .monospaced))
                 .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)

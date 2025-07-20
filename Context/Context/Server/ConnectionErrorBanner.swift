@@ -32,7 +32,7 @@ struct ConnectionErrorBanner: View {
       }
 
       if let latestError = latestError {
-        Text(latestError.error)
+        Text(latestError.errorDescription)
           .font(.system(size: 13))
           .foregroundColor(.primary)
           .lineLimit(2)
