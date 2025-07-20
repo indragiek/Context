@@ -31,6 +31,14 @@ struct ServerView: View {
             }
           )
         }
+
+        #if DEBUG
+          ToolbarItem(placement: .automatic) {
+            Button("Load Mock Errors") {
+              viewStore.send(.loadMockErrors)
+            }
+          }
+        #endif
       }
       .onAppear {
         viewStore.send(.onAppear)
