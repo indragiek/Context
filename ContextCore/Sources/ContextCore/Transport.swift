@@ -18,7 +18,7 @@ public enum TransportResponse: Sendable {
 public enum TransportError: Error {
   /// Thrown when the client receives a response for a request that it did not
   /// originally send.
-  case requestNotFound(JSONRPCRequestID)
+  case requestNotFound(JSONRPCRequestID, data: Data)
 
   /// Thrown when the client does not receive a response to a request that it sent.
   case noResponse
@@ -52,8 +52,9 @@ public enum TransportError: Error {
 extension TransportError: LocalizedError {
   public var errorDescription: String? {
     switch self {
-    case let .requestNotFound(id):
-      return "No request found with ID '\(id)'"
+    case let .requestNotFound(id, data: data):
+      let messageString = String(data: data, encoding: .utf8) ?? "<binary data: \(data.count) bytes>"
+      return "Received a response for a request with ID '\(id)', which the client did not send. Response: \(messageString)"
     case .noResponse:
       return "No response received from server"
     case let .unexpectedResponse(response):
@@ -65,7 +66,7 @@ extension TransportError: LocalizedError {
     case let .invalidMessage(data):
       let messageString =
         String(data: data, encoding: .utf8) ?? "<binary data: \(data.count) bytes>"
-      return "Invalid JSON-RPC message: \(messageString)"
+      return "JSON-RPC message could not be parsed: \(messageString)"
     case let .initializationFailed(error):
       return "Initialization failed: \(error.error.message)"
     case .emptyBatch:
@@ -347,7 +348,7 @@ func decodeSingleResponse(
           let error = try decoder.decode(JSONRPCError.self, from: data)
 
           guard let request = requestLookupCache[id] else {
-            throw TransportError.requestNotFound(id)
+            throw TransportError.requestNotFound(id, data: data)
           }
           requestLookupCache.removeValue(forKey: request.id)
           return .failedRequest(request: request, error: error)
@@ -355,7 +356,7 @@ func decodeSingleResponse(
 
         // Otherwise it's a success response
         guard let request = requestLookupCache[id] else {
-          throw TransportError.requestNotFound(id)
+          throw TransportError.requestNotFound(id, data: data)
         }
         let response = try request.responseDecoder(decoder, data)
         requestLookupCache.removeValue(forKey: request.id)
@@ -371,6 +372,9 @@ func decodeSingleResponse(
       }
       return .decodingError(request: request, error: decodingError, data: data)
     }
+  } catch let transportError as TransportError {
+    // Re-throw TransportError types without wrapping them
+    throw transportError
   } catch {
     throw TransportError.invalidMessage(data: data)
   }
