@@ -26,7 +26,7 @@ struct RawDataView: View {
   private func errorRawView(for error: any Error) -> some View {
     if let clientError = error as? ClientError {
       switch clientError {
-      case .requestFailed(_, let jsonRPCError):
+      case .requestFailed(_, let jsonRPCError, _):
         // For requestFailed, show the JSONRPCError in JSONRawView
         if let jsonData = try? JSONEncoder().encode(jsonRPCError),
           let jsonValue = try? JSONDecoder().decode(JSONValue.self, from: jsonData)
@@ -114,7 +114,7 @@ extension RawDataView {
     if let error = responseError {
       if let clientError = error as? ClientError {
         switch clientError {
-        case .requestFailed(_, let jsonRPCError):
+        case .requestFailed(_, let jsonRPCError, _):
           // Copy the JSON-RPC error
           if let jsonString = JSONUtility.prettyString(from: jsonRPCError) {
             NSPasteboard.general.clearContents()

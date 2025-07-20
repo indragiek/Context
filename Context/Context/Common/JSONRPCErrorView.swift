@@ -17,7 +17,7 @@ struct JSONRPCErrorView: View {
   @ViewBuilder
   private func clientErrorView(_ error: ClientError) -> some View {
     switch error {
-    case .requestFailed(_, let jsonRPCError):
+    case .requestFailed(_, let jsonRPCError, _):
       ContentUnavailableView {
         Label("Request Failed", systemImage: "exclamationmark.triangle")
       } description: {

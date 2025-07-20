@@ -53,26 +53,26 @@ extension TransportError: LocalizedError {
   public var errorDescription: String? {
     switch self {
     case let .requestNotFound(id, data: data):
-      let json = String(data: data, encoding: .utf8) ?? "<binary data: \(data.count) bytes>"
+      let json = String(data: data, encoding: .utf8) ?? "<data: \(data.count) bytes>"
       return "Received a response for a request with ID '\(id)', which the client did not send. \(json)"
     case .noResponse:
       return "No response received from server"
     case let .unexpectedResponse(response, data):
-      let json = String(data: data, encoding: .utf8) ?? "<binary data: \(data.count) bytes>"
+      let json = String(data: data, encoding: .utf8) ?? "<data: \(data.count) bytes>"
       return "Unexpected response type: \(type(of: response)). \(json)"
     case let .unexpectedNotification(method, data):
-      let json = String(data: data, encoding: .utf8) ?? "<binary data: \(data.count) bytes>"
-      return "Unexpected notification with method '\(method)'. \(json)"
+      let json = String(data: data, encoding: .utf8) ?? "<data: \(data.count) bytes>"
+      return "Unexpected notification with method \"\(method)\". \(json)"
     case let .unexpectedRequest(method, data):
-      let json = String(data: data, encoding: .utf8) ?? "<binary data: \(data.count) bytes>"
-      return "Unexpected request with method '\(method)'. \(json)"
+      let json = String(data: data, encoding: .utf8) ?? "<data: \(data.count) bytes>"
+      return "Unexpected request with method \"\(method)\". \(json)"
     case let .invalidMessage(data):
       let json =
-        String(data: data, encoding: .utf8) ?? "<binary data: \(data.count) bytes>"
+        String(data: data, encoding: .utf8) ?? "<data: \(data.count) bytes>"
       return "JSON-RPC message could not be parsed. \(json)"
     case let .initializationFailed(error, data):
-      let json = String(data: data, encoding: .utf8) ?? "<binary data: \(data.count) bytes>"
-      return "Initialization failed (code: \(error.error.code), message: \(error.error.message). \(json)"
+      let json = String(data: data, encoding: .utf8) ?? "<data: \(data.count) bytes>"
+      return "Initialization failed (code: \(error.error.code), message: \"\(error.error.message)\". \(json)"
     case .emptyBatch:
       return "JSON-RPC batch cannot be empty"
     case .timeout:

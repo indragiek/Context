@@ -3,19 +3,39 @@
 import Foundation
 
 /// A utility for common JSON encoding operations
-struct JSONUtility {
+public struct JSONUtility {
 
   /// Encodes a value to a pretty-printed JSON string
   /// - Parameters:
   ///   - value: The value to encode
   ///   - escapeSlashes: Whether to escape forward slashes in the output (default: false)
   /// - Returns: A pretty-printed JSON string, or nil if encoding fails
-  static func prettyString<T: Encodable>(from value: T, escapeSlashes: Bool = false) -> String? {
+  public static func prettyString<T: Encodable>(from value: T, escapeSlashes: Bool = false) -> String? {
     let encoder = JSONEncoder()
     encoder.outputFormatting =
       escapeSlashes
       ? [.prettyPrinted, .sortedKeys]
       : [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+
+    guard let data = try? encoder.encode(value),
+      let string = String(data: data, encoding: .utf8)
+    else {
+      return nil
+    }
+    return string
+  }
+
+  /// Encodes a value to a compact JSON string (without pretty printing)
+  /// - Parameters:
+  ///   - value: The value to encode
+  ///   - escapeSlashes: Whether to escape forward slashes in the output (default: false)
+  /// - Returns: A compact JSON string, or nil if encoding fails
+  public static func compactString<T: Encodable>(from value: T, escapeSlashes: Bool = false) -> String? {
+    let encoder = JSONEncoder()
+    encoder.outputFormatting =
+      escapeSlashes
+      ? [.sortedKeys]
+      : [.sortedKeys, .withoutEscapingSlashes]
 
     guard let data = try? encoder.encode(value),
       let string = String(data: data, encoding: .utf8)
@@ -31,7 +51,7 @@ struct JSONUtility {
   ///   - escapeSlashes: Whether to escape forward slashes in the output (default: false)
   /// - Returns: Pretty-printed JSON data
   /// - Throws: EncodingError if encoding fails
-  static func prettyData<T: Encodable>(from value: T, escapeSlashes: Bool = false) throws -> Data {
+  public static func prettyData<T: Encodable>(from value: T, escapeSlashes: Bool = false) throws -> Data {
     let encoder = JSONEncoder()
     encoder.outputFormatting =
       escapeSlashes
@@ -45,7 +65,7 @@ struct JSONUtility {
   /// - Parameter value: The value to encode
   /// - Returns: Compact JSON data with sorted keys
   /// - Throws: EncodingError if encoding fails
-  static func compactData<T: Encodable>(from value: T) throws -> Data {
+  public static func compactData<T: Encodable>(from value: T) throws -> Data {
     let encoder = JSONEncoder()
     encoder.outputFormatting = .sortedKeys
     return try encoder.encode(value)
@@ -55,7 +75,7 @@ struct JSONUtility {
   /// - Parameter value: The value to encode
   /// - Returns: JSON data with ISO8601 date formatting
   /// - Throws: EncodingError if encoding fails
-  static func keychainData<T: Encodable>(from value: T) throws -> Data {
+  public static func keychainData<T: Encodable>(from value: T) throws -> Data {
     let encoder = JSONEncoder()
     encoder.dateEncodingStrategy = .iso8601
     encoder.outputFormatting = .sortedKeys
@@ -65,7 +85,7 @@ struct JSONUtility {
   /// Checks if a string is likely JSON by examining its structure
   /// - Parameter string: The string to check
   /// - Returns: true if the string appears to be JSON (starts with { or [ and ends with } or ])
-  static func isLikelyJSON(_ string: String) -> Bool {
+  public static func isLikelyJSON(_ string: String) -> Bool {
     let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
     return (trimmed.hasPrefix("{") && trimmed.hasSuffix("}"))
       || (trimmed.hasPrefix("[") && trimmed.hasSuffix("]"))
