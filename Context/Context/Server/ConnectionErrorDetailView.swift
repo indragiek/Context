@@ -15,32 +15,8 @@ struct ConnectionErrorDetailView: View {
     return formatter
   }()
 
-  private func expandAll() {
-    expandedErrors = Set(errors.map(\.id))
-  }
-
-  private func collapseAll() {
-    expandedErrors.removeAll()
-  }
-
-  private func copyAll() {
-    let allLogs = errors.reversed().map { error in
-      let timestamp = dateFormatter.string(from: error.timestamp)
-      var logLine = "\(timestamp): \(error.errorDescription)"
-      if let json = error.json,
-         let jsonString = JSONUtility.prettyString(from: json, escapeSlashes: true) {
-        logLine += "\n\(jsonString)"
-      }
-      return logLine
-    }.joined(separator: "\n\n")
-    
-    NSPasteboard.general.clearContents()
-    NSPasteboard.general.setString(allLogs, forType: .string)
-  }
-
   var body: some View {
     VStack(spacing: 0) {
-      // Header
       HStack(spacing: 16) {
         Button(action: copyAll) {
           Image(systemName: "doc.on.doc")
@@ -72,7 +48,6 @@ struct ConnectionErrorDetailView: View {
 
       Divider()
 
-      // Error list
       ScrollView {
         LazyVStack(spacing: 0) {
           ForEach(errors.reversed()) { error in
@@ -101,6 +76,29 @@ struct ConnectionErrorDetailView: View {
     }
     .frame(width: 800, height: 500)
   }
+  
+  private func expandAll() {
+    expandedErrors = Set(errors.map(\.id))
+  }
+
+  private func collapseAll() {
+    expandedErrors.removeAll()
+  }
+
+  private func copyAll() {
+    let allLogs = errors.reversed().map { error in
+      let timestamp = dateFormatter.string(from: error.timestamp)
+      var logLine = "\(timestamp): \(error.errorDescription)"
+      if let json = error.json,
+         let jsonString = JSONUtility.prettyString(from: json, escapeSlashes: true) {
+        logLine += "\n\(jsonString)"
+      }
+      return logLine
+    }.joined(separator: "\n\n")
+    
+    NSPasteboard.general.clearContents()
+    NSPasteboard.general.setString(allLogs, forType: .string)
+  }
 }
 
 struct ErrorRowView: View {
@@ -109,36 +107,15 @@ struct ErrorRowView: View {
   let dateFormatter: DateFormatter
   let onToggle: () -> Void
   
-  private func copyError() {
-    let timestamp = dateFormatter.string(from: error.timestamp)
-    var content = "\(timestamp): \(error.errorDescription)"
-    if let json = error.json,
-       let jsonString = JSONUtility.prettyString(from: json, escapeSlashes: true) {
-      content += "\n\(jsonString)"
-    }
-    NSPasteboard.general.clearContents()
-    NSPasteboard.general.setString(content, forType: .string)
-  }
-  
-  private func copyJSON(for value: JSONValue) {
-    if let jsonString = JSONUtility.prettyString(from: value, escapeSlashes: true) {
-      NSPasteboard.general.clearContents()
-      NSPasteboard.general.setString(jsonString, forType: .string)
-    }
-  }
-  
   var body: some View {
     VStack(spacing: 0) {
-      // Collapsed/Summary Row
       HStack(alignment: .top, spacing: 12) {
-        // Disclosure triangle
         Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
           .font(.system(size: 10))
           .foregroundColor(.secondary)
           .frame(width: 12)
           .padding(.top, 5)
         
-        // Timestamp
         Text(dateFormatter.string(from: error.timestamp))
           .font(.system(size: 12, design: .monospaced))
           .foregroundColor(.secondary)
@@ -146,7 +123,6 @@ struct ErrorRowView: View {
           .fixedSize(horizontal: true, vertical: false)
           .padding(.top, 3)
         
-        // Error description
         Text(error.errorDescription)
           .font(.system(size: 13, design: .monospaced))
           .foregroundColor(.primary)
@@ -154,7 +130,6 @@ struct ErrorRowView: View {
           .lineLimit(isExpanded ? nil : 2)
           .padding(.vertical, 3)
         
-        // JSON indicator
         if error.json != nil {
           Text("{}")
             .font(.system(size: 12, weight: .medium, design: .monospaced))
@@ -178,7 +153,6 @@ struct ErrorRowView: View {
         }
       }
       
-      // Expanded Details
       if isExpanded, let json = error.json {
         VStack(alignment: .leading, spacing: 8) {
           Divider()
@@ -210,6 +184,24 @@ struct ErrorRowView: View {
           .padding(.bottom, 12)
         }
       }
+    }
+  }
+  
+  private func copyError() {
+    let timestamp = dateFormatter.string(from: error.timestamp)
+    var content = "\(timestamp): \(error.errorDescription)"
+    if let json = error.json,
+       let jsonString = JSONUtility.prettyString(from: json, escapeSlashes: true) {
+      content += "\n\(jsonString)"
+    }
+    NSPasteboard.general.clearContents()
+    NSPasteboard.general.setString(content, forType: .string)
+  }
+  
+  private func copyJSON(for value: JSONValue) {
+    if let jsonString = JSONUtility.prettyString(from: value, escapeSlashes: true) {
+      NSPasteboard.general.clearContents()
+      NSPasteboard.general.setString(jsonString, forType: .string)
     }
   }
 }
