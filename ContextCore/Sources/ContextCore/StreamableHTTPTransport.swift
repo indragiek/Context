@@ -345,9 +345,9 @@ public actor StreamableHTTPTransport: Transport {
     }
     let serverResponse = try await waitForResponse(initialize.id)
     switch serverResponse {
-    case .successfulRequest(request: _, let response, let data):
+    case .successfulRequest(request: let request, let response, let data):
       guard let initializeResponse = response as? InitializeResponse else {
-        throw TransportError.unexpectedResponse(response, data: data)
+        throw TransportError.unexpectedResponse(request: request, response: response, data: data)
       }
       if let newSessionID = httpResponse.value(forHTTPHeaderField: "Mcp-Session-Id") {
         sessionID = try validateSessionID(newSessionID)
@@ -367,14 +367,14 @@ public actor StreamableHTTPTransport: Transport {
       }
       
       return initializeResponse.result
-    case .failedRequest(request: _, let error, let data):
-      throw TransportError.initializationFailed(error, data: data)
+    case let .failedRequest(_, error, data):
+      throw TransportError.initializationFailed(request: initialize, error: error, data: data)
     case .serverNotification(let notification, let data):
       throw TransportError.unexpectedNotification(method: notification.method, data: data)
     case .serverRequest(let request, let data):
       throw TransportError.unexpectedRequest(method: request.method, data: data)
     case .serverError(let error, let data):
-      throw TransportError.initializationFailed(error, data: data)
+      throw TransportError.initializationFailed(request: initialize, error: error, data: data)
     case .decodingError(request: _, error: _, let data):
       throw TransportError.invalidMessage(data: data)
     }

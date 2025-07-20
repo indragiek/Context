@@ -106,7 +106,7 @@ public enum ClientError: Error, LocalizedError {
       return "Request timed out. \(JSONUtility.compactString(from: request) ?? "")"
     case let .requestCancelled(id):
       return "Request with ID \"\(id)\" was cancelled"
-    case let .serverError(error, data):
+    case let .serverError(_, data):
       let json = String(data: data, encoding: .utf8) ?? "<data: \(data.count) bytes>"
       return "Server error. \(json)"
     case .notConnected:
@@ -118,7 +118,7 @@ public enum ClientError: Error, LocalizedError {
       return "Received a response for a request with ID '\(id)', which the client did not send. \(json)"
     case let .unsupportedNotification(data):
       let json = String(data: data, encoding: .utf8) ?? "<data: \(data.count) bytes>"
-      return "Received unsupported notification. \(data)"
+      return "Received unsupported notification. \(json)"
     case let .unexpectedRequestType(method, expectedType):
       return "Expected request of type \(expectedType) for method \(method)"
     }
