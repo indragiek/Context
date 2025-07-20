@@ -64,10 +64,43 @@ public enum ClientError: Error, LocalizedError {
   public var errorDescription: String? {
     switch self {
     case let .requestFailed(request, error, data):
-      let json = String(data: data, encoding: .utf8) ?? "<data: \(data.count) bytes>"
+      // Create JSON payload with both request and response
+      var payload: [String: JSONValue] = [:]
+      
+      // Encode the request
+      if let requestData = try? JSONEncoder().encode(request),
+         let requestJSON = try? JSONDecoder().decode(JSONValue.self, from: requestData) {
+        payload["request"] = requestJSON
+      }
+      
+      // Decode the response data
+      if let responseJSON = try? JSONDecoder().decode(JSONValue.self, from: data) {
+        payload["response"] = responseJSON
+      }
+      
+      let jsonPayload = JSONValue.object(payload)
+      let json = JSONUtility.compactString(from: jsonPayload) ?? String(data: data, encoding: .utf8) ?? "<data: \(data.count) bytes>"
       return "Request \"\(request.method)\" failed (code: \(error.error.code), message: \"\(error.error.message)\"). \(json)"
     case let .requestInvalidResponse(request, error, data):
-      let json = String(data: data, encoding: .utf8) ?? "<data: \(data.count) bytes>"
+      // Create JSON payload with both request and response
+      var payload: [String: JSONValue] = [:]
+      
+      // Encode the request
+      if let requestData = try? JSONEncoder().encode(request),
+         let requestJSON = try? JSONDecoder().decode(JSONValue.self, from: requestData) {
+        payload["request"] = requestJSON
+      }
+      
+      // Decode the response data (it might not be valid JSON, so we handle the failure)
+      if let responseJSON = try? JSONDecoder().decode(JSONValue.self, from: data) {
+        payload["response"] = responseJSON
+      } else {
+        // If it's not valid JSON, include the raw string
+        payload["response"] = JSONValue.string(String(data: data, encoding: .utf8) ?? "<data: \(data.count) bytes>")
+      }
+      
+      let jsonPayload = JSONValue.object(payload)
+      let json = JSONUtility.compactString(from: jsonPayload) ?? String(data: data, encoding: .utf8) ?? "<data: \(data.count) bytes>"
       return "Invalid JSON-RPC response for request '\(request.method)': \(error.localizedDescription). \(json)"
     case let .requestTimedOut(request):
       return "Request timed out. \(JSONUtility.compactString(from: request) ?? "")"
