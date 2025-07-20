@@ -100,15 +100,15 @@ public struct JSONUtility {
     
     // Check if string starts with JSON
     if trimmed.hasPrefix("{") || trimmed.hasPrefix("[") {
-      if let jsonValue = extractJSONFromStart(of: trimmed) {
-        return jsonValue
+      if let result = extractJSONFromStart(of: trimmed) {
+        return result.jsonValue
       }
     }
     
     // Check if string ends with JSON
     if trimmed.hasSuffix("}") || trimmed.hasSuffix("]") {
-      if let jsonValue = extractJSONFromEnd(of: trimmed) {
-        return jsonValue
+      if let result = extractJSONFromEnd(of: trimmed) {
+        return result.jsonValue
       }
     }
     
@@ -116,7 +116,7 @@ public struct JSONUtility {
   }
 
   /// Extracts JSON starting from the beginning of a string by finding matching brackets
-  private static func extractJSONFromStart(of string: String) -> JSONValue? {
+  private static func extractJSONFromStart(of string: String) -> (jsonValue: JSONValue, endIndex: String.Index)? {
     var bracketCount = 0
     var inString = false
     var escaped = false
@@ -141,14 +141,16 @@ public struct JSONUtility {
     
     if let endIndex = endIndex {
       let jsonString = String(string[..<endIndex])
-      return parseJSON(jsonString)
+      if let jsonValue = parseJSON(jsonString) {
+        return (jsonValue, endIndex)
+      }
     }
     
     return nil
   }
 
   /// Extracts JSON ending at the end of a string by finding matching brackets in reverse
-  private static func extractJSONFromEnd(of string: String) -> JSONValue? {
+  private static func extractJSONFromEnd(of string: String) -> (jsonValue: JSONValue, startIndex: String.Index)? {
     var bracketCount = 0
     var inString = false
     var startIndex: String.Index?
@@ -195,7 +197,9 @@ public struct JSONUtility {
     
     if let startIndex = startIndex {
       let jsonString = String(string[startIndex...])
-      return parseJSON(jsonString)
+      if let jsonValue = parseJSON(jsonString) {
+        return (jsonValue, startIndex)
+      }
     }
     
     return nil
@@ -239,11 +243,47 @@ public struct JSONUtility {
   }
 
   /// Gets the error description from an error, preferring errorDescription if available
-  private static func getErrorDescription(from error: any Error) -> String {
+  /// This function also strips any JSON payload from the beginning or end of the error text
+  public static func getErrorDescription(from error: any Error) -> String {
+    let baseDescription: String
     if let localizedError = error as? LocalizedError,
        let errorDescription = localizedError.errorDescription {
-      return errorDescription
+      baseDescription = errorDescription
+    } else {
+      baseDescription = error.localizedDescription
     }
-    return error.localizedDescription
+    
+    // Strip JSON from the beginning or end of the error text
+    let trimmed = baseDescription.trimmingCharacters(in: .whitespacesAndNewlines)
+    
+    // Check if the error text starts with JSON
+    if trimmed.hasPrefix("{") || trimmed.hasPrefix("[") {
+      if let result = extractJSONFromStart(of: trimmed) {
+        let afterJSON = String(trimmed[result.endIndex...]).trimmingCharacters(in: .whitespacesAndNewlines)
+        if !afterJSON.isEmpty {
+          return afterJSON
+        }
+      }
+    }
+    
+    // Check if the error text ends with JSON
+    if trimmed.hasSuffix("}") || trimmed.hasSuffix("]") {
+      if let result = extractJSONFromEnd(of: trimmed) {
+        let beforeJSON = String(trimmed[..<result.startIndex]).trimmingCharacters(in: .whitespacesAndNewlines)
+        if !beforeJSON.isEmpty {
+          return beforeJSON
+        }
+      }
+    }
+    
+    return baseDescription
+  }
+
+  /// Attempts to extract a JSONValue from an error's description
+  /// - Parameter error: The error to extract JSON from
+  /// - Returns: A JSONValue if valid JSON is found in the error description, nil otherwise
+  public static func extractJSON(from error: any Error) -> JSONValue? {
+    let errorText = getErrorDescription(from: error)
+    return extractJSON(from: errorText)
   }
 }

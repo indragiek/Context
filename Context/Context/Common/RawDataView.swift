@@ -21,24 +21,16 @@ struct RawDataView: View {
 
   @ViewBuilder
   private func errorRawView(for error: any Error) -> some View {
-    let errorText = getErrorDescription(from: error)
-    
-    if let jsonValue = JSONUtility.extractJSON(from: errorText) {
+    if let jsonValue = JSONUtility.extractJSON(from: error) {
       JSONRawView(jsonValue: jsonValue, searchText: "", isSearchActive: false)
-    } else if !errorText.isEmpty {
-      plainTextView(errorText)
     } else {
-      errorPlaceholder
+      let errorText = JSONUtility.getErrorDescription(from: error)
+      if !errorText.isEmpty {
+        plainTextView(errorText)
+      } else {
+        errorPlaceholder
+      }
     }
-  }
-  
-  /// Gets the error description from an error, preferring errorDescription if available
-  private func getErrorDescription(from error: any Error) -> String {
-    if let localizedError = error as? LocalizedError,
-       let errorDescription = localizedError.errorDescription {
-      return errorDescription
-    }
-    return error.localizedDescription
   }
 
   private func plainTextView(_ text: String) -> some View {
