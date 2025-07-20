@@ -80,7 +80,8 @@ enum DXTTestError: Error {
         error: JSONRPCError(
           error: JSONRPCError.ErrorBody(code: -32000, message: "Timeout", data: nil),
           id: testRequest.id
-        )
+        ),
+        data: Data()
       )
     ) {
       try await transport.testOnly_sendAndWaitForResponse(request: testRequest)
@@ -133,14 +134,15 @@ enum DXTTestError: Error {
         error: JSONRPCError(
           error: JSONRPCError.ErrorBody(code: -32000, message: "Timeout", data: nil),
           id: toolsRequest.id
-        )
+        ),
+        data: Data()
       )
     ) {
       try await transport.testOnly_sendAndWaitForResponse(request: toolsRequest)
     }
     
     // Parse the response to verify the tool is available
-    if case let .successfulRequest(_, response) = toolsResponse,
+    if case let .successfulRequest(_, response, data: _) = toolsResponse,
        let listToolsResponse = response as? ListToolsResponse {
       let tools = listToolsResponse.result.tools
       #expect(tools.count > 0)

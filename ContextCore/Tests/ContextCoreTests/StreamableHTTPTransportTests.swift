@@ -38,7 +38,7 @@ import os
 
     let response = try await transport.testOnly_sendAndWaitForResponse(request: request)
     switch response {
-    case let .successfulRequest(request: receivedRequest, response: receivedResponse):
+    case let .successfulRequest(request: receivedRequest, response: receivedResponse, data: _):
       #expect(receivedRequest.id == request.id)
       guard let toolsResponse = receivedResponse as? ListToolsResponse else {
         Issue.record("Expected ListToolsResponse, but got \(type(of: receivedResponse))")
@@ -86,13 +86,13 @@ import os
 
     let (response1, response2) = try await (response1Future, response2Future)
 
-    if case let .successfulRequest(request: request, _) = response1 {
+    if case let .successfulRequest(request: request, response: _, data: _) = response1 {
       #expect(request.id == request1.id)
     } else {
       recordErrorsForNonSuccessfulResponse(response1)
     }
 
-    if case let .successfulRequest(request: request, _) = response2 {
+    if case let .successfulRequest(request: request, response: _, data: _) = response2 {
       #expect(request.id == request2.id)
     } else {
       recordErrorsForNonSuccessfulResponse(response2)
@@ -181,7 +181,7 @@ import os
     let request = ListToolsRequest(id: "after-restart", cursor: nil)
     let response = try await transport.testOnly_sendAndWaitForResponse(request: request)
 
-    if case let .successfulRequest(request: receivedRequest, _) = response {
+    if case let .successfulRequest(request: receivedRequest, response: _, data: _) = response {
       #expect(receivedRequest.id == request.id)
     } else {
       recordErrorsForNonSuccessfulResponse(response)
@@ -232,7 +232,7 @@ import os
 
     let stringResponse = try await transport.testOnly_sendAndWaitForResponse(
       request: stringIDRequest)
-    if case let .successfulRequest(request: request, _) = stringResponse {
+    if case let .successfulRequest(request: request, response: _, data: _) = stringResponse {
       #expect(request.id == stringIDRequest.id)
     } else {
       recordErrorsForNonSuccessfulResponse(stringResponse)
@@ -240,7 +240,7 @@ import os
 
     let numberResponse = try await transport.testOnly_sendAndWaitForResponse(
       request: numberIDRequest)
-    if case let .successfulRequest(request: request, _) = numberResponse {
+    if case let .successfulRequest(request: request, response: _, data: _) = numberResponse {
       #expect(request.id == numberIDRequest.id)
     } else {
       recordErrorsForNonSuccessfulResponse(numberResponse)
@@ -283,7 +283,7 @@ import os
 
       for try await response in try await transport.receive() {
         switch response {
-        case let .successfulRequest(request: request, _):
+        case let .successfulRequest(request: request, response: _, data: _):
           if requestIDs.contains(request.id) {
             requestIDs.remove(request.id)
             responseCount += 1
@@ -334,7 +334,7 @@ import os
     // Verify each response matches its corresponding request
     let responseIDs = responses.compactMap { response -> JSONRPCRequestID? in
       switch response {
-      case let .successfulRequest(request: request, _):
+      case let .successfulRequest(request: request, response: _, data: _):
         return request.id
       case .failedRequest, .serverNotification, .serverRequest, .serverError, .decodingError:
         return nil
@@ -347,7 +347,7 @@ import os
     // Verify each individual response
     for response in responses {
       switch response {
-      case let .successfulRequest(request: request, response: receivedResponse):
+      case let .successfulRequest(request: request, response: receivedResponse, data: _):
         guard let toolsResponse = receivedResponse as? ListToolsResponse else {
           Issue.record(
             "Expected ListToolsResponse, but got \(type(of: receivedResponse))")
@@ -399,7 +399,7 @@ import os
 
       for try await response in try await transport.receive() {
         switch response {
-        case let .successfulRequest(request: request, _):
+        case let .successfulRequest(request: request, response: _, data: _):
           if expectedRequests.contains(request.id) {
             collectedRequests.insert(request.id)
           }
@@ -478,7 +478,7 @@ import os
             switch response {
             case .successfulRequest:
               break
-            case .serverNotification(let notification):
+            case .serverNotification(let notification, data: _):
               if let log = notification as? LoggingMessageNotification,
                  let params = log.params {
                 #expect(params.level == LoggingLevel.info)
@@ -751,7 +751,7 @@ import os
       let channel = try await transport.receive()
       for try await response in channel {
         switch response {
-        case let .successfulRequest(request: _, response: response):
+        case let .successfulRequest(request: _, response: response, data: _):
           // Check if this is a ping response
           if response is PingResponse {
             pingResponseCount += 1
@@ -970,7 +970,7 @@ import os
     let request = ListToolsRequest(id: "no-sse-test", cursor: nil)
     let response = try await transport.testOnly_sendAndWaitForResponse(request: request)
     
-    if case let .successfulRequest(_, toolsResponse) = response {
+    if case let .successfulRequest(_, toolsResponse, data: _) = response {
       guard let toolsResponse = toolsResponse as? ListToolsResponse else {
         Issue.record("Expected ListToolsResponse but got \(type(of: response))")
         return
@@ -990,7 +990,7 @@ import os
     )
     let toolResponse = try await transport.testOnly_sendAndWaitForResponse(request: toolCall)
     
-    if case let .successfulRequest(_, callResponse) = toolResponse {
+    if case let .successfulRequest(_, callResponse, data: _) = toolResponse {
       guard let callResponse = callResponse as? CallToolResponse else {
         Issue.record("Expected CallToolResponse but got \(type(of: callResponse))")
         return

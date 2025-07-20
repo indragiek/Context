@@ -416,7 +416,8 @@ import AsyncAlgorithms
     // Send a response for a non-existent request to trigger "No pending request" error
     let _ = TransportResponse.successfulRequest(
       request: PingRequest(id: .string("fake-id")),
-      response: PingResponse(id: .string("fake-id"))
+      response: PingResponse(id: .string("fake-id")),
+      data: Data()
     )
 
     // We need to access the private handleTransportResponse method
@@ -627,7 +628,7 @@ actor MockPingTransport: Transport {
       // Send a ping request after connection is established
       Task {
         let pingRequest = PingRequest(id: .string("test-ping-123"))
-        continuation.yield(.serverRequest(pingRequest))
+        continuation.yield(.serverRequest(pingRequest, data: Data()))
       }
     }
   }

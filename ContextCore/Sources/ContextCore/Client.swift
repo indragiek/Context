@@ -599,17 +599,17 @@ public actor Client {
     _ response: TransportResponse, group: inout ThrowingTaskGroup<Void, Error>
   ) {
     switch response {
-    case let .successfulRequest(request: request, response: response):
+    case let .successfulRequest(request: request, response: response, data: _):
       handleSuccessfulRequest(request: request, response: response, group: &group)
-    case let .failedRequest(request: request, error: error):
+    case let .failedRequest(request: request, error: error, data: _):
       handleFailedRequest(request: request, error: error)
     case let .decodingError(request: request, error: error, data: data):
       handleDecodingError(request: request, error: error, data: data)
-    case let .serverNotification(notification):
+    case let .serverNotification(notification, data: _):
       handleNotification(notification, group: &group)
-    case let .serverRequest(request):
+    case let .serverRequest(request, data: _):
       handleServerRequest(request, group: &group)
-    case let .serverError(error):
+    case let .serverError(error, data: _):
       handleError(error, group: &group)
     }
   }

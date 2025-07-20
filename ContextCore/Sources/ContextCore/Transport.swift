@@ -6,12 +6,12 @@ import os
 /// A response from the server, which can be a successful response to a request,
 /// an error response to a request, a server-initiated notification, a server-initiated request, or a server error.
 public enum TransportResponse: Sendable {
-  case successfulRequest(request: any JSONRPCRequest, response: any JSONRPCResponse)
-  case failedRequest(request: any JSONRPCRequest, error: JSONRPCError)
+  case successfulRequest(request: any JSONRPCRequest, response: any JSONRPCResponse, data: Data)
+  case failedRequest(request: any JSONRPCRequest, error: JSONRPCError, data: Data)
   case decodingError(request: (any JSONRPCRequest)?, error: DecodingError, data: Data)
-  case serverNotification(any JSONRPCNotification)
-  case serverRequest(any JSONRPCRequest)
-  case serverError(JSONRPCError)
+  case serverNotification(any JSONRPCNotification, data: Data)
+  case serverRequest(any JSONRPCRequest, data: Data)
+  case serverError(JSONRPCError, data: Data)
 }
 
 /// Errors thrown by `Transport` implementations.
@@ -24,19 +24,19 @@ public enum TransportError: Error {
   case noResponse
 
   /// Thrown when the response was of a type that was not expected.
-  case unexpectedResponse(any JSONRPCResponse)
+  case unexpectedResponse(any JSONRPCResponse, data: Data)
 
   /// Thrown when a notification with an unknown method is received.
-  case unexpectedNotification(method: String)
+  case unexpectedNotification(method: String, data: Data)
 
   /// Thrown when a request with an unknown method is received from the server.
-  case unexpectedRequest(method: String)
+  case unexpectedRequest(method: String, data: Data)
 
   /// Thrown when the received message is not a valid JSON-RPC message.
   case invalidMessage(data: Data)
 
   /// Thrown when the server returns a failure response to initialization.
-  case initializationFailed(JSONRPCError)
+  case initializationFailed(JSONRPCError, data: Data)
 
   /// Thrown when attempting to send or receive an empty JSON-RPC batch, which
   /// is not permitted by the spec.
@@ -53,22 +53,26 @@ extension TransportError: LocalizedError {
   public var errorDescription: String? {
     switch self {
     case let .requestNotFound(id, data: data):
-      let messageString = String(data: data, encoding: .utf8) ?? "<binary data: \(data.count) bytes>"
-      return "Received a response for a request with ID '\(id)', which the client did not send. Response: \(messageString)"
+      let json = String(data: data, encoding: .utf8) ?? "<binary data: \(data.count) bytes>"
+      return "Received a response for a request with ID '\(id)', which the client did not send. \(json)"
     case .noResponse:
       return "No response received from server"
-    case let .unexpectedResponse(response):
-      return "Unexpected response type: \(type(of: response))"
-    case let .unexpectedNotification(method):
-      return "Unexpected notification with method: \(method)"
-    case let .unexpectedRequest(method):
-      return "Unexpected request with method: \(method)"
+    case let .unexpectedResponse(response, data):
+      let json = String(data: data, encoding: .utf8) ?? "<binary data: \(data.count) bytes>"
+      return "Unexpected response type: \(type(of: response)). \(json)"
+    case let .unexpectedNotification(method, data):
+      let json = String(data: data, encoding: .utf8) ?? "<binary data: \(data.count) bytes>"
+      return "Unexpected notification with method '\(method)'. \(json)"
+    case let .unexpectedRequest(method, data):
+      let json = String(data: data, encoding: .utf8) ?? "<binary data: \(data.count) bytes>"
+      return "Unexpected request with method '\(method)'. \(json)"
     case let .invalidMessage(data):
-      let messageString =
+      let json =
         String(data: data, encoding: .utf8) ?? "<binary data: \(data.count) bytes>"
-      return "JSON-RPC message could not be parsed: \(messageString)"
-    case let .initializationFailed(error):
-      return "Initialization failed: \(error.error.message)"
+      return "JSON-RPC message could not be parsed. \(json)"
+    case let .initializationFailed(error, data):
+      let json = String(data: data, encoding: .utf8) ?? "<binary data: \(data.count) bytes>"
+      return "Initialization failed (code: \(error.error.code), message: \(error.error.message). \(json)"
     case .emptyBatch:
       return "JSON-RPC batch cannot be empty"
     case .timeout:
@@ -175,11 +179,11 @@ extension Transport {
   func testOnly_waitForResponse(id: JSONRPCRequestID) async throws -> TransportResponse {
     for try await response in try await receive() {
       switch response {
-      case .successfulRequest(request: let r, response: _):
+      case .successfulRequest(request: let r, response: _, data: _):
         if r.id == id {
           return response
         }
-      case .failedRequest(request: let r, error: _):
+      case .failedRequest(request: let r, error: _, data: _):
         if r.id == id {
           return response
         }
@@ -187,7 +191,7 @@ extension Transport {
         if r?.id == id {
           return response
         }
-      case .serverNotification, .serverRequest, .serverError:
+      case .serverNotification(_, _), .serverRequest(_, _), .serverError(_, _):
         // Skip notifications, server requests, and errors as they are not responses to our request
         continue
       }
@@ -304,17 +308,17 @@ func decodeSingleResponse(
       // If there's a method but no ID, it's a notification
       if let method = messageType.method, messageType.id == nil {
         guard let notificationType = NotificationRegistry.notificationType(for: method) else {
-          throw TransportError.unexpectedNotification(method: method)
+          throw TransportError.unexpectedNotification(method: method, data: data)
         }
 
         let notification = try decoder.decode(notificationType, from: data)
-        return .serverNotification(notification)
+        return .serverNotification(notification, data: data)
       }
 
       // Check for error message without an ID (server error)
       if messageType.error != nil && messageType.id == nil {
         let error = try decoder.decode(JSONRPCError.self, from: data)
-        return .serverError(error)
+        return .serverError(error, data: data)
       }
 
       // If there's a method and an ID, check if it's a server request or a response to our request
@@ -325,19 +329,19 @@ func decodeSingleResponse(
           if messageType.error != nil {
             let error = try decoder.decode(JSONRPCError.self, from: data)
             requestLookupCache.removeValue(forKey: request.id)
-            return .failedRequest(request: request, error: error)
+            return .failedRequest(request: request, error: error, data: data)
           } else {
             let response = try request.responseDecoder(decoder, data)
             requestLookupCache.removeValue(forKey: request.id)
-            return .successfulRequest(request: request, response: response)
+            return .successfulRequest(request: request, response: response, data: data)
           }
         } else {
           // This is a server request - method and ID but not in our cache
           guard let requestType = RequestRegistry.requestType(for: method) else {
-            throw TransportError.unexpectedRequest(method: method)
+            throw TransportError.unexpectedRequest(method: method, data: data)
           }
           let request = try decoder.decode(requestType, from: data)
-          return .serverRequest(request)
+          return .serverRequest(request, data: data)
         }
       }
 
@@ -351,7 +355,7 @@ func decodeSingleResponse(
             throw TransportError.requestNotFound(id, data: data)
           }
           requestLookupCache.removeValue(forKey: request.id)
-          return .failedRequest(request: request, error: error)
+          return .failedRequest(request: request, error: error, data: data)
         }
 
         // Otherwise it's a success response
@@ -360,7 +364,7 @@ func decodeSingleResponse(
         }
         let response = try request.responseDecoder(decoder, data)
         requestLookupCache.removeValue(forKey: request.id)
-        return .successfulRequest(request: request, response: response)
+        return .successfulRequest(request: request, response: response, data: data)
       }
 
       // Not a valid message
@@ -386,20 +390,20 @@ private func logResponse(_ response: TransportResponse, logger: Logger?) {
     return
   }
   switch response {
-  case let .successfulRequest(request: request, response: response):
+  case let .successfulRequest(request: request, response: response, data: _):
     logger.trace(
       "[successfulRequest] request: \(String(reflecting: request), privacy: .private), response: \(String(reflecting: response), privacy: .private)"
     )
-  case let .failedRequest(request: request, error: error):
+  case let .failedRequest(request: request, error: error, data: _):
     logger.trace(
       "[failedRequest] request: \(String(reflecting: request), privacy: .private), error: \(String(reflecting: error), privacy: .private)"
     )
-  case let .serverNotification(notification):
+  case let .serverNotification(notification, data: _):
     logger.trace(
       "[serverNotification] request: \(String(reflecting: notification), privacy: .private)")
-  case let .serverRequest(request):
+  case let .serverRequest(request, data: _):
     logger.trace("[serverRequest] request: \(String(reflecting: request), privacy: .private)")
-  case let .serverError(error):
+  case let .serverError(error, data: _):
     logger.trace("[serverError] \(String(reflecting: error), privacy: .private)")
   case let .decodingError(request, error, data):
     let str = String(data: data, encoding: .utf8) ?? "<invalid>"

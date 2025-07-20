@@ -318,11 +318,11 @@ public actor StreamableHTTPTransport: Transport {
         group.addTask {
           for await response in internalResponseChannel {
             switch response {
-            case .successfulRequest(request: let r, response: _):
+            case .successfulRequest(request: let r, response: _, data: _):
               if r.id == requestID {
                 return response
               }
-            case .failedRequest(request: let r, error: _):
+            case .failedRequest(request: let r, error: _, data: _):
               if r.id == requestID {
                 return response
               }
@@ -330,7 +330,7 @@ public actor StreamableHTTPTransport: Transport {
               if r?.id == requestID {
                 return response
               }
-            case .serverNotification, .serverRequest, .serverError:
+            case .serverNotification(_, _), .serverRequest(_, _), .serverError(_, _):
               // Skip notifications, server requests, and errors as they are not responses to our request
               continue
             }
@@ -345,9 +345,9 @@ public actor StreamableHTTPTransport: Transport {
     }
     let serverResponse = try await waitForResponse(initialize.id)
     switch serverResponse {
-    case .successfulRequest(request: _, let response):
+    case .successfulRequest(request: _, let response, let data):
       guard let initializeResponse = response as? InitializeResponse else {
-        throw TransportError.unexpectedResponse(response)
+        throw TransportError.unexpectedResponse(response, data: data)
       }
       if let newSessionID = httpResponse.value(forHTTPHeaderField: "Mcp-Session-Id") {
         sessionID = try validateSessionID(newSessionID)
@@ -367,14 +367,14 @@ public actor StreamableHTTPTransport: Transport {
       }
       
       return initializeResponse.result
-    case .failedRequest(request: _, let error):
-      throw TransportError.initializationFailed(error)
-    case .serverNotification(let notification):
-      throw TransportError.unexpectedNotification(method: notification.method)
-    case .serverRequest(let request):
-      throw TransportError.unexpectedNotification(method: request.method)
-    case .serverError(let error):
-      throw TransportError.initializationFailed(error)
+    case .failedRequest(request: _, let error, let data):
+      throw TransportError.initializationFailed(error, data: data)
+    case .serverNotification(let notification, let data):
+      throw TransportError.unexpectedNotification(method: notification.method, data: data)
+    case .serverRequest(let request, let data):
+      throw TransportError.unexpectedRequest(method: request.method, data: data)
+    case .serverError(let error, let data):
+      throw TransportError.initializationFailed(error, data: data)
     case .decodingError(request: _, error: _, let data):
       throw TransportError.invalidMessage(data: data)
     }
@@ -635,7 +635,7 @@ public actor StreamableHTTPTransport: Transport {
 
       return responses.compactMap { response in
         switch response {
-        case .failedRequest(_, let error), .serverError(let error):
+        case .failedRequest(_, let error, _), .serverError(let error, _):
           return error
         default:
           return nil

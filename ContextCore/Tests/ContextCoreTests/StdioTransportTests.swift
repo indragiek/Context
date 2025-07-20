@@ -32,7 +32,7 @@ import Testing
       clientInfo: TestFixtures.clientInfo)
     let result = try await transport.testOnly_sendAndWaitForResponse(request: initialize)
     switch result {
-    case let .successfulRequest(request: request, response: response):
+    case let .successfulRequest(request: request, response: response, data: _):
       #expect(
         (try TestFixtures.jsonEncoder.encode(request))
           == (try TestFixtures.jsonEncoder.encode(initialize)))
@@ -143,13 +143,13 @@ import Testing
 
     let (response1, response2) = try await (response1Task, response2Task)
 
-    if case let .successfulRequest(request: request, _) = response1 {
+    if case let .successfulRequest(request: request, response: _, data: _) = response1 {
       #expect(request.id == request1.id)
     } else {
       recordErrorsForNonSuccessfulResponse(response1)
     }
 
-    if case let .successfulRequest(request: request, _) = response2 {
+    if case let .successfulRequest(request: request, response: _, data: _) = response2 {
       #expect(request.id == request2.id)
     } else {
       recordErrorsForNonSuccessfulResponse(response2)
@@ -229,7 +229,7 @@ import Testing
 
     let stringResponse = try await transport.testOnly_sendAndWaitForResponse(
       request: stringIDRequest)
-    if case let .successfulRequest(request: request, _) = stringResponse {
+    if case let .successfulRequest(request: request, response: _, data: _) = stringResponse {
       #expect(request.id == stringIDRequest.id)
     } else {
       recordErrorsForNonSuccessfulResponse(stringResponse)
@@ -237,7 +237,7 @@ import Testing
 
     let numberResponse = try await transport.testOnly_sendAndWaitForResponse(
       request: numberIDRequest)
-    if case let .successfulRequest(request: request, _) = numberResponse {
+    if case let .successfulRequest(request: request, response: _, data: _) = numberResponse {
       #expect(request.id == numberIDRequest.id)
     } else {
       recordErrorsForNonSuccessfulResponse(numberResponse)
@@ -364,7 +364,7 @@ import Testing
       var responseCount = 0
 
       for try await response in try await transport.receive() {
-        if case let .successfulRequest(request: request, _) = response {
+        if case let .successfulRequest(request: request, response: _, data: _) = response {
           collectedIDs.append(request.id)
         }
 

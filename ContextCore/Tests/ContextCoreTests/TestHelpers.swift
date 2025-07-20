@@ -183,15 +183,15 @@ public class HTTPTestServer {
 /// Records issues for non-successful transport responses to help with debugging test failures.
 func recordErrorsForNonSuccessfulResponse(_ response: TransportResponse) {
   switch response {
-  case .successfulRequest:
+  case .successfulRequest(_, _, _):
     break
-  case let .failedRequest(request: request, error: error):
+  case let .failedRequest(request: request, error: error, data: _):
     Issue.record("Request \(request) failed: \(error)")
-  case let .serverNotification(notification):
+  case let .serverNotification(notification, data: _):
     Issue.record("Unexpected notification: \(notification.method)")
-  case let .serverRequest(request):
+  case let .serverRequest(request, data: _):
     Issue.record("Unexpected server request: \(request.method)")
-  case let .serverError(error):
+  case let .serverError(error, data: _):
     Issue.record("Unexpected server error: \(error)")
   case let .decodingError(request: request, error: error, data: _):
     Issue.record("Request \(String(reflecting: request)) failed with decoding error: \(error)")
