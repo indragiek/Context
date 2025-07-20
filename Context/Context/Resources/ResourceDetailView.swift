@@ -312,9 +312,11 @@ struct ResourceDetailView: View {
   }
 
   private func copyRawJSONToClipboard() {
-    RawDataView.copyRawDataToClipboard(
-      responseJSON: responseJSON,
-      responseError: responseError
+    let content = JSONUtility.clipboardContents(
+      json: responseJSON,
+      error: responseError
     )
+    NSPasteboard.general.clearContents()
+    NSPasteboard.general.setString(content, forType: .string)
   }
 }

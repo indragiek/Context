@@ -185,9 +185,11 @@ private struct MessagesHeader: View {
   }
 
   private func copyRawJSONToClipboard() {
-    RawDataView.copyRawDataToClipboard(
-      responseJSON: promptState.responseJSON,
-      responseError: promptState.responseError
+    let content = JSONUtility.clipboardContents(
+      json: promptState.responseJSON,
+      error: promptState.responseError
     )
+    NSPasteboard.general.clearContents()
+    NSPasteboard.general.setString(content, forType: .string)
   }
 }
