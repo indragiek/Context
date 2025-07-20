@@ -42,6 +42,10 @@ public enum ClientError: Error, LocalizedError {
   /// Thrown when an in-flight request is cancelled.
   case requestCancelled(id: JSONRPCRequestID)
 
+  /// Thrown when the server sends an error that is not in response to a request
+  /// previously sent by the client.
+  case serverError(error: JSONRPCError, data: Data)
+
   /// Thrown when attempting to send a request without being connected to the server.
   case notConnected
 
@@ -69,6 +73,9 @@ public enum ClientError: Error, LocalizedError {
       return "Request timed out. \(JSONUtility.compactString(from: request) ?? "")"
     case let .requestCancelled(id):
       return "Request with ID \"\(id)\" was cancelled"
+    case let .serverError(error, data):
+      let json = String(data: data, encoding: .utf8) ?? "<data: \(data.count) bytes>"
+      return "Server error. \(json)"
     case .notConnected:
       return "Client is not connected to server"
     case let .capabilityNotSupported(capability):
@@ -117,13 +124,10 @@ public actor Client {
     _connectionState
   }
 
-  /// Stream of errors returned by the server that are *not* a response to a request sent by
-  /// the client. These errors are returned directly by the corresponding request APIs.
-  public var errors = AsyncChannel<JSONRPCError>()
-
   /// Stream of all errors that occur within the client, including transport errors,
-  /// protocol errors, and other internal errors.
-  public var streamErrors = AsyncChannel<Error>()
+  /// protocol errors, and other internal errors. This also includes errors returned
+  /// by the server that are *not* a response to a request sent by the client.
+  public var errors = AsyncChannel<Error>()
 
   /// Stream of logs emitted by the server.
   public var logs = AsyncChannel<ServerLog>()
@@ -613,8 +617,8 @@ public actor Client {
       handleNotification(notification, data: data, group: &group)
     case let .serverRequest(request, data: _):
       handleServerRequest(request, group: &group)
-    case let .serverError(error, data: _):
-      handleError(error, group: &group)
+    case let .serverError(error, data: data):
+      logAndStreamError("Server error", error: ClientError.serverError(error: error, data: data))
     }
   }
 
@@ -887,18 +891,11 @@ public actor Client {
     }
   }
 
-  private func handleError(_ error: JSONRPCError, group: inout ThrowingTaskGroup<Void, Error>) {
-    group.addTask {
-      await self.errors.send(error)
-    }
-  }
-
-  /// Log an error and send it to the streamErrors channel.
+  /// Log an error and send it to the errors channel.
   private func logAndStreamError(_ message: String, error: Error) {
     logger.error("\(message): \(error)")
     Task {
-      await streamErrors.send(error)
+      await errors.send(error)
     }
   }
-
 }

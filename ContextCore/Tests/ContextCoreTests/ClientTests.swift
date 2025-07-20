@@ -225,7 +225,7 @@ import AsyncAlgorithms
     
     // Set up error monitoring before connecting
     let errorTask = Task {
-      for await error in await client.streamErrors {
+      for await error in await client.errors {
         if error is FailingTransport.FailureError {
           await errorDetected.send(true)
           return
@@ -241,7 +241,7 @@ import AsyncAlgorithms
     let transportError = await mockTransport.awaitSendError()
     #expect(transportError is FailingTransport.FailureError)
     
-    // Wait for the error to be detected in streamErrors
+    // Wait for the error to be detected in errors
     let errorStreamed = await errorDetected.first { _ in true } ?? false
     #expect(errorStreamed)
     
@@ -360,10 +360,10 @@ import AsyncAlgorithms
     let failingTransport = FailingTransport()
     let client = Client(transport: failingTransport)
 
-    // Create a task to collect errors from streamErrors
+    // Create a task to collect errors from errors
     let errorCollector = Task<[Error], Never> {
       var errors: [Error] = []
-      for await error in await client.streamErrors {
+      for await error in await client.errors {
         errors.append(error)
         if errors.count >= 1 {
           break  // We expect at least one error
@@ -401,10 +401,10 @@ import AsyncAlgorithms
 
     try await client.connect()
 
-    // Create a task to collect errors from streamErrors
+    // Create a task to collect errors from errors
     let errorCollector = Task<[Error], Never> {
       var errors: [Error] = []
-      for await error in await client.streamErrors {
+      for await error in await client.errors {
         errors.append(error)
         if errors.count >= 1 {
           break
@@ -436,7 +436,7 @@ import AsyncAlgorithms
 
     var collectedErrors: [Error] = []
     let errorCollector = Task {
-      for await error in await client.streamErrors {
+      for await error in await client.errors {
         collectedErrors.append(error)
         if collectedErrors.count >= 3 {
           break

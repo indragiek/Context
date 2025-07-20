@@ -162,7 +162,7 @@ struct ServerFeature {
               return
             }
 
-            let errorStream = await client.streamErrors
+            let errorStream = await client.errors
             for await error in errorStream {
               await send(.streamError(error))
             }
