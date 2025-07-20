@@ -7,6 +7,8 @@ struct ConnectionErrorBanner: View {
   let onDismiss: () -> Void
 
   @State private var showingErrorDetails = false
+  @State private var isHovering = false
+  @State private var isPressed = false
 
   private var latestError: ConnectionError? {
     errors.last
@@ -39,12 +41,6 @@ struct ConnectionErrorBanner: View {
           .frame(maxWidth: .infinity, alignment: .leading)
       }
 
-      Button("Show Details") {
-        showingErrorDetails = true
-      }
-      .buttonStyle(.link)
-      .font(.system(size: 12))
-
       Button(action: onDismiss) {
         Image(systemName: "xmark.circle.fill")
           .foregroundColor(.secondary)
@@ -54,13 +50,36 @@ struct ConnectionErrorBanner: View {
     }
     .padding(.horizontal, 16)
     .padding(.vertical, 12)
-    .background(Color(NSColor.controlBackgroundColor))
+    .frame(maxWidth: .infinity)
+    .background(
+      Color(NSColor.controlBackgroundColor)
+        .brightness(isPressed ? -0.15 : (isHovering ? -0.05 : 0))
+    )
     .overlay(
       Rectangle()
         .fill(Color(NSColor.separatorColor))
         .frame(height: 1),
       alignment: .bottom
     )
+    .contentShape(Rectangle())
+    .onHover { hovering in
+      isHovering = hovering
+    }
+    .onTapGesture {
+      withAnimation(.easeInOut(duration: 0.1)) {
+        isPressed = true
+      }
+      
+      Task { @MainActor in
+        try? await Task.sleep(for: .milliseconds(100))
+        withAnimation(.easeInOut(duration: 0.1)) {
+          isPressed = false
+        }
+        showingErrorDetails = true
+      }
+    }
+    .animation(.easeInOut(duration: 0.15), value: isHovering)
+    .animation(.easeInOut(duration: 0.1), value: isPressed)
     .sheet(isPresented: $showingErrorDetails) {
       ConnectionErrorDetailView(errors: errors)
     }
