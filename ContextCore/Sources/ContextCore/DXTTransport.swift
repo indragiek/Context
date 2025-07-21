@@ -290,10 +290,6 @@ public actor DXTTransport: Transport {
     try await stdioTransport.send(error: error)
   }
   
-  public func send(batch: [JSONRPCBatchItem]) async throws {
-    try await stdioTransport.send(batch: batch)
-  }
-  
   public func receive() async throws -> ResponseSequence {
     try await stdioTransport.receive()
   }

@@ -38,10 +38,6 @@ public enum TransportError: Error {
   /// Thrown when the server returns a failure response to initialization.
   case initializationFailed(request: InitializeRequest, error: JSONRPCError, data: Data)
 
-  /// Thrown when attempting to send or receive an empty JSON-RPC batch, which
-  /// is not permitted by the spec.
-  case emptyBatch
-
   /// Thrown when a request times out waiting for a response.
   case timeout
 
@@ -103,8 +99,6 @@ extension TransportError: LocalizedError {
       let jsonPayload = JSONValue.object(payload)
       let json = JSONUtility.compactString(from: jsonPayload) ?? String(data: data, encoding: .utf8) ?? "<data: \(data.count) bytes>"
       return "Initialization failed (code: \(error.error.code), message: \"\(error.error.message)\"). \(json)"
-    case .emptyBatch:
-      return "JSON-RPC batch cannot be empty"
     case .timeout:
       return "Request timed out"
     case .notStarted:
@@ -162,10 +156,6 @@ public protocol Transport: Actor {
   /// Send an error response to the server in response to a request sent by the server.
   /// - Parameter error: The error response to send to the server.
   func send(error: JSONRPCError) async throws
-
-  /// Send a batch of requests and/or notifications to the server.
-  /// - Parameter items: The batch items to send to the server.
-  func send(batch: [JSONRPCBatchItem]) async throws
 
   /// Receive a stream of responses from the server.
   /// - Returns: An async sequence of responses received from the server.
@@ -228,24 +218,6 @@ extension Transport {
     }
     throw TransportError.noResponse
   }
-
-  /// Send a batch of requests and/or notifications to the server.
-  /// - Parameter items: The batch items to send to the server.
-  public func send(batch: [JSONRPCBatchItem]) async throws {
-    if batch.isEmpty {
-      throw TransportError.emptyBatch
-    }
-
-    // Default implementation converts batch items to individual requests/notifications
-    for item in batch {
-      switch item {
-      case .request(let request):
-        try await send(request: request)
-      case .notification(let notification):
-        try await send(notification: notification)
-      }
-    }
-  }
 }
 
 // Simplified JSON structure to determine the type of message
@@ -288,7 +260,7 @@ private enum RequestRegistry {
   }
 }
 
-/// Decodes one or more responses (if the data represents a batch) returned by the server. The request
+/// Decodes responses returned by the server. The request
 /// lookup cache is used to look up the original request object matching the request ID, which is
 /// required to decode the response.
 func decodeAllResponses(
@@ -296,32 +268,15 @@ func decodeAllResponses(
   logger: Logger? = nil,
   decoder: JSONDecoder = JSONDecoder()
 ) throws -> [TransportResponse] {
-  if isJSONArray(data: data) {  // batch response
-    let responses = try splitJSONArray(from: data)
-      .map {
-        let response = try decodeSingleResponse(
-          data: $0,
-          requestLookupCache: &requestLookupCache,
-          decoder: decoder
-        )
-        logResponse(response, logger: logger)
-        return response
-      }
-    if responses.isEmpty {
-      throw TransportError.emptyBatch
-    }
-    return responses
-  } else {  // single response
-    let response = try decodeSingleResponse(
-      data: data,
-      requestLookupCache: &requestLookupCache,
-      decoder: decoder
-    )
-    logResponse(response, logger: logger)
-    return [
-      response
-    ]
-  }
+  let response = try decodeSingleResponse(
+    data: data,
+    requestLookupCache: &requestLookupCache,
+    decoder: decoder
+  )
+  logResponse(response, logger: logger)
+  return [
+    response
+  ]
 }
 
 /// Decodes a single response returned by the server. The request lookup cache is used to look up
@@ -441,125 +396,4 @@ private func logResponse(_ response: TransportResponse, logger: Logger?) {
       "[decodingError] request: \(String(reflecting: request), privacy: .private), error: \(String(reflecting: error), privacy: .private), data: \(str, privacy: .private)"
     )
   }
-}
-
-/// Returns whether the JSON data has an array at the root.
-private func isJSONArray(data: Data) -> Bool {
-  guard data.count > 0 else { return false }
-
-  var index = 0
-
-  // Skip whitespace
-  while index < data.count
-    && (data[index] == UInt8(ascii: " ") || data[index] == UInt8(ascii: "\n")
-      || data[index] == UInt8(ascii: "\r") || data[index] == UInt8(ascii: "\t"))
-  {
-    index += 1
-  }
-
-  // If we reached the end or the first non-whitespace character isn't '[', it's not an array
-  return index < data.count && data[index] == UInt8(ascii: "[")
-}
-
-/// Assumes that the JSON data contains an array at the root, and returns an array of the
-/// JSON data for each element in the original array.
-private func splitJSONArray(from data: Data) throws -> [Data] {
-  var resultArray: [Data] = []
-  var index = 0
-
-  // Skip whitespace
-  func skipWhitespace() {
-    while index < data.count
-      && (data[index] == UInt8(ascii: " ") || data[index] == UInt8(ascii: "\n")
-        || data[index] == UInt8(ascii: "\r") || data[index] == UInt8(ascii: "\t"))
-    {
-      index += 1
-    }
-  }
-
-  // Find array start
-  skipWhitespace()
-  guard index < data.count && data[index] == UInt8(ascii: "[") else {
-    let context = DecodingError.Context(
-      codingPath: [],
-      debugDescription: "Input is not a JSON array",
-      underlyingError: nil
-    )
-    throw DecodingError.typeMismatch([Any].self, context)
-  }
-  index += 1
-
-  skipWhitespace()
-
-  // Process each object in the array
-  while index < data.count {
-    // Check for end of array
-    if data[index] == UInt8(ascii: "]") {
-      break
-    }
-
-    // Ensure we have an object start
-    guard data[index] == UInt8(ascii: "{") else {
-      let context = DecodingError.Context(
-        codingPath: [],
-        debugDescription: "Expected JSON object in array",
-        underlyingError: nil
-      )
-      throw DecodingError.typeMismatch([String: Any].self, context)
-    }
-
-    let startIndex = index
-
-    // Track object depth (for nested objects)
-    var depth = 1
-    index += 1
-
-    var inString = false
-    var escape = false
-
-    // Find the matching closing brace for this object
-    while index < data.count && depth > 0 {
-      let byte = data[index]
-
-      if escape {
-        escape = false
-      } else if byte == UInt8(ascii: "\\") {
-        escape = true
-      } else if byte == UInt8(ascii: "\"") {
-        inString = !inString
-      } else if !inString {
-        if byte == UInt8(ascii: "{") {
-          depth += 1
-        } else if byte == UInt8(ascii: "}") {
-          depth -= 1
-        }
-      }
-
-      index += 1
-    }
-
-    // Check if we ended prematurely
-    if depth > 0 {
-      let context = DecodingError.Context(
-        codingPath: [],
-        debugDescription: "Unexpected end of data",
-        underlyingError: nil
-      )
-      throw DecodingError.dataCorrupted(context)
-    }
-
-    // Extract the object data
-    let objectData = data.subdata(in: startIndex..<index)
-    resultArray.append(objectData)
-
-    skipWhitespace()
-
-    // If we have a comma, move past it
-    if index < data.count && data[index] == UInt8(ascii: ",") {
-      index += 1
-      skipWhitespace()
-    }
-  }
-
-  return resultArray
 }

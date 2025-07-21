@@ -339,28 +339,6 @@ public actor StdioTransport: Transport {
     try send(data: try encoder.encode(error))
   }
 
-  public func send(batch: [JSONRPCBatchItem]) async throws {
-    if batch.isEmpty {
-      throw TransportError.emptyBatch
-    }
-
-    for item in batch {
-      if case .request(let request) = item {
-        pendingRequests[request.id] = request
-      }
-    }
-    do {
-      try send(data: try encoder.encode(batch))
-    } catch {
-      for item in batch {
-        if case .request(let request) = item {
-          pendingRequests.removeValue(forKey: request.id)
-        }
-      }
-      throw error
-    }
-  }
-
   public func receive() async throws -> AsyncThrowingChannel<TransportResponse, Error> {
     guard let responseChannel = responseChannel else {
       throw TransportError.notStarted

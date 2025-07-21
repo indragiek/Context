@@ -184,10 +184,6 @@ public actor StreamableHTTPTransport: Transport {
     _ = try await sendHTTP(error: error)
   }
 
-  public func send(batch: [JSONRPCBatchItem]) async throws {
-    _ = try await sendHTTP(batch: batch)
-  }
-
   public func receive() async throws -> AsyncThrowingChannel<TransportResponse, Error> {
     guard let responseChannel = responseChannel else {
       fatalError(
@@ -480,30 +476,6 @@ public actor StreamableHTTPTransport: Transport {
   /// Sends an error response to the server.
   private func sendHTTP(error: JSONRPCError) async throws -> HTTPURLResponse {
     return try await sendHTTP(data: try encoder.encode(error))
-  }
-
-  /// Sends a batch of requests and/or notifications to the server.
-  private func sendHTTP(batch: [JSONRPCBatchItem]) async throws -> HTTPURLResponse {
-    if batch.isEmpty {
-      throw TransportError.emptyBatch
-    }
-
-    for item in batch {
-      if case .request(let request) = item {
-        pendingRequests[request.id] = request
-      }
-    }
-    do {
-      let data = try encoder.encode(batch)
-      return try await sendHTTP(data: data)
-    } catch {
-      for item in batch {
-        if case .request(let request) = item {
-          pendingRequests.removeValue(forKey: request.id)
-        }
-      }
-      throw error
-    }
   }
 
   /// POSTs a message to the server, to either the endpoint returned by the `endpoint` message
