@@ -5,6 +5,10 @@ import ContextCore
 import Dependencies
 import Foundation
 
+#if !SENTRY_DISABLED
+import Sentry
+#endif
+
 struct LoadedResource: Equatable {
   let embeddedResources: [EmbeddedResource]
   let responseJSON: JSONValue?
@@ -39,6 +43,14 @@ extension ResourceLoader: DependencyKey {
     loadResource: { uri, server in
       @Dependency(\.mcpClientManager) var mcpClientManager
 
+      #if !SENTRY_DISABLED
+      let span = SentrySDK.span?.startChild(operation: "resource.load_content") ?? SentrySDK.startTransaction(
+        name: "resource.load_content",
+        operation: "task"
+      )
+      span.setData(value: uri, key: "resource_uri")
+      #endif
+
       do {
         // Get the client and read the resource
         let client = try await mcpClientManager.client(for: server)
@@ -52,12 +64,25 @@ extension ResourceLoader: DependencyKey {
         let jsonData = try JSONUtility.prettyData(from: responseToEncode, escapeSlashes: true)
         let jsonValue = try JSONDecoder().decode(JSONValue.self, from: jsonData)
 
+        #if !SENTRY_DISABLED
+        span.setData(value: jsonData.count, key: "resource_size")
+        span.setData(value: false, key: "is_cached") // Live value is never cached
+        if let firstContent = contents.first {
+          span.setData(value: firstContent.mimeType, key: "mime_type")
+        }
+        span.finish()
+        #endif
+
         return LoadedResource(
           embeddedResources: contents,
           responseJSON: jsonValue,
           responseError: nil
         )
       } catch {
+        #if !SENTRY_DISABLED
+        span.finish(status: .internalError)
+        #endif
+        
         return LoadedResource(
           embeddedResources: [],
           responseJSON: nil,

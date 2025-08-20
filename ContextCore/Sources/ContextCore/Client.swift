@@ -371,10 +371,26 @@ public actor Client {
   public func listResources(cursor: String? = nil) async throws -> (
     resources: [Resource], nextCursor: String?
   ) {
+    #if !SENTRY_DISABLED
+    let span = SentrySDK.span?.startChild(operation: "mcp.resources.list") ?? SentrySDK.startTransaction(
+      name: "mcp.resources.list",
+      operation: "task"
+    )
+    span.setData(value: cursor != nil, key: "has_next_cursor")
+    span.setData(value: cursor != nil, key: "supports_pagination")
+    #endif
+    
     try checkCapability { $0.resources }
     let request = ListResourcesRequest(id: idGenerator(), cursor: cursor)
     let response = try await sendRequestAndWaitForResponse(request: request)
     resourceListChanged = false
+    
+    #if !SENTRY_DISABLED
+    span.setData(value: response.result.resources.count, key: "resource_count")
+    span.setData(value: response.result.nextCursor != nil, key: "has_next_cursor")
+    span.finish()
+    #endif
+    
     return (resources: response.result.resources, nextCursor: response.result.nextCursor)
   }
 

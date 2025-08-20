@@ -5,6 +5,10 @@ import ContextCore
 import GRDB
 import SharingGRDB
 
+#if !SENTRY_DISABLED
+import Sentry
+#endif
+
 struct ResourceTemplateCompletionState: Sendable, Equatable {
   var variableCompletions: [String: [String]] = [:]
   var loadingCompletions: [String: Bool] = [:]
@@ -119,8 +123,22 @@ struct ResourcesFeature {
 
       case .onConnected:
         return .run { [server = state.server] send in
+          #if !SENTRY_DISABLED
+          let transaction = SentrySDK.startTransaction(
+            name: "resources.load",
+            operation: "task",
+            bindToScope: true
+          )
+          transaction.setData(value: server.id.uuidString, key: "server_id")
+          transaction.setData(value: server.capabilities?.resources != nil, key: "has_resources")
+          transaction.setData(value: server.capabilities?.resourceTemplates != nil, key: "has_templates")
+          #endif
+          
           do {
             guard let client = await mcpClientManager.existingClient(for: server) else {
+              #if !SENTRY_DISABLED
+              transaction.finish(status: .notFound)
+              #endif
               await send(.loadingFailed(NotConnectedError()))
               return
             }
@@ -132,7 +150,14 @@ struct ResourcesFeature {
             // Store pagination cursors
             await send(.moreResourcesLoaded(resources: [], nextCursor: resourcesNextCursor))
             await send(.moreTemplatesLoaded(templates: [], nextCursor: templatesNextCursor))
+            
+            #if !SENTRY_DISABLED
+            transaction.finish()
+            #endif
           } catch {
+            #if !SENTRY_DISABLED
+            transaction.finish(status: .internalError)
+            #endif
             await send(.loadingFailed(error))
           }
         }
