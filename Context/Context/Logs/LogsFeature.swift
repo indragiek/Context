@@ -7,6 +7,10 @@ import Foundation
 import GRDB
 import SharingGRDB
 
+#if !SENTRY_DISABLED
+  import Sentry
+#endif
+
 enum LogsError: LocalizedError {
   case streamError(String)
 
@@ -75,9 +79,26 @@ struct LogsFeature {
         return .none
 
       case .onConnected:
+        #if !SENTRY_DISABLED
+          let transaction = SentrySDK.startTransaction(
+            name: "mcp.logs.stream_setup",
+            operation: "task",
+            bindToScope: true
+          )
+          transaction.setData(value: state.server.name, key: "server_name")
+          transaction.setData(value: state.server.id.uuidString, key: "server_id")
+          // TODO: Add server capability check for logging support
+          transaction.setData(value: true, key: "logging_supported")
+          transaction.setData(value: state.selectedLevel.rawValue, key: "initial_filter_level")
+        #endif
+
         return .merge(
           .cancel(id: CancelID.logSubscription),
           .run { [server = state.server] send in
+            #if !SENTRY_DISABLED
+              defer { transaction.finish() }
+            #endif
+
             guard let client = await mcpClientManager.existingClient(for: server) else {
               return
             }
@@ -117,8 +138,24 @@ struct LogsFeature {
         return .none
 
       case let .logReceived(params):
+        #if !SENTRY_DISABLED
+          let span = SentrySDK.span?.startChild(operation: "mcp.logs.process_message")
+          span?.setData(value: params.level.rawValue, key: "log_level")
+          span?.setData(value: params.logger, key: "logger_name")
+          span?.setData(value: String(params.data.utf8.count), key: "data_size")
+        #endif
+
         let newLog = LogEntry(params: params)
+        
+        #if !SENTRY_DISABLED
+          span?.setData(value: true, key: "parse_success")
+        #endif
+
         state.cachedLogs.append(CachedLogEntry(newLog))
+
+        #if !SENTRY_DISABLED
+          span?.setData(value: false, key: "cache_hit")  // This is always a new entry
+        #endif
 
         if state.cachedLogs.count > Self.maxLogCount {
           let removeCount = state.cachedLogs.count - Self.maxLogCount
@@ -131,6 +168,11 @@ struct LogsFeature {
         if state.cachedLogs.count == 1 && state.selectedLogIDs.isEmpty {
           state.selectedLogIDs = [newLog.id]
         }
+
+        #if !SENTRY_DISABLED
+          span?.finish()
+        #endif
+
         return .none
 
       case let .logSelected(ids):
@@ -138,9 +180,21 @@ struct LogsFeature {
         return .none
 
       case let .searchQueryChanged(query):
+        #if !SENTRY_DISABLED
+          let span = SentrySDK.span?.startChild(operation: "mcp.logs.apply_filters")
+          span?.setData(value: state.cachedLogs.count, key: "total_logs")
+          span?.setData(value: query.isEmpty ? "null" : String(query.count), key: "search_query")
+          span?.setData(value: state.selectedLevel.rawValue, key: "filter_level")
+        #endif
+
         state.searchQuery = query
 
         let filteredIDs = Set(state.filteredLogs.map { $0.id })
+        
+        #if !SENTRY_DISABLED
+          span?.setData(value: filteredIDs.count, key: "filtered_logs")
+        #endif
+
         let validSelectedIDs = state.selectedLogIDs.intersection(filteredIDs)
 
         if validSelectedIDs.isEmpty && !state.filteredLogs.isEmpty {
@@ -152,6 +206,10 @@ struct LogsFeature {
         } else {
           state.selectedLogIDs = validSelectedIDs
         }
+
+        #if !SENTRY_DISABLED
+          span?.finish()
+        #endif
 
         return .none
 
