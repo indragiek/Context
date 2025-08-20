@@ -5,6 +5,10 @@ import Foundation
 import System
 import os
 
+#if !SENTRY_DISABLED
+  import Sentry
+#endif
+
 /// Errors thrown by `StdioTransport`
 public enum StdioTransportError: Error, LocalizedError, Equatable {
   /// Thrown when the server closes stdout, indicating that no more messages
@@ -180,6 +184,13 @@ public actor StdioTransport: Transport {
     let errorPipe = Pipe()
 
     do {
+      #if !SENTRY_DISABLED
+        let span = SentrySDK.span?.startChild(operation: "mcp.transport.stdio.launch")
+        span?.setData(value: serverProcessInfo.executableURL.path, key: "command")
+        span?.setData(value: serverProcessInfo.arguments.joined(separator: " "), key: "arguments")
+        span?.setData(value: serverProcessInfo.environment?.count ?? 0, key: "environment_count")
+      #endif
+
       process = try {
         let process = Process()
         process.executableURL = serverProcessInfo.executableURL
@@ -204,6 +215,11 @@ public actor StdioTransport: Transport {
 
         try process.run()
 
+        #if !SENTRY_DISABLED
+          span?.setData(value: process.processIdentifier, key: "process_id")
+          span?.finish()
+        #endif
+
         Task {
           await connectionStateChannel.send(.connected)
         }
@@ -211,6 +227,10 @@ public actor StdioTransport: Transport {
       }()
       self.inputPipe = inputPipe
     } catch {
+      #if !SENTRY_DISABLED
+        SentrySDK.span?.startChild(operation: "mcp.transport.stdio.launch")?.finish(status: .internalError)
+      #endif
+      
       // Clean up channels on failure
       responseChannel.fail(error)
       internalResponseChannel.finish()

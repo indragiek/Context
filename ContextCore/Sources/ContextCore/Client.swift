@@ -262,16 +262,31 @@ public actor Client {
 
     logger.info("Connecting to server")
     do {
+      #if !SENTRY_DISABLED
+        let span = SentrySDK.span?.startChild(operation: "mcp.protocol.handshake")
+      #endif
+
       logger.debug("Initializing connection")
       let initResponse = try await transport.initialize(idGenerator: idGenerator)
       serverInfo = initResponse.serverInfo
       serverCapabilities = initResponse.capabilities
       serverProtocolVersion = initResponse.protocolVersion
 
+      #if !SENTRY_DISABLED
+        span?.setData(value: initResponse.protocolVersion, key: "protocol_version")
+        span?.setData(value: String(reflecting: initResponse.capabilities), key: "server_capabilities")
+        span?.setData(value: "client capabilities", key: "client_capabilities")
+        span?.finish()
+      #endif
+
       logger.info(
         "Connected to server \(initResponse.serverInfo.name) \(initResponse.serverInfo.version). protocolVersion: \(initResponse.protocolVersion), capabilities: \(String(reflecting: initResponse.capabilities))"
       )
     } catch let error {
+      #if !SENTRY_DISABLED
+        SentrySDK.span?.startChild(operation: "mcp.protocol.handshake")?.finish(status: .internalError)
+      #endif
+      
       logAndStreamError("Failed to connect to server", error: error)
       updateConnectionState(.disconnected)
       throw error

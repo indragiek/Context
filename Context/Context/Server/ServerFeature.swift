@@ -7,6 +7,10 @@ import Foundation
 import SharingGRDB
 import os
 
+#if !SENTRY_DISABLED
+  import Sentry
+#endif
+
 // MARK: - Mock Errors for UI Testing
 
 private struct MockTextOnlyError: LocalizedError {
@@ -185,15 +189,38 @@ struct ServerFeature {
               return
             }
 
+            #if !SENTRY_DISABLED
+              let transaction = SentrySDK.startTransaction(
+                name: "mcp.server.connect",
+                operation: "task",
+                bindToScope: true
+              )
+              transaction.setData(value: server.name, key: "server_name")
+              transaction.setData(value: server.id.uuidString, key: "server_id")
+              transaction.setData(value: server.transport.rawValue, key: "transport_type")
+              transaction.setData(value: server.url, key: "server_url")
+              transaction.setData(value: server.transport == .streamableHTTP || server.transport == .sse, key: "has_authentication")
+            #endif
+
             do {
               logger.debug("Connecting to server \(server.name)")
               try await client.connect()
               logger.debug("Connected to server \(server.name), sending ping")
               try await client.ping()
               logger.info("Successfully connected to server \(server.name)")
+              
+              #if !SENTRY_DISABLED
+                transaction.finish()
+              #endif
+              
               await send(.connectionSucceeded)
             } catch {
               logger.error("Failed to connect to server \(server.name): \(error)")
+              
+              #if !SENTRY_DISABLED
+                transaction.finish(status: .internalError)
+              #endif
+              
               await send(.connectionError(error))
             }
           }
