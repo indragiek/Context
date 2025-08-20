@@ -404,8 +404,27 @@ public actor Client {
   ///   or other transport-related errors.
   public func readResource(uri: String) async throws -> [EmbeddedResource] {
     try checkCapability { $0.resources }
+
+    #if !SENTRY_DISABLED
+      let span = SentrySDK.span?.startChild(operation: "mcp.jsonrpc.read_resource")
+      span?.setData(value: uri, key: "resource_uri")
+    #endif
+
     let request = ReadResourceRequest(id: idGenerator(), uri: uri)
+
+    #if !SENTRY_DISABLED
+      span?.setData(value: request.id.stringValue, key: "request_id")
+    #endif
+
     let response = try await sendRequestAndWaitForResponse(request: request)
+
+    #if !SENTRY_DISABLED
+      let contentSize = response.result.contents.first?.blob?.count ?? response.result.contents.first?.text?.count ?? 0
+      span?.setData(value: contentSize, key: "content_size")
+      span?.setData(value: response.result.contents.first?.mimeType, key: "content_mime_type")
+      span?.finish()
+    #endif
+
     return response.result.contents
   }
 
