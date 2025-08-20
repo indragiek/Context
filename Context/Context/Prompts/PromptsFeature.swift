@@ -6,6 +6,10 @@ import Foundation
 import GRDB
 import SharingGRDB
 
+#if !SENTRY_DISABLED
+import Sentry
+#endif
+
 enum PromptLoadingState: Sendable, Equatable {
   case idle
   case loading
@@ -520,24 +524,54 @@ struct PromptsFeature {
         state.promptStates[prompt.name] = promptState
 
         return .run { [server = state.server, argumentValues = promptState.argumentValues] send in
+          #if !SENTRY_DISABLED
+          let transaction = SentrySDK.startTransaction(
+            name: "prompt.execute",
+            operation: "task",
+            bindToScope: true
+          )
+          transaction.setData(value: prompt.name, key: "prompt_name")
+          transaction.setData(value: server.id.uuidString, key: "server_id")
+          transaction.setData(value: prompt.arguments?.count ?? 0, key: "argument_count")
+          transaction.setData(value: !(prompt.arguments?.filter { $0.required == true }.isEmpty ?? true), key: "has_required_args")
+          #endif
+          
           let task = Task {
             do {
               let client = try await mcpClientManager.client(for: server)
 
-              if Task.isCancelled { return }
+              if Task.isCancelled { 
+                #if !SENTRY_DISABLED
+                transaction.finish(status: .cancelled)
+                #endif
+                return
+              }
 
               let (description, fetchedMessages) = try await client.getPrompt(
                 name: prompt.name, arguments: argumentValues)
 
-              if Task.isCancelled { return }
+              if Task.isCancelled { 
+                #if !SENTRY_DISABLED
+                transaction.finish(status: .cancelled)
+                #endif
+                return
+              }
 
               let result = GetPromptResponse.Result(
                 description: description, messages: fetchedMessages)
+
+              #if !SENTRY_DISABLED
+              transaction.finish()
+              #endif
 
               await send(
                 .promptMessagesFetched(
                   promptName: prompt.name, result: result, fetchedMessages: fetchedMessages))
             } catch {
+              #if !SENTRY_DISABLED
+              transaction.finish(status: .internalError)
+              #endif
+              
               if !Task.isCancelled {
                 await send(.promptMessagesFetchFailed(promptName: prompt.name, error: error))
               }

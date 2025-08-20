@@ -353,9 +353,24 @@ public actor Client {
   public func getPrompt(name: String, arguments: [String: String]? = nil) async throws -> (
     description: String?, messages: [PromptMessage]
   ) {
+    #if !SENTRY_DISABLED
+    let span = SentrySDK.span?.startChild(operation: "mcp.prompt.get") ?? SentrySDK.startTransaction(
+      name: "mcp.prompt.get",
+      operation: "task"
+    )
+    span.setData(value: name, key: "prompt_name")
+    span.setData(value: arguments?.count ?? 0, key: "arguments_provided")
+    #endif
+    
     try checkCapability { $0.prompts }
     let request = GetPromptRequest(id: idGenerator(), name: name, arguments: arguments)
     let response = try await sendRequestAndWaitForResponse(request: request)
+    
+    #if !SENTRY_DISABLED
+    span.setData(value: response.result.messages.count, key: "response_message_count")
+    span.finish()
+    #endif
+    
     return (description: response.result.description, messages: response.result.messages)
   }
 
