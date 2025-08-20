@@ -484,9 +484,31 @@ public actor Client {
   public func callTool(name: String, arguments: [String: JSONValue]? = nil) async throws -> (
     content: [Content], isError: Bool
   ) {
+    #if !SENTRY_DISABLED
+    let span = SentrySDK.span?.startChild(operation: "mcp.tool.call") ?? SentrySDK.startTransaction(
+      name: "mcp.tool.call",
+      operation: "task"
+    )
+    span.setData(value: name, key: "tool_name")
+    
+    // Calculate arguments size if present
+    if let arguments = arguments {
+      let argumentsData = try? JSONSerialization.data(withJSONObject: arguments.mapValues { $0.rawValue }, options: [])
+      span.setData(value: argumentsData?.count ?? 0, key: "arguments_size")
+    } else {
+      span.setData(value: 0, key: "arguments_size")
+    }
+    #endif
+    
     try checkCapability { $0.tools }
     let request = CallToolRequest(id: idGenerator(), name: name, arguments: arguments)
     let response = try await sendRequestAndWaitForResponse(request: request)
+    
+    #if !SENTRY_DISABLED
+    span.setData(value: !(response.result.isError ?? false), key: "response_success")
+    span.finish()
+    #endif
+    
     return (content: response.result.content, isError: response.result.isError ?? false)
   }
 

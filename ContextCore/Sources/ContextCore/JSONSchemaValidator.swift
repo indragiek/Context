@@ -3,6 +3,10 @@
 import Foundation
 import os
 
+#if !SENTRY_DISABLED
+import Sentry
+#endif
+
 /// Main JSON Schema validator that coordinates all validation components
 public final class JSONSchemaValidator {
   private let logger = Logger(subsystem: "com.indragie.Context", category: "JSONSchemaValidator")
@@ -30,6 +34,25 @@ public final class JSONSchemaValidator {
     context: JSONSchemaValidationContext? = nil,
     options: JSONSchemaValidationOptions? = nil
   ) async throws -> JSONSchemaValidationResult {
+    #if !SENTRY_DISABLED
+    let span = SentrySDK.span?.startChild(operation: "tool.validate_params") ?? SentrySDK.startTransaction(
+      name: "tool.validate_params",
+      operation: "task"
+    )
+    
+    // Calculate schema complexity (number of properties if object schema)
+    let schemaComplexity: Int
+    if case .object(let obj) = schema,
+       case .object(let properties) = obj["properties"] {
+      schemaComplexity = properties.count
+    } else {
+      schemaComplexity = 1
+    }
+    
+    span.setData(value: schemaComplexity, key: "schema_complexity")
+    span.setData(value: 1, key: "parameter_count") // Single parameter being validated
+    #endif
+    
     let validationOptions = options ?? JSONSchemaValidationOptions()
     var validationContext = context ?? JSONSchemaValidationContext(options: validationOptions)
     
@@ -62,11 +85,18 @@ public final class JSONSchemaValidator {
     
     // Add collected annotations to result
     let annotations = validationContext.getCollectedAnnotations()
-    return JSONSchemaValidationResult(
+    let finalResult = JSONSchemaValidationResult(
       isValid: result.isValid,
       errors: result.errors,
       annotations: annotations
     )
+    
+    #if !SENTRY_DISABLED
+    span.setData(value: finalResult.isValid, key: "validation_result")
+    span.finish()
+    #endif
+    
+    return finalResult
   }
   
   // MARK: - Core Validation
