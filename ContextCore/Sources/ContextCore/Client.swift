@@ -4,6 +4,10 @@ import AsyncAlgorithms
 import Foundation
 import os
 
+#if !SENTRY_DISABLED
+  import Sentry
+#endif
+
 /// Protocol for handling sampling requests from the server.
 public protocol SamplingHandler: Sendable {
   /// Handle a sampling request from the server and return a response.
@@ -465,8 +469,26 @@ public actor Client {
     content: [Content], isError: Bool
   ) {
     try checkCapability { $0.tools }
+
+    #if !SENTRY_DISABLED
+      let span = SentrySDK.span?.startChild(operation: "mcp.jsonrpc.call_tool")
+      span?.setData(value: name, key: "tool_name")
+      span?.setData(value: arguments != nil, key: "has_arguments")
+    #endif
+
     let request = CallToolRequest(id: idGenerator(), name: name, arguments: arguments)
+
+    #if !SENTRY_DISABLED
+      span?.setData(value: request.id.stringValue, key: "request_id")
+    #endif
+
     let response = try await sendRequestAndWaitForResponse(request: request)
+
+    #if !SENTRY_DISABLED
+      span?.setData(value: response.result.content.count, key: "response_content_count")
+      span?.finish()
+    #endif
+
     return (content: response.result.content, isError: response.result.isError ?? false)
   }
 

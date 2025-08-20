@@ -3,6 +3,10 @@
 import ContextCore
 import Foundation
 
+#if !SENTRY_DISABLED
+  import Sentry
+#endif
+
 /// Provides JSON Schema validation using ContextCore validators
 @MainActor
 final class SchemaValidator {
@@ -14,7 +18,26 @@ final class SchemaValidator {
     value: JSONValue,
     against schema: JSONValue
   ) async throws -> ValidationResult {
+    #if !SENTRY_DISABLED
+      let span = SentrySDK.span?.startChild(operation: "mcp.tool.validate_schema")
+      
+      // Extract schema complexity
+      var schemaComplexity = 0
+      if case .object(let obj) = schema,
+         case .object(let properties) = obj["properties"] {
+        schemaComplexity = properties.count
+      }
+      span?.setData(value: schemaComplexity, key: "schema_complexity")
+    #endif
+    
     let result = try await validator.validate(value, against: schema)
+    
+    #if !SENTRY_DISABLED
+      span?.setData(value: result.isValid, key: "validation_success")
+      span?.setData(value: result.errors.count, key: "error_count")
+      span?.finish()
+    #endif
+    
     return ValidationResult(from: result)
   }
   

@@ -6,6 +6,10 @@ import ContextCore
 import Dependencies
 import SwiftUI
 
+#if !SENTRY_DISABLED
+  import Sentry
+#endif
+
 struct ToolDetailView: View {
   let tool: Tool
   @Binding var toolState: ToolState
@@ -391,6 +395,19 @@ struct ToolDetailView: View {
     // Set loading state
     isLoading = true
 
+    #if !SENTRY_DISABLED
+      let transaction = SentrySDK.startTransaction(
+        name: "mcp.tool.execute",
+        operation: "task",
+        bindToScope: true
+      )
+      transaction.setData(value: tool.name, key: "tool_name")
+      transaction.setData(value: server.name, key: "server_name")
+      transaction.setData(value: server.id.uuidString, key: "server_id")
+      transaction.setData(value: filteredParameterValues.count, key: "argument_count")
+      transaction.setData(value: server.transport.rawValue, key: "server_transport")
+    #endif
+
     Task { @MainActor in
       do {
         // Get the client and call the tool
@@ -423,6 +440,10 @@ struct ToolDetailView: View {
         if let savedField = savedFocusedField {
           focusedField = savedField
         }
+
+        #if !SENTRY_DISABLED
+          transaction.finish()
+        #endif
       } catch {
         // Store the actual error object
         responseError = error
@@ -443,6 +464,10 @@ struct ToolDetailView: View {
         if let savedField = savedFocusedField {
           focusedField = savedField
         }
+
+        #if !SENTRY_DISABLED
+          transaction.finish(status: .internalError)
+        #endif
       }
     }
   }
