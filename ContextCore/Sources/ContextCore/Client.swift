@@ -353,8 +353,26 @@ public actor Client {
     description: String?, messages: [PromptMessage]
   ) {
     try checkCapability { $0.prompts }
+
+    #if !SENTRY_DISABLED
+      let span = SentrySDK.span?.startChild(operation: "mcp.jsonrpc.get_prompt")
+      span?.setData(value: name, key: "prompt_name")
+      span?.setData(value: arguments != nil, key: "arguments_provided")
+    #endif
+
     let request = GetPromptRequest(id: idGenerator(), name: name, arguments: arguments)
+
+    #if !SENTRY_DISABLED
+      span?.setData(value: request.id.stringValue, key: "request_id")
+    #endif
+
     let response = try await sendRequestAndWaitForResponse(request: request)
+
+    #if !SENTRY_DISABLED
+      span?.setData(value: response.result.messages.count, key: "message_count")
+      span?.finish()
+    #endif
+
     return (description: response.result.description, messages: response.result.messages)
   }
 

@@ -4,6 +4,10 @@ import ContextCore
 import Foundation
 import RegexBuilder
 
+#if !SENTRY_DISABLED
+  import Sentry
+#endif
+
 /// Processes template variables in prompt content
 struct TemplateProcessor {
   // Cached regex for template matching
@@ -18,16 +22,28 @@ struct TemplateProcessor {
   }
   
   func process(_ content: Content) -> Content {
-    switch content {
+    #if !SENTRY_DISABLED
+      let span = SentrySDK.span?.startChild(operation: "mcp.prompt.template_processing")
+      span?.setData(value: argumentValues.count, key: "argument_count")
+    #endif
+    
+    let processedContent = switch content {
     case .text(let text, let annotations):
-      return .text(processText(text), annotations: annotations)
+      Content.text(processText(text), annotations: annotations)
       
     case .resource(let embeddedResource, let annotations):
-      return .resource(processResource(embeddedResource), annotations: annotations)
+      Content.resource(processResource(embeddedResource), annotations: annotations)
       
     default:
-      return content
+      content
     }
+    
+    #if !SENTRY_DISABLED
+      span?.setData(value: true, key: "processing_success")
+      span?.finish()
+    #endif
+    
+    return processedContent
   }
   
   private func processText(_ text: String) -> String {

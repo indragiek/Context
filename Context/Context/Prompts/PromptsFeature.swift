@@ -6,6 +6,10 @@ import Foundation
 import GRDB
 import SharingGRDB
 
+#if !SENTRY_DISABLED
+  import Sentry
+#endif
+
 enum PromptLoadingState: Sendable, Equatable {
   case idle
   case loading
@@ -521,6 +525,19 @@ struct PromptsFeature {
 
         return .run { [server = state.server, argumentValues = promptState.argumentValues] send in
           let task = Task {
+            #if !SENTRY_DISABLED
+              let transaction = SentrySDK.startTransaction(
+                name: "mcp.prompt.process",
+                operation: "task",
+                bindToScope: true
+              )
+              transaction.setData(value: prompt.name, key: "prompt_name")
+              transaction.setData(value: server.name, key: "server_name")
+              transaction.setData(value: server.id.uuidString, key: "server_id")
+              transaction.setData(value: argumentValues.count, key: "argument_count")
+              transaction.setData(value: prompt.arguments?.contains { $0.required == true } ?? false, key: "has_required_args")
+            #endif
+
             do {
               let client = try await mcpClientManager.client(for: server)
 
@@ -534,10 +551,18 @@ struct PromptsFeature {
               let result = GetPromptResponse.Result(
                 description: description, messages: fetchedMessages)
 
+              #if !SENTRY_DISABLED
+                transaction.finish()
+              #endif
+
               await send(
                 .promptMessagesFetched(
                   promptName: prompt.name, result: result, fetchedMessages: fetchedMessages))
             } catch {
+              #if !SENTRY_DISABLED
+                transaction.finish(status: .internalError)
+              #endif
+
               if !Task.isCancelled {
                 await send(.promptMessagesFetchFailed(promptName: prompt.name, error: error))
               }
