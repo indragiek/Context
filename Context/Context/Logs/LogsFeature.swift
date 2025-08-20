@@ -7,6 +7,10 @@ import Foundation
 import GRDB
 import SharingGRDB
 
+#if !SENTRY_DISABLED
+import Sentry
+#endif
+
 enum LogsError: LocalizedError {
   case streamError(String)
 
@@ -78,12 +82,29 @@ struct LogsFeature {
         return .merge(
           .cancel(id: CancelID.logSubscription),
           .run { [server = state.server] send in
+            #if !SENTRY_DISABLED
+            let transaction = SentrySDK.startTransaction(
+              name: "logs.stream",
+              operation: "task",
+              bindToScope: true
+            )
+            transaction.setData(value: server.id.uuidString, key: "server_id")
+            transaction.setData(value: "info", key: "log_level") // minimum log level
+            transaction.setData(value: true, key: "stream_active")
+            #endif
+            
             guard let client = await mcpClientManager.existingClient(for: server) else {
+              #if !SENTRY_DISABLED
+              transaction.finish(status: .notFound)
+              #endif
               return
             }
 
             let connectionState = await client.currentConnectionState
             guard connectionState == .connected else {
+              #if !SENTRY_DISABLED
+              transaction.finish(status: .unavailable)
+              #endif
               return
             }
 
@@ -101,6 +122,10 @@ struct LogsFeature {
                     )))
               }
             }
+            
+            #if !SENTRY_DISABLED
+            transaction.finish()
+            #endif
           }
           .cancellable(id: CancelID.logSubscription)
         )
@@ -117,6 +142,16 @@ struct LogsFeature {
         return .none
 
       case let .logReceived(params):
+        #if !SENTRY_DISABLED
+        let span = SentrySDK.span?.startChild(operation: "logs.process_entry") ?? SentrySDK.startTransaction(
+          name: "logs.process_entry",
+          operation: "task"
+        )
+        span.setData(value: params.level.rawValue, key: "log_level")
+        span.setData(value: params.logger ?? "unknown", key: "log_source")
+        span.setData(value: state.cachedLogs.count, key: "buffer_size")
+        #endif
+        
         let newLog = LogEntry(params: params)
         state.cachedLogs.append(CachedLogEntry(newLog))
 
@@ -131,6 +166,14 @@ struct LogsFeature {
         if state.cachedLogs.count == 1 && state.selectedLogIDs.isEmpty {
           state.selectedLogIDs = [newLog.id]
         }
+        
+        #if !SENTRY_DISABLED
+        // Check if this log matches current search query
+        let matchesFilter = state.filteredLogs.contains { $0.id == newLog.id }
+        span.setData(value: matchesFilter, key: "is_filtered")
+        span.finish()
+        #endif
+        
         return .none
 
       case let .logSelected(ids):
@@ -138,6 +181,15 @@ struct LogsFeature {
         return .none
 
       case let .searchQueryChanged(query):
+        #if !SENTRY_DISABLED
+        let span = SentrySDK.span?.startChild(operation: "logs.search") ?? SentrySDK.startTransaction(
+          name: "logs.search",
+          operation: "task"
+        )
+        span.setData(value: query.count, key: "query_length")
+        span.setData(value: state.cachedLogs.count, key: "total_logs")
+        #endif
+        
         state.searchQuery = query
 
         let filteredIDs = Set(state.filteredLogs.map { $0.id })
@@ -152,6 +204,11 @@ struct LogsFeature {
         } else {
           state.selectedLogIDs = validSelectedIDs
         }
+
+        #if !SENTRY_DISABLED
+        span.setData(value: state.filteredLogs.count, key: "filtered_count")
+        span.finish()
+        #endif
 
         return .none
 
