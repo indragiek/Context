@@ -8,6 +8,10 @@ import GRDB
 import SharingGRDB
 import os
 
+#if !SENTRY_DISABLED
+import Sentry
+#endif
+
 // MARK: - Mode
 
 enum AddServerMode: Equatable {
@@ -433,6 +437,18 @@ struct AddServerFeature {
       serverID = originalServer.id
     }
 
+    #if !SENTRY_DISABLED
+    let transaction = SentrySDK.startTransaction(
+      name: "server.create",
+      operation: "task",
+      bindToScope: true
+    )
+    transaction.setData(value: state.serverName, key: "server_name")
+    transaction.setData(value: state.transport.rawValue, key: "transport_type")
+    transaction.setData(value: serverID.uuidString, key: "server_id")
+    transaction.setData(value: state.mode == .edit, key: "is_edit_mode")
+    #endif
+
     return .run {
       [
         serverID = serverID,
@@ -449,6 +465,9 @@ struct AddServerFeature {
         dxtStore = self.dxtStore,
         dxtConfigKeychain = self.dxtConfigKeychain,
         logger = self.logger
+        #if !SENTRY_DISABLED
+        , transaction = transaction
+        #endif
       ] send in
       do {
         // Build the server using ServerStore
@@ -542,8 +561,14 @@ struct AddServerFeature {
           try await serverStore.updateServer(server)
         }
 
+        #if !SENTRY_DISABLED
+        transaction.finish()
+        #endif
         await send(.serverSaved(.success(serverID)))
       } catch {
+        #if !SENTRY_DISABLED
+        transaction.finish(status: .internalError)
+        #endif
         await send(.serverSaved(.failure(error)))
       }
     }

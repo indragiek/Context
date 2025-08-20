@@ -4,6 +4,10 @@ import AsyncAlgorithms
 import Foundation
 import os
 
+#if !SENTRY_DISABLED
+import Sentry
+#endif
+
 /// Protocol for handling sampling requests from the server.
 public protocol SamplingHandler: Sendable {
   /// Handle a sampling request from the server and return a response.
@@ -241,6 +245,14 @@ public actor Client {
       return
     }
 
+    #if !SENTRY_DISABLED
+    let span = SentrySDK.span?.startChild(operation: "mcp.connection.establish") ?? SentrySDK.startTransaction(
+      name: "mcp.connection.establish",
+      operation: "task"
+    )
+    span.setData(value: String(describing: type(of: transport)), key: "transport_type")
+    #endif
+
     setupConnectionStateHandler()
     updateConnectionState(.connecting)
 
@@ -267,7 +279,15 @@ public actor Client {
       logger.info(
         "Connected to server \(initResponse.serverInfo.name) \(initResponse.serverInfo.version). protocolVersion: \(initResponse.protocolVersion), capabilities: \(String(reflecting: initResponse.capabilities))"
       )
+      
+      #if !SENTRY_DISABLED
+      span.setData(value: initResponse.protocolVersion, key: "protocol_version")
+      span.finish()
+      #endif
     } catch let error {
+      #if !SENTRY_DISABLED
+      span.finish(status: .internalError)
+      #endif
       logAndStreamError("Failed to connect to server", error: error)
       updateConnectionState(.disconnected)
       throw error

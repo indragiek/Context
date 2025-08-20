@@ -7,6 +7,10 @@ import IdentifiedCollections
 import SharingGRDB
 import os
 
+#if !SENTRY_DISABLED
+import Sentry
+#endif
+
 // Import Schema types
 typealias Implementation = ContextCore.Implementation
 
@@ -163,6 +167,17 @@ actor MCPClientManager {
   // MARK: - Private
 
   private func createClient(for server: MCPServer) async throws -> Client {
+    #if !SENTRY_DISABLED
+    let span = SentrySDK.span?.startChild(operation: "mcp.client.create") ?? SentrySDK.startTransaction(
+      name: "mcp.client.create",
+      operation: "task"
+    )
+    span.setData(value: server.id.uuidString, key: "server_id")
+    span.setData(value: server.transport.rawValue, key: "transport_type")
+    span.setData(value: server.name, key: "server_name")
+    defer { span.finish() }
+    #endif
+
     let transport = try await createTransport(for: server)
     let client = Client(transport: transport, logger: logger)
 
