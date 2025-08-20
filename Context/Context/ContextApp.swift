@@ -22,6 +22,8 @@ struct ContextApp: App {
         options.dsn =
           "https://3fd20401248f7d1fcfed9e0a7ce389ad@o4509521009508352.ingest.us.sentry.io/4509521010229248"
         options.enableAppHangTracking = false
+        options.enableUncaughtNSExceptionReporting = true
+        options.tracesSampleRate = 1.0
       }
     #endif
 
