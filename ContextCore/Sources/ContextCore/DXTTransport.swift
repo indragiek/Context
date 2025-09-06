@@ -130,7 +130,7 @@ public actor DXTTransport: Transport {
   private let logger = Logger(subsystem: "com.indragie.ContextCore", category: "DXTTransport")
   
   // Cached regex for placeholder validation
-  private static let placeholderRegex = /\$\{[a-zA-Z_][a-zA-Z0-9_]*(\.[a-zA-Z_][a-zA-Z0-9_]*)*\}/
+  private nonisolated(unsafe) static let placeholderRegex = /\$\{[a-zA-Z_][a-zA-Z0-9_]*(\.[a-zA-Z_][a-zA-Z0-9_]*)*\}/
   
   /// Initializes a DXTTransport with the specified extracted DXT directory
   /// - Parameters:

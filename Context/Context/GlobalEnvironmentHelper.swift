@@ -22,6 +22,16 @@ enum ShellPathError: LocalizedError {
 struct GlobalEnvironmentHelper {
   private static let shellPathKey = "customShellPath"
   
+  /// Environment variables that should be removed or sanitized for clean MCP server execution
+  private static let terminalIntegrationVariables = [
+    "TERM_PROGRAM",
+    "TERM_SESSION_ID", 
+    "ITERM_SESSION_ID",
+    "ITERM_PROFILE",
+    "PROMPT_COMMAND",
+    "__CF_USER_TEXT_ENCODING"
+  ]
+  
   /// Read the shell path from UserDefaults or return the default shell
   static func readShellPath() -> String {
     if let customPath = UserDefaults.standard.string(forKey: shellPathKey),
@@ -69,6 +79,27 @@ struct GlobalEnvironmentHelper {
     )
 
     return try await expandEnvironmentVariables(environment)
+  }
+  
+  /// Generate a clean environment for MCP server execution by removing terminal integration variables
+  static func cleanEnvironmentForMCP(_ environment: [String: String]) -> [String: String] {
+    var cleanEnv = environment
+    
+    // Remove terminal integration variables
+    for variable in terminalIntegrationVariables {
+      cleanEnv.removeValue(forKey: variable)
+    }
+    
+    // Set safe terminal settings
+    cleanEnv["TERM"] = "xterm"
+    cleanEnv["PS1"] = "$ "
+    
+    return cleanEnv
+  }
+  
+  /// Get clean shell arguments for non-interactive execution (suitable for MCP servers)
+  static func cleanShellArgsForMCP() -> [String] {
+    return ["-l", "-c"]  // Remove -i (interactive) flag
   }
 
   /// Perform variable substitution using the user's configured shell

@@ -223,7 +223,7 @@ actor MCPClientManager {
       }
 
       let shellPath = GlobalEnvironmentHelper.readShellPath()
-      var shellArgs = ["-l", "-i", "-c"]
+      var shellArgs = GlobalEnvironmentHelper.cleanShellArgsForMCP()
 
       var commandString = command
       if let args = server.args, !args.isEmpty {
@@ -241,6 +241,9 @@ actor MCPClientManager {
           environment[key] = value
         }
       }
+      
+      // Clean environment for MCP execution to prevent ANSI escape sequences
+      environment = GlobalEnvironmentHelper.cleanEnvironmentForMCP(environment)
 
       let processInfo = StdioTransport.ServerProcessInfo(
         executableURL: URL(fileURLWithPath: shellPath),
@@ -348,6 +351,9 @@ actor MCPClientManager {
           environment[key] = value
         }
       }
+      
+      // Clean environment for DXT execution to prevent ANSI escape sequences
+      environment = GlobalEnvironmentHelper.cleanEnvironmentForMCP(environment)
 
       let shellPath = GlobalEnvironmentHelper.readShellPath()
       
