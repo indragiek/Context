@@ -238,10 +238,21 @@ public actor StreamableHTTPTransport: Transport {
     internalResponseChannel.finish()
     self.internalResponseChannel = nil
 
-    for task in consumerTasks {
+    // Gracefully cancel all consumer tasks and wait for them to complete
+    // to avoid race conditions with active byte stream iterations
+    let tasksToCancel = consumerTasks
+    consumerTasks.removeAll()
+    
+    for task in tasksToCancel {
       task.cancel()
     }
-    consumerTasks.removeAll()
+    
+    // Wait for all tasks to complete their cancellation gracefully
+    // This prevents the dispatch-level crash that occurs when tasks are
+    // cancelled while actively iterating over URLSession.AsyncBytes
+    for task in tasksToCancel {
+      _ = try? await task.value
+    }
     
     stopPingTimer()
     pingInterval = nil
@@ -672,6 +683,13 @@ public actor StreamableHTTPTransport: Transport {
     // Consume the rest of the stream asynchronously
     consumerTasks.append(
       Task {
+        // Ensure activeSSEConnectionCount is always decremented, even on cancellation
+        defer {
+          Task {
+            await self.decrementSSEConnectionCount()
+          }
+        }
+        
         do {
           for try await event in stream {
             if Task.isCancelled { break }
@@ -689,10 +707,8 @@ public actor StreamableHTTPTransport: Transport {
               }
             }
           }
-          await decrementSSEConnectionCount()
         } catch {
           logger.error("Error handling text/event-stream response: \(error)")
-          await decrementSSEConnectionCount()
           if Task.isCancelled { return }
 
           // For finite streams (POST responses), stream completion is normal - don't reconnect
@@ -782,7 +798,11 @@ public actor StreamableHTTPTransport: Transport {
         do {
           let parser = EventSourceParser()
           for try await event in await parser.parse(byteStream: bytes) {
-            if Task.isCancelled { break }
+            // Check for cancellation before any dispatch operations
+            if Task.isCancelled { 
+              continuation.finish()
+              return 
+            }
 
             // Keep our reconnection time updated with the parser's
             if let retryMs = event.retryMs {
@@ -813,7 +833,12 @@ public actor StreamableHTTPTransport: Transport {
           }
           continuation.finish()
         } catch let error {
-          continuation.finish(throwing: error)
+          // Don't propagate cancellation errors
+          if Task.isCancelled {
+            continuation.finish()
+          } else {
+            continuation.finish(throwing: error)
+          }
         }
       }
       continuation.onTermination = { state in
@@ -854,6 +879,8 @@ public actor StreamableHTTPTransport: Transport {
   private func consumeByteStream(bytes: URLSession.AsyncBytes) async throws -> Data {
     var data = Data()
     for try await byte in bytes {
+      // Check for cancellation before processing to avoid dispatch issues
+      if Task.isCancelled { break }
       data.append(byte)
     }
     return data
@@ -862,6 +889,9 @@ public actor StreamableHTTPTransport: Transport {
   /// Consumes an application/json response from the server that contains a single JSON object.
   /// Parses the object and emits the response.
   private func consumeSingleObjectResponse(stream: URLSession.AsyncBytes) async throws {
+    // Check for cancellation early to avoid unnecessary work
+    if Task.isCancelled { return }
+    
     let data = try await consumeByteStream(bytes: stream)
     if Task.isCancelled { return }
 
