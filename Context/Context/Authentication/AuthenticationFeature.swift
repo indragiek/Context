@@ -19,6 +19,7 @@ struct AuthenticationFeature {
     var isLoading: Bool = false
     var authorizationURL: URL?
     var pkceParameters: OAuthClient.PKCEParameters?
+    var pendingAuthorizationCode: String?
     var error: String?
     var authServerMetadata: AuthorizationServerMetadata?
     var resourceMetadata: ProtectedResourceMetadata?
@@ -28,6 +29,7 @@ struct AuthenticationFeature {
     let redirectURI = OAuthConstants.callbackURL.absoluteString
     var oAuthState: OAuthClient.StateParameter?  // Generated fresh for each auth attempt
     var isRegisteredClient: Bool = false  // Track if we've dynamically registered
+    var hasAttemptedLateClientRegistration: Bool = false
 
     // Loading state tracking
     var loadingStep: LoadingStep = .idle
@@ -69,6 +71,11 @@ struct AuthenticationFeature {
     }
   }
 
+  enum ClientRegistrationPurpose: Sendable {
+    case beforeAuthorization
+    case invalidClientRecovery
+  }
+
   enum Action {
     case startAuthentication
     case metadataLoaded(
@@ -82,8 +89,9 @@ struct AuthenticationFeature {
     case tokenRefreshCompleted(Result<OAuthToken, any Error>)
     case cancelButtonTapped
     case dismissError
-    case attemptClientRegistration(code: String)
-    case clientRegistrationCompleted(Result<ClientRegistrationResponse, any Error>, code: String)
+    case attemptClientRegistration
+    case clientRegistrationCompleted(
+      Result<ClientRegistrationResponse, any Error>, purpose: ClientRegistrationPurpose)
     case authenticationCompleteAndDismiss
     case continueAfterRefreshError
   }
@@ -91,8 +99,13 @@ struct AuthenticationFeature {
   @Dependency(\.dismiss) var dismiss
   @Dependency(\.mcpClientManager) var clientManager
   @Dependency(\.oauthClient) var oauthClient
+  @Dependency(\.oauthTransactionGenerator) var transactionGenerator
 
   private let logger = Logger(subsystem: "com.indragie.Context", category: "AuthenticationFeature")
+
+  private enum CancelID {
+    case authenticationFlow
+  }
 
   var body: some ReducerOf<Self> {
     Reduce { state, action in
@@ -128,7 +141,7 @@ struct AuthenticationFeature {
         return handleTokenRefreshCompleted(&state, result: result)
 
       case .cancelButtonTapped:
-        clearSensitiveData(&state)
+        clearAuthorizationTransaction(&state)
         state.authServerMetadata = nil
         state.resourceMetadata = nil
         state.loadingStep = .idle
@@ -136,7 +149,10 @@ struct AuthenticationFeature {
         state.isSilentRefresh = false
         state.isRefreshing = false
         state.showSuccessAnimation = false
-        return .run { _ in await dismiss() }
+        return .merge(
+          .cancel(id: CancelID.authenticationFlow),
+          .run { _ in await dismiss() }
+        )
 
       case .dismissError:
         state.error = nil
@@ -147,11 +163,11 @@ struct AuthenticationFeature {
         state.showRefreshError = false
         return .none
 
-      case let .attemptClientRegistration(code):
-        return handleAttemptClientRegistration(&state, code: code)
+      case .attemptClientRegistration:
+        return handleAttemptClientRegistration(&state)
 
-      case let .clientRegistrationCompleted(result, code):
-        return handleClientRegistrationCompleted(&state, result: result, code: code)
+      case let .clientRegistrationCompleted(result, purpose):
+        return handleClientRegistrationCompleted(&state, result: result, purpose: purpose)
 
       case .authenticationCompleteAndDismiss:
         // Use TCA's proper dismissal mechanism
@@ -179,11 +195,12 @@ struct AuthenticationFeature {
     state.loadingStep = .idle
     state.isRefreshing = false
     state.isSilentRefresh = false
-    // Clear sensitive data on any error
-    clearSensitiveData(&state)
+    // Clear the authorization transaction on any terminal error.
+    clearAuthorizationTransaction(&state)
   }
 
-  private func clearSensitiveData(_ state: inout State) {
+  private func clearAuthorizationTransaction(_ state: inout State) {
+    state.pendingAuthorizationCode = nil
     state.oAuthState = nil
     state.pkceParameters = nil
     state.authorizationURL = nil
@@ -244,13 +261,12 @@ struct AuthenticationFeature {
     state.isLoading = true
     state.error = nil
     state.loadingStep = .connectingToServer
-    // Clear any previous auth attempt data
-    state.pkceParameters = nil
-    state.authorizationURL = nil
+    state.hasAttemptedLateClientRegistration = false
+    clearAuthorizationTransaction(&state)
 
     // Generate fresh state for this authentication attempt
     do {
-      state.oAuthState = try OAuthClient.StateParameter.generate()
+      state.oAuthState = try transactionGenerator.generateState()
     } catch let error as OAuthClientError {
       // Provide specific error message based on the error type
       switch error {
@@ -265,16 +281,24 @@ struct AuthenticationFeature {
       return .none
     }
 
-    return .run { [resourceMetadataURL = state.resourceMetadataURL] send in
+    let discovery: EffectOf<Self> = .run { [resourceMetadataURL = state.resourceMetadataURL] send in
       do {
         let (resourceMetadata, authServerMetadata) = try await oauthClient.discoverMetadata(
           resourceMetadataURL: resourceMetadataURL
         )
+        guard !Task.isCancelled else { return }
         await send(.metadataLoaded(resource: resourceMetadata, authServer: authServerMetadata))
       } catch {
+        guard !Task.isCancelled else { return }
         await send(.metadataLoadFailed(error))
       }
     }
+    .cancellable(id: CancelID.authenticationFlow)
+
+    return .concatenate(
+      .cancel(id: CancelID.authenticationFlow),
+      discovery
+    )
   }
 
   private func handleMetadataLoaded(
@@ -299,13 +323,18 @@ struct AuthenticationFeature {
             registrationRequest: registrationRequest
           )
 
-          await send(.clientRegistrationCompleted(.success(response), code: ""))
+          guard !Task.isCancelled else { return }
+          await send(
+            .clientRegistrationCompleted(.success(response), purpose: .beforeAuthorization))
         } catch {
+          guard !Task.isCancelled else { return }
           // If registration fails, we'll try with the default client ID
           logger.warning("Client registration failed, will attempt with default client ID")
-          await send(.clientRegistrationCompleted(.failure(error), code: ""))
+          await send(
+            .clientRegistrationCompleted(.failure(error), purpose: .beforeAuthorization))
         }
       }
+      .cancellable(id: CancelID.authenticationFlow)
     }
 
     // If no registration endpoint or already registered, proceed with authorization
@@ -318,7 +347,7 @@ struct AuthenticationFeature {
     // Generate PKCE parameters
     let pkceParameters: OAuthClient.PKCEParameters
     do {
-      pkceParameters = try OAuthClient.PKCEParameters.generate()
+      pkceParameters = try transactionGenerator.generatePKCE()
     } catch let error as OAuthClientError {
       // Provide specific error message based on the error type
       switch error {
@@ -361,8 +390,6 @@ struct AuthenticationFeature {
     } catch {
       logger.error("Failed to build authorization URL")
       setError(&state, "Failed to prepare authorization request")
-      state.oAuthState = nil
-      state.pkceParameters = nil
     }
 
     return .none
@@ -393,7 +420,6 @@ struct AuthenticationFeature {
     else {
       logger.error("State parameter mismatch - possible CSRF attack")
       setError(&state, "Invalid state parameter - possible security issue")
-      clearSensitiveData(&state)
       return .none
     }
 
@@ -401,7 +427,6 @@ struct AuthenticationFeature {
     guard !expectedState.isExpired else {
       logger.error("State parameter expired")
       setError(&state, "Authentication session expired - please try again")
-      clearSensitiveData(&state)
       return .none
     }
 
@@ -409,14 +434,13 @@ struct AuthenticationFeature {
     guard !code.isEmpty, code.count < 2048 else {
       logger.error("Invalid authorization code format")
       setError(&state, "Invalid authorization code received")
-      clearSensitiveData(&state)
       return .none
     }
 
-    // Clear the state after successful validation
+    // Consume the state and retain the code only while this exchange is pending.
     state.oAuthState = nil
     state.authorizationURL = nil
-
+    state.pendingAuthorizationCode = code
     state.isLoading = true
 
     guard let authServerMetadata = state.authServerMetadata,
@@ -433,7 +457,8 @@ struct AuthenticationFeature {
       [
         clientID = state.clientID,
         redirectURI = state.redirectURI,
-        resourceMetadata = state.resourceMetadata
+        resourceMetadata = state.resourceMetadata,
+        canAttemptLateRegistration = !state.hasAttemptedLateClientRegistration
       ] send in
       do {
         let token = try await oauthClient.exchangeCodeForToken(
@@ -449,20 +474,25 @@ struct AuthenticationFeature {
         // Check if it's an OAuth error response with invalid_client
         if let oauthError = error as? OAuthErrorResponse,
           oauthError.error == "invalid_client",
-          authServerMetadata.registrationEndpoint != nil
+          authServerMetadata.registrationEndpoint != nil,
+          canAttemptLateRegistration
         {
-          // Pass the code along with the error for potential retry
-          await send(.attemptClientRegistration(code: code))
+          guard !Task.isCancelled else { return }
+          await send(.attemptClientRegistration)
         } else {
+          guard !Task.isCancelled else { return }
           await send(.tokenExchangeCompleted(.failure(error)))
         }
       }
     }
+    .cancellable(id: CancelID.authenticationFlow)
   }
 
   private func handleTokenExchangeCompleted(
     _ state: inout State, result: Result<OAuthToken, any Error>
   ) -> EffectOf<Self> {
+    clearAuthorizationTransaction(&state)
+
     switch result {
     case let .success(token):
       return storeTokenAndComplete(&state, token: token)
@@ -526,12 +556,15 @@ struct AuthenticationFeature {
         )
 
         logger.debug("Authentication refresh completed")
+        guard !Task.isCancelled else { return }
         await send(.tokenRefreshCompleted(.success(newToken)))
       } catch {
+        guard !Task.isCancelled else { return }
         logger.error("Authentication refresh failed: \(error.localizedDescription)")
         await send(.tokenRefreshCompleted(.failure(error)))
       }
     }
+    .cancellable(id: CancelID.authenticationFlow)
   }
 
   private func handleTokenRefreshCompleted(
@@ -572,13 +605,22 @@ struct AuthenticationFeature {
     }
   }
 
-  private func handleAttemptClientRegistration(_ state: inout State, code: String) -> EffectOf<Self>
-  {
+  private func handleAttemptClientRegistration(_ state: inout State) -> EffectOf<Self> {
+    // The rejected code, state, and verifier belong to the old client and can never be reused.
+    clearAuthorizationTransaction(&state)
+
+    guard !state.hasAttemptedLateClientRegistration else {
+      setError(
+        &state, "The authorization server rejected the registered OAuth client (invalid_client).")
+      return .none
+    }
+
     guard let authServerMetadata = state.authServerMetadata else {
       setError(&state, "Missing authentication metadata for registration")
       return .none
     }
 
+    state.hasAttemptedLateClientRegistration = true
     state.isLoading = true
     state.error = nil
     state.loadingStep = .discoveringAuth
@@ -591,71 +633,62 @@ struct AuthenticationFeature {
           authServerMetadata: authServerMetadata,
           registrationRequest: registrationRequest
         )
-        await send(.clientRegistrationCompleted(.success(registrationResponse), code: code))
+        guard !Task.isCancelled else { return }
+        await send(
+          .clientRegistrationCompleted(
+            .success(registrationResponse), purpose: .invalidClientRecovery))
       } catch {
-        await send(.clientRegistrationCompleted(.failure(error), code: code))
+        guard !Task.isCancelled else { return }
+        await send(
+          .clientRegistrationCompleted(.failure(error), purpose: .invalidClientRecovery))
       }
     }
+    .cancellable(id: CancelID.authenticationFlow)
   }
 
   private func handleClientRegistrationCompleted(
-    _ state: inout State, result: Result<ClientRegistrationResponse, any Error>, code: String
+    _ state: inout State, result: Result<ClientRegistrationResponse, any Error>,
+    purpose: ClientRegistrationPurpose
   ) -> EffectOf<Self> {
     switch result {
     case let .success(registrationResponse):
       logger.info("Successfully registered client with ID: \(registrationResponse.clientId)")
 
-      // Update our client ID with the dynamically registered one
       state.clientID = registrationResponse.clientId
       state.isRegisteredClient = true
 
-      // Check if this is pre-authorization registration (empty code) or post-failure retry
-      if code.isEmpty {
-        // Pre-authorization registration - proceed to build auth URL
+      switch purpose {
+      case .beforeAuthorization:
+        // The state created when authentication started is still valid.
         return prepareAuthorizationURL(&state)
-      } else {
-        // Post-failure registration - retry token exchange with the new client ID
-        guard let authServerMetadata = state.authServerMetadata,
-          let pkceParameters = state.pkceParameters
-        else {
-          setError(&state, "Missing authentication metadata after registration")
+
+      case .invalidClientRecovery:
+        // Registration changed the client identity. Start a wholly new authorization transaction;
+        // an authorization code and verifier issued to the old client must not cross this boundary.
+        clearAuthorizationTransaction(&state)
+        do {
+          state.oAuthState = try transactionGenerator.generateState()
+        } catch let error as OAuthClientError {
+          setError(&state, error.errorDescription ?? "Failed to restart authentication")
+          return .none
+        } catch {
+          setError(
+            &state, "Unexpected error restarting authentication: \(error.localizedDescription)")
           return .none
         }
-
-        // Clear PKCE parameters immediately after capturing for retry
-        state.pkceParameters = nil
-
-        return .run {
-          [
-            clientID = registrationResponse.clientId,
-            redirectURI = state.redirectURI,
-            resourceMetadata = state.resourceMetadata
-          ] send in
-          do {
-            let token = try await oauthClient.exchangeCodeForToken(
-              code: code,
-              authServerMetadata: authServerMetadata,
-              clientID: clientID,
-              redirectURI: redirectURI,
-              pkce: pkceParameters,
-              resource: resourceMetadata?.resource
-            )
-            await send(.tokenExchangeCompleted(.success(token)))
-          } catch {
-            await send(.tokenExchangeCompleted(.failure(error)))
-          }
-        }
+        return prepareAuthorizationURL(&state)
       }
 
     case let .failure(error):
       logger.error("Client registration failed")
 
-      if code.isEmpty {
-        // Pre-authorization registration failed - try to proceed anyway
+      switch purpose {
+      case .beforeAuthorization:
+        // Initial registration is opportunistic. Preserve the existing fallback to the default ID.
         logger.warning("Pre-authorization registration failed, proceeding with default client ID")
         return prepareAuthorizationURL(&state)
-      } else {
-        // Post-failure registration failed - show error
+
+      case .invalidClientRecovery:
         if let oauthError = error as? OAuthClientError {
           setError(&state, "Registration failed: \(oauthError.errorDescription ?? "Unknown error")")
         } else {
