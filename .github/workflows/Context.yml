@@ -34,3 +34,10 @@ jobs:
         xcodebuild -project "Context.xcodeproj" -scheme "Context" -sdk macosx -configuration Debug -skipMacroValidation -skipPackagePluginValidation build | xcbeautify --renderer github-actions
       env:
         NSUnbufferedIO: YES
+    - name: Run macOS unit tests
+      working-directory: ./Context
+      run: |
+        set -o pipefail
+        xcodebuild -project "Context.xcodeproj" -scheme "Context" -destination "platform=macOS" -configuration Debug -skipMacroValidation -skipPackagePluginValidation -only-testing:ContextTests test | xcbeautify --renderer github-actions
+      env:
+        NSUnbufferedIO: YES
